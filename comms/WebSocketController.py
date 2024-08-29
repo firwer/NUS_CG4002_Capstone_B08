@@ -1,12 +1,13 @@
+import asyncio
 import base64
 import string
 import time
 from socket import *
 from Utils import encrypt_msg, decrypt_msg
 
-
 class WebSockController:
-    clientSocket: socket
+    reader: asyncio.StreamReader
+    writer: asyncio.StreamWriter
     secret_key: string
     ip: string
     port: int
@@ -15,38 +16,36 @@ class WebSockController:
         self.secret_key = secret_key
         self.ip = ip
         self.port = port
-        self.connect()
 
-    def connect(self):
-        self.clientSocket = socket(AF_INET, SOCK_STREAM)
-        self.clientSocket.settimeout(10)
+    async def connect(self):
         try:
-            self.clientSocket.connect((self.ip, self.port))
-            print(f"Connected to the {self.ip}:{self.port}!")
+            self.reader, self.writer = await asyncio.open_connection(self.ip, self.port)
+            print(f"Connected to {self.ip}:{self.port}!")
         except Exception as err:
             print(f"Error while connecting to the server: {err}. Retrying...")
-            self.reconnect()
+            await self.reconnect()
 
     # Send a hello message to the evaluation server to initiate the handshake
-    def init_handshake(self):
-        if not self.clientSocket:
+    async def init_handshake(self):
+        if not self.writer:
             print("Connection not established. Exiting...")
             return
         data = encrypt_msg("hello", self.secret_key)
-        self.clientSocket.send(f"{len(data)}_".encode())
-        self.clientSocket.send(data)
+        self.writer.write(f"{len(data)}_".encode())
+        self.writer.write(data)
+        await self.writer.drain()  # Ensure the data is sent
         print("Successfully initiated handshake with evaluation server!")
 
-    def reconnect(self):
+    async def reconnect(self):
         reconnect_delay = 1
         max_reconnect_attempts = 5
         attempt = 0
 
         while attempt < max_reconnect_attempts:
             print(f"Reconnecting in {reconnect_delay} seconds...")
-            time.sleep(reconnect_delay)
+            await asyncio.sleep(reconnect_delay)
             try:
-                self.clientSocket.connect((self.ip, self.port))
+                self.reader, self.writer = await asyncio.open_connection(self.ip, self.port)
                 print("Reconnected successfully!")
                 return
             except Exception as err:
@@ -56,16 +55,19 @@ class WebSockController:
 
         print("Max reconnect attempts reached. Exiting...")
 
-    def send(self, message):
+    async def send(self, message):
         data = encrypt_msg(message, self.secret_key)
-        self.clientSocket.send(f"{len(data)}_".encode())
-        self.clientSocket.send(data)
+        self.writer.write(f"{len(data)}_".encode())
+        self.writer.write(data)
+        await self.writer.drain()  # Ensure the data is sent
         print(f"Sent message: {message}")
 
-    def receive(self):
-        receivedMsg = self.clientSocket.recv(2048)
-        return receivedMsg.decode()
+    async def receive(self):
+        received_msg = await self.reader.read(2048)  # Adjust buffer size as needed
+        return received_msg.decode()
 
-    def close(self):
-        self.clientSocket.close()
+    async def close(self):
+        if self.writer:
+            self.writer.close()
+            await self.writer.wait_closed()
         print("Connection closed")

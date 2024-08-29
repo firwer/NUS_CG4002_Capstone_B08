@@ -1,12 +1,17 @@
+import asyncio
 import datetime
 import json
 import time
 from multiprocessing import Process, Queue
 from threading import Thread
 
+import aiomqtt
+
+import config
 from EvaluationProcess import start_evaluation_process
 from PredictionService import start_prediction_service_process
 from RelayNodeProcess import start_relay_mqtt_client_process
+
 
 class GamePlayerData:
     player_id: int
@@ -49,11 +54,11 @@ def update_game_state(curr_game_state, action):
     return curr_game_state.game_state
 
 
-def evaluation_server_job(curr_game_state, eval_input_queue, eval_output_queue):
+async def evaluation_server_job(curr_game_state, eval_input_queue, eval_output_queue):
     # Send updated game state to evaluation server
-    eval_input_queue.put(curr_game_state.to_json())
+    await eval_input_queue.put(curr_game_state.to_json())
     # Wait for evaluation response
-    eval_resp = eval_output_queue.get()
+    eval_resp = await eval_output_queue.get()
 
     # Parse & update evaluation response
     _, json_str = eval_resp.split('_', 1)
@@ -63,9 +68,9 @@ def evaluation_server_job(curr_game_state, eval_input_queue, eval_output_queue):
 
 # Need this function for visualizer to provide feedback on whether player is in sight. If game state did not change (
 # i.e. health is unchanged, it means player is not in sight)
-def visualizer_job(curr_game_state, visualizer_input_queue, visualizer_output_queue):
+async def visualizer_job(curr_game_state, visualizer_input_queue, visualizer_output_queue):
     # Send updated game state to visualizer
-    visualizer_input_queue.put(curr_game_state.to_json())
+    await visualizer_input_queue.put(curr_game_state.to_json())
 
     # TODO IMPLEMENT VISUALIZER SIDE RESPONSE
     # Wait for visualizer response
@@ -76,31 +81,30 @@ def visualizer_job(curr_game_state, visualizer_input_queue, visualizer_output_qu
 class GameEngine:
     currP1GameState: GamePlayerData
     currP2GameState: GamePlayerData
-
     def __init__(self, eval_server_port):
         self.eval_server_port = eval_server_port
+        self.mqttClient = aiomqtt.Client(hostname=config.MQTT_BROKER_HOST, port=config.MQTT_BROKER_PORT)
 
-        self.prediction_service_to_engine_queue_p1 = Queue()
-        self.prediction_service_to_engine_queue_p2 = Queue()
+        self.prediction_service_to_engine_queue_p1 = asyncio.Queue()
+        self.prediction_service_to_engine_queue_p2 = asyncio.Queue()
 
-        self.engine_to_evaluation_server_queue_p1 = Queue()
-        self.engine_to_evaluation_server_queue_p2 = Queue()
+        self.engine_to_evaluation_server_queue_p1 = asyncio.Queue()
+        self.engine_to_evaluation_server_queue_p2 = asyncio.Queue()
 
-        self.evaluation_server_to_engine_queue_p1 = Queue()
-        self.evaluation_server_to_engine_queue_p2 = Queue()
+        self.evaluation_server_to_engine_queue_p1 = asyncio.Queue()
+        self.evaluation_server_to_engine_queue_p2 = asyncio.Queue()
 
-        # TODO: Check if each player has their own queue for the following
-        self.relay_mqtt_to_engine_queue_p1 = Queue()  # Pipeline from relay node for P1
-        self.engine_to_relay_mqtt_queue_p1 = Queue()  # Pipeline to relay node for P1
+        self.relay_mqtt_to_engine_queue_p1 = asyncio.Queue()  # Pipeline from relay node for P1
+        self.engine_to_relay_mqtt_queue_p1 = asyncio.Queue()  # Pipeline to relay node for P1
 
-        self.relay_mqtt_to_engine_queue_p2 = Queue()  # Pipeline from relay node for P2
-        self.engine_to_relay_mqtt_queue_p2 = Queue()  # Pipeline to relay node for P2
+        self.relay_mqtt_to_engine_queue_p2 = asyncio.Queue()  # Pipeline from relay node for P2
+        self.engine_to_relay_mqtt_queue_p2 = asyncio.Queue()  # Pipeline to relay node for P2
 
-        self.engine_to_visualizer_queue_p1 = Queue()  # Pipeline from engine to visualizer for p1
-        self.visualizer_to_engine_queue_p1 = Queue()  # Pipeline from visualizer to engine for p2
+        self.engine_to_visualizer_queue_p1 = asyncio.Queue()  # Pipeline from engine to visualizer for p1
+        self.visualizer_to_engine_queue_p1 = asyncio.Queue()  # Pipeline from visualizer to engine for p2
 
-        self.engine_to_visualizer_queue_p2 = Queue()  # Pipeline from engine to visualizer for p1
-        self.visualizer_to_engine_queue_p2 = Queue()  # Pipeline from visualizer to engine for p2
+        self.engine_to_visualizer_queue_p2 = asyncio.Queue()  # Pipeline from engine to visualizer for p1
+        self.visualizer_to_engine_queue_p2 = asyncio.Queue()  # Pipeline from visualizer to engine for p2
 
         default_game_state = {
             'hp': 90,
@@ -114,49 +118,26 @@ class GameEngine:
         self.currP1GameState = GamePlayerData(1, 'none', default_game_state)
         self.currP2GameState = GamePlayerData(2, 'none', default_game_state)
 
-    def start_game(self):
+    async def start_game(self):
+        tasks = [
+            start_relay_mqtt_client_process(self.relay_mqtt_to_engine_queue_p1, self.engine_to_relay_mqtt_queue_p1),
+            start_relay_mqtt_client_process(self.relay_mqtt_to_engine_queue_p2, self.engine_to_relay_mqtt_queue_p2),
+            start_evaluation_process(self.eval_server_port, self.evaluation_server_to_engine_queue_p1,
+                                     self.engine_to_evaluation_server_queue_p1),
+            start_evaluation_process(self.eval_server_port, self.evaluation_server_to_engine_queue_p2,
+                                     self.engine_to_evaluation_server_queue_p2),
+            start_prediction_service_process(self.relay_mqtt_to_engine_queue_p1,
+                                             self.prediction_service_to_engine_queue_p1),
+            start_prediction_service_process(self.relay_mqtt_to_engine_queue_p2,
+                                             self.prediction_service_to_engine_queue_p2),
+            self.manage_game_state(1),
+            self.manage_game_state(2)
+        ]
 
-        relay_p1 = Process(target=start_relay_mqtt_client_process,
-                           args=(self.relay_mqtt_to_engine_queue_p1, self.engine_to_relay_mqtt_queue_p1))
+        # Run all tasks concurrently
+        await asyncio.gather(*tasks)
 
-        eval_p1 = Process(target=start_evaluation_process,
-                          args=(self.eval_server_port, self.evaluation_server_to_engine_queue_p1,
-                                self.engine_to_evaluation_server_queue_p1))
-        eval_p2 = Process(target=start_evaluation_process,
-                          args=(self.eval_server_port, self.evaluation_server_to_engine_queue_p2,
-                                self.engine_to_evaluation_server_queue_p2))
-
-        # Start prediction processes
-        pred_p1 = Process(target=start_prediction_service_process,
-                          args=(self.relay_mqtt_to_engine_queue_p1, self.prediction_service_to_engine_queue_p1))
-        pred_p2 = Process(target=start_prediction_service_process,
-                          args=(self.relay_mqtt_to_engine_queue_p2, self.prediction_service_to_engine_queue_p2))
-        jobs = [relay_p1, eval_p1, pred_p1]
-        for process in jobs: process.start()
-        print("Game engine started successfully!")
-
-        Thread(target=self.manage_game_state, args=(1,), daemon=True).start()
-        #Thread(target=self.manage_game_state, args=(2,), daemon=True).start()
-
-    # def validate_and_update(self, player_id):
-    #     eval_queue = self.evaluation_server_to_engine_queue_p1 if player_id == 1 else self.evaluation_server_to_engine_queue_p2
-    #     current_game_state = self.currP1GameState if player_id == 1 else self.currP2GameState
-    #
-    #     evaluation_response = eval_queue.get()  # Wait for evaluation response
-    #     expected_game_state = GameStateData(0, '', {}).from_json(evaluation_response)
-    #
-    #     # Validate and update
-    #     if current_game_state.game_state != expected_game_state.game_state:
-    #         print(f"Discrepancy found for player {player_id}, updating game state.")
-    #         if player_id == 1:
-    #             self.currP1GameState = expected_game_state
-    #         else:
-    #             self.currP2GameState = expected_game_state
-    #     #now = datetime.datetime.now()
-    #     #self.engine_to_relay_mqtt_queue_p1.put(f"{now}-{self.currP1GameState.to_json()}")
-    #     #print(f"Player {player_id} game state validated successfully. f{self.currP1GameState.to_json()}")
-
-    def manage_game_state(self, player_id):
+    async def manage_game_state(self, player_id):
         # Select appropriate queues based on player_id
         if player_id == 1:
             pred_output_queue = self.prediction_service_to_engine_queue_p1
@@ -181,20 +162,20 @@ class GameEngine:
 
         while True:
             # Check for predicted action
-            prediction_action = pred_output_queue.get()
+            prediction_action = await pred_output_queue.get()
             prediction_action = prediction_action.decode('utf-8')
             curr_game_state.update_state(prediction_action, update_game_state(curr_game_state, prediction_action))
 
             # TODO: Should we make it multi-threaded? If so, curr_game_state would require a lock
 
             # Send updated game state to evaluation server
-            evaluation_server_job(curr_game_state, eval_input_queue, eval_output_queue)
+            await evaluation_server_job(curr_game_state, eval_input_queue, eval_output_queue)
 
             # Send updated game state to visualizer
-            visualizer_job(curr_game_state, visualizer_input_queue, visualizer_output_queue)
+            await visualizer_job(curr_game_state, visualizer_input_queue, visualizer_output_queue)
 
             now = datetime.datetime.now()
             # Send validated/verified game state to relay node
-            relay_node_input_queue.put(f"{now} - {curr_game_state.to_json()}")
+            await relay_node_input_queue.put(f"{now} - {curr_game_state.to_json()}")
 
-            time.sleep(0.1)  # Small delay to prevent busy-waiting
+            await asyncio.sleep(0.1)  # Non-blocking delay to prevent busy-waiting
