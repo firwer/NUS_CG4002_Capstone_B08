@@ -47,7 +47,6 @@ class MQTTController:
             print(f"Connection failed with result code {rc}")
 
     def on_message(self, client, userdata, msg):
-        print(f"Received message {msg.payload} from topic {msg.topic}.")
         if msg.topic == config.MQTT_ENGINE_TO_RELAY:
             print("pushing to relay")
             self.p1_data_queue.put(msg.payload)

@@ -1,5 +1,5 @@
-# Relay Node
-RELAY_NODE_LOCAL_TEST = False
+# Relay Node Configuration
+RELAY_NODE_LOCAL_TEST = True  # Set to True for local env relay node testing
 
 # Evaluation Server Configurations
 serverName = '127.0.0.1'
@@ -8,7 +8,7 @@ secret_key = "bitcoingoingmoon"
 # Ultra96 SSH Credentials
 ssh_host = "172.26.190.125"
 ssh_user = "xilinx"
-ssh_password = "" # Add password here
+ssh_password = "leonardo"  # Add password here
 
 # MQTT Broker Configurations
 MQTT_BROKER_HOST = "localhost"

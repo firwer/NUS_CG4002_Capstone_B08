@@ -10,6 +10,7 @@ def start_relay_mqtt_client_process(relay_mqtt_to_engine_queue, engine_to_relay_
         ec.mqttc.publish(config.MQTT_ENGINE_TO_RELAY, t)
 
 
+# Relay MQTT Client Process is responsible for the communication between the Relay Node and the Game Engine
 class RelayMQTTClientProcess:
     def __init__(self, relay_mqtt_to_engine_queue):
         self.relay_mqtt_to_engine_queue = relay_mqtt_to_engine_queue
