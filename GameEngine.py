@@ -10,7 +10,7 @@ import aiomqtt
 import config
 from EvaluationProcess import start_evaluation_process
 from PredictionService import start_prediction_service_process
-from RelayNodeProcess import start_relay_mqtt_client_process
+from comms.AsyncMQTTController import AsyncMQTTController
 
 
 class GamePlayerData:
@@ -78,9 +78,17 @@ async def visualizer_job(curr_game_state, visualizer_input_queue, visualizer_out
     #curr_game_state.game_state = visualizer_resp
 
 
+async def start_relay_node_mqtt_job(receive_topic: str, send_topic: str, receive_queue: asyncio.Queue,
+                                    send_queue: asyncio.Queue):
+    mqttc = AsyncMQTTController(config.MQTT_BROKER_PORT, receive_queue, send_queue)
+    while True:
+        await mqttc.start(receive_topic, send_topic)
+
+
 class GameEngine:
     currP1GameState: GamePlayerData
     currP2GameState: GamePlayerData
+
     def __init__(self, eval_server_port):
         self.eval_server_port = eval_server_port
         self.mqttClient = aiomqtt.Client(hostname=config.MQTT_BROKER_HOST, port=config.MQTT_BROKER_PORT)
@@ -120,8 +128,10 @@ class GameEngine:
 
     async def start_game(self):
         tasks = [
-            start_relay_mqtt_client_process(self.relay_mqtt_to_engine_queue_p1, self.engine_to_relay_mqtt_queue_p1),
-            start_relay_mqtt_client_process(self.relay_mqtt_to_engine_queue_p2, self.engine_to_relay_mqtt_queue_p2),
+            start_relay_node_mqtt_job(config.MQTT_SENSOR_DATA_RELAY_TO_ENG_P1, config.MQTT_SENSOR_DATA_ENG_TO_RELAY_P1,
+                                      self.relay_mqtt_to_engine_queue_p1, self.engine_to_relay_mqtt_queue_p1),
+            start_relay_node_mqtt_job(config.MQTT_SENSOR_DATA_RELAY_TO_ENG_P2, config.MQTT_SENSOR_DATA_ENG_TO_RELAY_P2,
+                                      self.relay_mqtt_to_engine_queue_p2, self.engine_to_relay_mqtt_queue_p2),
             start_evaluation_process(self.eval_server_port, self.evaluation_server_to_engine_queue_p1,
                                      self.engine_to_evaluation_server_queue_p1),
             start_evaluation_process(self.eval_server_port, self.evaluation_server_to_engine_queue_p2,
@@ -179,3 +189,4 @@ class GameEngine:
             await relay_node_input_queue.put(f"{now} - {curr_game_state.to_json()}")
 
             await asyncio.sleep(0.1)  # Non-blocking delay to prevent busy-waiting
+

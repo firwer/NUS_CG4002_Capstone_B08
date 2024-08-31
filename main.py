@@ -15,5 +15,6 @@ async def main():
 if sys.platform.lower() == "win32" or os.name.lower() == "nt":
     from asyncio import set_event_loop_policy, WindowsSelectorEventLoopPolicy
     set_event_loop_policy(WindowsSelectorEventLoopPolicy())
+
 if __name__ == "__main__":
     asyncio.run(main())

@@ -15,8 +15,11 @@ MQTT_BROKER_HOST = "127.0.0.1"
 MQTT_BROKER_PORT = 1884
 MQTT_QOS = 1  # Lower values mean less reliability but faster communication
 
-MQTT_SENSOR_DATA_PLAYER1 = "sensor_data/player1"
-MQTT_SENSOR_DATA_PLAYER2 = "sensor_data/player2"
+MQTT_SENSOR_DATA_RELAY_TO_ENG_P1 = "sensor_data/p1/relay_to_engine"
+MQTT_SENSOR_DATA_ENG_TO_RELAY_P1 = "sensor_data/p1/engine_to_relay"
+
+MQTT_SENSOR_DATA_RELAY_TO_ENG_P2 = "sensor_data/p2/relay_to_engine"
+MQTT_SENSOR_DATA_ENG_TO_RELAY_P2 = "sensor_data/p2/engine_to_relay"
 
 MQTT_ENGINE_TO_RELAY = "sensor_data/return"
 

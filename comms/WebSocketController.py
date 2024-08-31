@@ -1,9 +1,7 @@
 import asyncio
-import base64
 import string
-import time
-from socket import *
 from Utils import encrypt_msg, decrypt_msg
+
 
 class WebSockController:
     reader: asyncio.StreamReader
@@ -49,7 +47,7 @@ class WebSockController:
                 print("Reconnected successfully!")
                 return
             except Exception as err:
-                print(f"Reconnect attempt {attempt+1} failed: {err}")
+                print(f"Reconnect attempt {attempt + 1} failed: {err}")
             reconnect_delay = min(reconnect_delay * 2, 60)  # Exponential backoff
             attempt += 1
 
@@ -71,3 +69,7 @@ class WebSockController:
             self.writer.close()
             await self.writer.wait_closed()
         print("Connection closed")
+
+
+{{"player_id": 1, "action": "gun", "game_state": {"hp": 100, "bullets": 5, "bombs": 2, "shield_hp": 0, "deaths": 0, "shields": 3}}, {
+    {"player_id": 2, "action": "shield", "game_state": {"hp": 100, "bullets": 6, "bombs": 2, "shield_hp": 0, "deaths": 0, "shields": 3},}}}
