@@ -47,7 +47,7 @@ async def main():
         mqttc = AsyncMQTTController(server.local_bind_port, receive_queue, send_queue)
 
     mqtt_p1 = asyncio.create_task(mqttc.start(send_topic=config.MQTT_SENSOR_DATA_RELAY_TO_ENG_P1,
-                                                receive_topic=config.MQTT_SENSOR_DATA_ENG_TO_RELAY_P1))
+                                              receive_topic=config.MQTT_SENSOR_DATA_ENG_TO_RELAY_P1))
     # mqtt_p2 = asyncio.create_task(mqttc.start(send_topic=config.MQTT_SENSOR_DATA_RELAY_TO_ENG_P2,
     #                                             receive_topic=config.MQTT_SENSOR_DATA_ENG_TO_RELAY_P2))
     debug_input = asyncio.create_task(user_input(send_queue, receive_queue))

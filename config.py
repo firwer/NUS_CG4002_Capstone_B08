@@ -21,6 +21,10 @@ MQTT_SENSOR_DATA_ENG_TO_RELAY_P1 = "sensor_data/p1/engine_to_relay"
 MQTT_SENSOR_DATA_RELAY_TO_ENG_P2 = "sensor_data/p2/relay_to_engine"
 MQTT_SENSOR_DATA_ENG_TO_RELAY_P2 = "sensor_data/p2/engine_to_relay"
 
+MQTT_ENG_TO_VISUALIZER = "game_state/engine_to_visualizer"
+MQTT_VISUALIZER_TO_ENG = "game_state/visualizer_to_engine"
+
+
 MQTT_ENGINE_TO_RELAY = "sensor_data/return"
 
 # MQTT Broker Exponential Backoff Recovery Config
