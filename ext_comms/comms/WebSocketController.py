@@ -1,6 +1,6 @@
 import asyncio
 import string
-from Utils import encrypt_msg, decrypt_msg
+from ext_comms.Utils import encrypt_msg
 
 
 class WebSockController:

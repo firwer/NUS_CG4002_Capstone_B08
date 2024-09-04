@@ -1,5 +1,3 @@
-import json
-
 import config
 from comms.WebSocketController import WebSockController
 

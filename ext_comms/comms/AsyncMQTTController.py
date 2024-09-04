@@ -1,6 +1,6 @@
 import asyncio
 import aiomqtt
-import config
+from ext_comms import config
 
 
 class AsyncMQTTController:

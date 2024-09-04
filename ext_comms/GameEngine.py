@@ -1,9 +1,5 @@
 import asyncio
-import datetime
 import json
-import time
-from multiprocessing import Process, Queue
-from threading import Thread
 
 import aiomqtt
 
