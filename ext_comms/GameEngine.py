@@ -81,11 +81,16 @@ def update_game_state(curr_player_data: GamePlayerData, action: str):
 
 async def evaluation_server_job(curr_game_data: GameData, player_id: int, eval_input_queue: asyncio.Queue,
                                 eval_output_queue: asyncio.Queue):
+    EvalGameData = {
+        "player_id": player_id,
+        "action": curr_game_data.p1.action,
+        "game_state": {
+            "p1": curr_game_data.p1.game_state,
+            "p2": curr_game_data.p2.game_state
+        }
+    }
     # Send updated game state to evaluation server
-    if player_id == 1:
-        await eval_input_queue.put(curr_game_data.p1.to_json())
-    else:
-        await eval_input_queue.put(curr_game_data.p2.to_json())
+    await eval_input_queue.put(json.dumps(EvalGameData))
     # Wait for evaluation response
     eval_resp = await eval_output_queue.get()
 
@@ -100,25 +105,11 @@ async def evaluation_server_job(curr_game_data: GameData, player_id: int, eval_i
 
 # Need this function for visualizer to provide feedback on whether player is in sight. If game state did not change (
 # i.e. health is unchanged, it means player is not in sight)
-async def start_visualizer_mqtt_job(receive_topic: str, send_topic: str, input_queue: asyncio.Queue,
-                                    output_queue: asyncio.Queue):
-    # Send updated game state to visualizer
-    # await visualizer_input_queue.put(curr_game_data.to_json())
-    mqttc_visualizer = AsyncMQTTController(config.MQTT_BROKER_PORT, output_queue, input_queue)
 
-    while True:  # Is there a need for this loop????
-        await mqttc_visualizer.start(receive_topic, send_topic)
-    # TODO IMPLEMENT VISUALIZER SIDE RESPONSE
-    # Wait for visualizer response
-    #visualizer_resp = visualizer_output_queue.get()
-    #curr_game_state.game_state = visualizer_resp
-
-
-async def start_relay_node_mqtt_job(receive_topic: str, send_topic: str, receive_queue: asyncio.Queue,
-                                    send_queue: asyncio.Queue):
-    mqttc_relay = AsyncMQTTController(config.MQTT_BROKER_PORT, receive_queue=receive_queue, send_queue=send_queue)
-    while True:
-        await mqttc_relay.start(receive_topic, send_topic)
+async def start_mqtt_job(receive_topic: str, send_topic: str, receive_queue: asyncio.Queue,
+                         send_queue: asyncio.Queue):
+    mqtt_client = AsyncMQTTController(config.MQTT_BROKER_PORT, receive_queue=receive_queue, send_queue=send_queue)
+    await mqtt_client.start(receive_topic, send_topic)
 
 
 class GameEngine:
@@ -151,10 +142,18 @@ class GameEngine:
     async def start_game(self):
         tasks = [
 
-            start_relay_node_mqtt_job(config.MQTT_SENSOR_DATA_RELAY_TO_ENG_P1, config.MQTT_SENSOR_DATA_ENG_TO_RELAY_P1,
-                                      self.relay_mqtt_to_engine_queue_p1, self.engine_to_relay_mqtt_queue_p1),
-            start_relay_node_mqtt_job(config.MQTT_SENSOR_DATA_RELAY_TO_ENG_P2, config.MQTT_SENSOR_DATA_ENG_TO_RELAY_P2,
-                                      self.relay_mqtt_to_engine_queue_p2, self.engine_to_relay_mqtt_queue_p2),
+            # Start MQTT client for Relay Node & Visualizer
+            start_mqtt_job(config.MQTT_SENSOR_DATA_RELAY_TO_ENG_P1, config.MQTT_SENSOR_DATA_ENG_TO_RELAY_P1,
+                           receive_queue=self.relay_mqtt_to_engine_queue_p1,
+                           send_queue=self.engine_to_relay_mqtt_queue_p1),
+            start_mqtt_job(config.MQTT_SENSOR_DATA_RELAY_TO_ENG_P2, config.MQTT_SENSOR_DATA_ENG_TO_RELAY_P2,
+                           receive_queue=self.relay_mqtt_to_engine_queue_p2,
+                           send_queue=self.engine_to_relay_mqtt_queue_p2),
+            start_mqtt_job(config.MQTT_VISUALIZER_TO_ENG, config.MQTT_ENG_TO_VISUALIZER,
+                           receive_queue=self.engine_to_visualizer_queue,
+                           send_queue=self.visualizer_to_engine_queue),
+
+            # Start Evaluation Server Process
             start_evaluation_process(self.eval_server_port, self.evaluation_server_to_engine_queue_p1,
                                      self.engine_to_evaluation_server_queue_p1),
             start_evaluation_process(self.eval_server_port, self.evaluation_server_to_engine_queue_p2,
@@ -163,10 +162,6 @@ class GameEngine:
                                              self.prediction_service_to_engine_queue_p1),
             start_prediction_service_process(self.relay_mqtt_to_engine_queue_p2,
                                              self.prediction_service_to_engine_queue_p2),
-
-            start_visualizer_mqtt_job(config.MQTT_VISUALIZER_TO_ENG, config.MQTT_ENG_TO_VISUALIZER,
-                                      input_queue=self.engine_to_visualizer_queue,
-                                      output_queue=self.visualizer_to_engine_queue),
             self.manage_game_state(1),
             self.manage_game_state(2)
         ]
@@ -200,13 +195,14 @@ class GameEngine:
             elif player_id == 2:
                 self.currGameData.p2.update_state(prediction_action,
                                                   update_game_state(self.currGameData.p2, prediction_action))
-            print("EVALUATING...")
-            # Send updated game state to evaluation server
-            await evaluation_server_job(self.currGameData, player_id, eval_input_queue, eval_output_queue)
 
             print("Updating VISUALIZER...")
             # Send updated game state to visualizer
             await visualizer_output_queue.put(self.currGameData.to_json())
+
+            print("EVALUATING...")
+            # Send updated game state to evaluation server
+            await evaluation_server_job(self.currGameData, player_id, eval_input_queue, eval_output_queue)
 
             #await visualizer_input_queue.get()  # Wait for visualizer response
             print(f"SENDING TO RELAY: {self.currGameData.to_json()}")

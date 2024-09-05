@@ -1,5 +1,7 @@
 import asyncio
-import os, sys
+import os
+import sys
+
 from GameEngine import GameEngine
 
 

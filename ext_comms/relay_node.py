@@ -1,5 +1,7 @@
 import asyncio
-import os, sys
+import os
+import sys
+
 from sshtunnel import SSHTunnelForwarder
 
 import config
@@ -28,6 +30,7 @@ async def main():
     if config.RELAY_NODE_LOCAL_TEST:
         print("DEV: LOCAL RELAY NODE TEST RUN")
         print("DEV: Starting MQTT Client")
+        print(f"DEV: Connecting to {config.MQTT_BROKER_HOST}:{config.MQTT_BROKER_PORT}")
         mqttc = AsyncMQTTController(config.MQTT_BROKER_PORT, receive_queue, send_queue)
     else:
         print("PROD: PRODUCTION RUN")
@@ -49,7 +52,6 @@ async def main():
     # mqtt_p2 = asyncio.create_task(mqttc.start(send_topic=config.MQTT_SENSOR_DATA_RELAY_TO_ENG_P2,
     #                                             receive_topic=config.MQTT_SENSOR_DATA_ENG_TO_RELAY_P2))
     debug_input = asyncio.create_task(user_input(send_queue, receive_queue))
-    #debug_output = asyncio.create_task(data_output(receive_queue))
     await asyncio.gather(mqtt_p1, debug_input)
     server.stop()
 

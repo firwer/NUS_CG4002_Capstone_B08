@@ -1,6 +1,4 @@
 import asyncio
-import random
-import time
 
 
 async def start_prediction_service_process(relay_mqtt_to_engine_queue, prediction_service_to_engine_queue):
