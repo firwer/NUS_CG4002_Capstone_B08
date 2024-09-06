@@ -4,7 +4,7 @@ import string
 from Utils import encrypt_msg
 
 
-class WebSockController:
+class TCPController:
     reader: asyncio.StreamReader
     writer: asyncio.StreamWriter
     secret_key: string

@@ -1,5 +1,5 @@
 import config
-from comms.WebSocketController import WebSockController
+from comms.TCPController import TCPController
 
 
 async def start_evaluation_process(eval_server_port, evaluation_server_to_engine_queue, engine_to_evaluation_server_queue):
@@ -16,8 +16,8 @@ class EvaluationProcess:
     def __init__(self, eval_server_port, evaluation_server_to_engine_queue, engine_to_evaluation_server_queue):
         self.evaluation_server_to_engine_queue = evaluation_server_to_engine_queue
         self.engine_to_evaluation_server_queue = engine_to_evaluation_server_queue
-        self.wsController = WebSockController(config.serverName, eval_server_port,
-                                              config.secret_key)  # Used for communication with the evaluation server
+        self.wsController = TCPController(config.EVAL_SERVER_HOST, eval_server_port,
+                                              config.EVAL_SECRET_KEY)  # Used for communication with the evaluation server
         self.response_pending = False  # Flag to track if a response is pending
 
     async def msg_receiver(self):
@@ -28,7 +28,6 @@ class EvaluationProcess:
 
     async def msg_sender(self):
         message = await self.engine_to_evaluation_server_queue.get()
-        print("SENDING MESSAGE TO EVAL")
         if self.response_pending:
             print("Response already pending, skipping send")
             return

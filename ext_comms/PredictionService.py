@@ -13,6 +13,8 @@ class PredictionServiceProcess:
         self.prediction_service_to_engine_queue = prediction_service_to_engine_queue
 
     async def predict(self):
+        # TODO: Need to differentiate between GUN and other actions
+
         data = await self.relay_mqtt_to_engine_queue.get()
         print(f"Received data from RelayNode: {data}, predicting...")
         await asyncio.sleep(0.2)  # Simulating processing time

@@ -5,6 +5,7 @@ import aiomqtt
 
 import config
 from EvaluationProcess import start_evaluation_process
+from GameDataProcess import game_state_manager
 from PredictionService import start_prediction_service_process
 from comms.AsyncMQTTController import AsyncMQTTController
 
@@ -32,7 +33,7 @@ class GamePlayerData:
         self.game_state = data['p1']
         return self
 
-    def update_state(self, action, game_state):
+    def update_state(self, action: str, game_state: dict):
         self.action = action
         self.game_state = game_state
 
@@ -64,19 +65,6 @@ class GameData:
             'p1': self.p1.to_json(),
             'p2': self.p2.to_json()
         })
-
-
-def update_game_state(curr_player_data: GamePlayerData, action: str):
-    # Update the game state object based on the action
-    if action == 'bomb':
-        curr_player_data.game_state['bombs'] -= 1
-    elif action == 'shoot':
-        curr_player_data.game_state['bullets'] -= 1
-    elif action == 'shield':
-        curr_player_data.game_state['shields'] -= 1
-    elif action == 'reload':
-        curr_player_data.game_state['bullets'] += 1
-    return curr_player_data.game_state
 
 
 async def evaluation_server_job(curr_game_data: GameData, player_id: int, eval_input_queue: asyncio.Queue,
@@ -162,14 +150,14 @@ class GameEngine:
                                              self.prediction_service_to_engine_queue_p1),
             start_prediction_service_process(self.relay_mqtt_to_engine_queue_p2,
                                              self.prediction_service_to_engine_queue_p2),
-            self.manage_game_state(1),
-            self.manage_game_state(2)
+            self.game_data_process(1),
+            self.game_data_process(2)
         ]
 
         # Run all tasks concurrently
         await asyncio.gather(*tasks)
 
-    async def manage_game_state(self, player_id):
+    async def game_data_process(self, player_id):
         # Select appropriate queues based on player_id
         visualizer_input_queue = self.engine_to_visualizer_queue
         visualizer_output_queue = self.visualizer_to_engine_queue
@@ -187,24 +175,18 @@ class GameEngine:
 
         while True:
             # Check for predicted action
-            prediction_action = await pred_output_queue.get()
-            prediction_action = prediction_action.decode('utf-8')
-            if player_id == 1:
-                self.currGameData.p1.update_state(prediction_action,
-                                                  update_game_state(self.currGameData.p1, prediction_action))
-            elif player_id == 2:
-                self.currGameData.p2.update_state(prediction_action,
-                                                  update_game_state(self.currGameData.p2, prediction_action))
+            await game_state_manager(currGameData=self.currGameData, attacker_id=player_id,
+                                     pred_output_queue=pred_output_queue)
 
             print("Updating VISUALIZER...")
             # Send updated game state to visualizer
             await visualizer_output_queue.put(self.currGameData.to_json())
 
+            # await visualizer_input_queue.get()  # Wait for visualizer response
             print("EVALUATING...")
             # Send updated game state to evaluation server
             await evaluation_server_job(self.currGameData, player_id, eval_input_queue, eval_output_queue)
 
-            #await visualizer_input_queue.get()  # Wait for visualizer response
             print(f"SENDING TO RELAY: {self.currGameData.to_json()}")
             # Send validated/verified game state to relay node
             await relay_node_input_queue.put(f"{self.currGameData.to_json()}")

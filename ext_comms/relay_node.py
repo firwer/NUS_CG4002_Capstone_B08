@@ -6,6 +6,7 @@ from sshtunnel import SSHTunnelForwarder
 
 import config
 from comms.AsyncMQTTController import AsyncMQTTController
+from comms.TCPController import TCPController
 
 
 async def user_input(send_queue: asyncio.Queue, receive_queue: asyncio.Queue):
@@ -16,12 +17,23 @@ async def user_input(send_queue: asyncio.Queue, receive_queue: asyncio.Queue):
         print(f"Received message: {msg}")
 
 
-async def run_mqtt_client(mqttc, send_topic, receive_topic):
-    try:
-        await mqttc.start_duplex_comms(send_topic, receive_topic)
-    except Exception as e:
-        print(f"Error in Relay Node MQTT client Connection: {e}")
-        await mqttc.connect()  # Attempt to reconnect
+async def msg_receiver(wsController, receive_queue: asyncio.Queue):
+    msg = await wsController.receive()
+    await receive_queue.put(msg)
+
+
+async def msg_sender(wsController, send_queue: asyncio.Queue):
+    message = await send_queue.get()
+    await wsController.send(message)
+
+
+async def run_tcp_client(send_queue: asyncio.Queue, receive_queue: asyncio.Queue):
+    wsController = TCPController(config.TCP_SERVER_HOST, config.TCP_SERVER_PORT,
+                                 config.TCP_SECRET_KEY)  # Used for communication with the evaluation server
+    await wsController.connect()
+    while True:
+        await msg_sender(wsController, send_queue)
+        await msg_receiver(wsController, receive_queue)
 
 
 async def main():
@@ -29,9 +41,8 @@ async def main():
     receive_queue = asyncio.Queue()
     if config.RELAY_NODE_LOCAL_TEST:
         print("DEV: LOCAL RELAY NODE TEST RUN")
-        print("DEV: Starting MQTT Client")
-        print(f"DEV: Connecting to {config.MQTT_BROKER_HOST}:{config.MQTT_BROKER_PORT}")
-        mqttc = AsyncMQTTController(config.MQTT_BROKER_PORT, receive_queue, send_queue)
+        print("DEV: Starting TCP Client")
+        print(f"DEV: Connecting to {config.TCP_SERVER_HOST}:{config.TCP_SERVER_PORT}")
     else:
         print("PROD: PRODUCTION RUN")
         print("PROD: SSH Tunneling to Ultra96")
@@ -39,20 +50,16 @@ async def main():
             ssh_host=config.ssh_host,
             ssh_username=config.ssh_user,
             ssh_password=config.ssh_password,
-            remote_bind_address=(config.MQTT_BROKER_HOST, config.MQTT_BROKER_PORT)
+            remote_bind_address=(config.TCP_SERVER_HOST, config.TCP_SERVER_PORT)
         )
         server.start()
 
-        print(f"PROD: Forwarding port {server.local_bind_port} to broker port {config.MQTT_BROKER_PORT}")
-        print("PROD: Starting MQTT Client")
-        mqttc = AsyncMQTTController(server.local_bind_port, receive_queue, send_queue)
+        print(f"PROD: Forwarding port {server.local_bind_port} to ULTRA96 TCP Server port {config.TCP_SERVER_PORT}")
+        print("PROD: Starting TCP Client")
 
-    mqtt_p1 = asyncio.create_task(mqttc.start(send_topic=config.MQTT_SENSOR_DATA_RELAY_TO_ENG_P1,
-                                              receive_topic=config.MQTT_SENSOR_DATA_ENG_TO_RELAY_P1))
-    # mqtt_p2 = asyncio.create_task(mqttc.start(send_topic=config.MQTT_SENSOR_DATA_RELAY_TO_ENG_P2,
-    #                                             receive_topic=config.MQTT_SENSOR_DATA_ENG_TO_RELAY_P2))
+    tcp_p1 = asyncio.create_task(run_tcp_client(send_queue=send_queue, receive_queue=receive_queue))
     debug_input = asyncio.create_task(user_input(send_queue, receive_queue))
-    await asyncio.gather(mqtt_p1, debug_input)
+    await asyncio.gather(tcp_p1, debug_input)
     server.stop()
 
 
