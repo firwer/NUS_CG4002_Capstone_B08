@@ -1,11 +1,10 @@
-import random
-import time
+import asyncio
 
 
-def start_prediction_service_process(relay_mqtt_to_engine_queue, prediction_service_to_engine_queue):
+async def start_prediction_service_process(relay_mqtt_to_engine_queue, prediction_service_to_engine_queue):
     ps = PredictionServiceProcess(relay_mqtt_to_engine_queue, prediction_service_to_engine_queue)
     while True:
-        ps.predict()
+        await ps.predict()
 
 
 class PredictionServiceProcess:
@@ -13,9 +12,11 @@ class PredictionServiceProcess:
         self.relay_mqtt_to_engine_queue = relay_mqtt_to_engine_queue
         self.prediction_service_to_engine_queue = prediction_service_to_engine_queue
 
-    def predict(self):
-        data = self.relay_mqtt_to_engine_queue.get()
+    async def predict(self):
+        # TODO: Need to differentiate between GUN and other actions
+
+        data = await self.relay_mqtt_to_engine_queue.get()
         print(f"Received data from RelayNode: {data}, predicting...")
-        time.sleep(0.2)
+        await asyncio.sleep(0.2)  # Simulating processing time
         print(f"Prediction: {data}")
-        self.prediction_service_to_engine_queue.put(data)
+        await self.prediction_service_to_engine_queue.put(data)
