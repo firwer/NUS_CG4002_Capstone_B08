@@ -5,35 +5,57 @@ import sys
 from sshtunnel import SSHTunnelForwarder
 
 import config
-from comms.AsyncMQTTController import AsyncMQTTController
-from comms.TCPController import TCPController
+from comms.TCPC_Controller import TCPC_Controller
 
 
 async def user_input(send_queue: asyncio.Queue, receive_queue: asyncio.Queue):
     while True:
         message = input("Input message: ")
         await send_queue.put(message)
+        print(f"Waiting for message")
         msg = await receive_queue.get()
         print(f"Received message: {msg}")
 
 
-async def msg_receiver(wsController, receive_queue: asyncio.Queue):
-    msg = await wsController.receive()
-    await receive_queue.put(msg)
-
-
-async def msg_sender(wsController, send_queue: asyncio.Queue):
-    message = await send_queue.get()
-    await wsController.send(message)
-
-
-async def run_tcp_client(send_queue: asyncio.Queue, receive_queue: asyncio.Queue):
-    wsController = TCPController(config.TCP_SERVER_HOST, config.TCP_SERVER_PORT,
-                                 config.TCP_SECRET_KEY)  # Used for communication with the evaluation server
-    await wsController.connect()
+async def msg_receiver(wsController: TCPC_Controller, receive_queue: asyncio.Queue):
+    """
+    Continuously receive messages from the TCP server and place them in the queue.
+    """
     while True:
-        await msg_sender(wsController, send_queue)
-        await msg_receiver(wsController, receive_queue)
+        try:
+            msg = await wsController.recv_decrypt()
+            await receive_queue.put(msg)
+        except (asyncio.IncompleteReadError, ConnectionResetError, ConnectionAbortedError):
+            print("Connection lost. Attempting to reconnect...")
+            await wsController.reconnect()
+            continue  # After reconnection, continue receiving
+
+
+async def msg_sender(wsController: TCPC_Controller, send_queue: asyncio.Queue):
+    """
+    Send messages from the relay node to the TCP server.
+    """
+    while True:
+        message = await send_queue.get()
+        await wsController.send(message)
+
+
+async def run_tcp_client(send_queue: asyncio.Queue, receive_queue: asyncio.Queue, port: int):
+    """
+    Establish a connection to the TCP server and handle reconnections.
+    """
+    wsController = TCPC_Controller(config.TCP_SERVER_HOST, port, config.TCP_SECRET_KEY)
+
+    await wsController.connect()
+
+    # Tasks for sending and receiving messages
+    tasks = [
+        asyncio.create_task(msg_sender(wsController, send_queue)),
+        asyncio.create_task(msg_receiver(wsController, receive_queue)),
+        asyncio.create_task(user_input(send_queue, receive_queue))
+    ]
+
+    await asyncio.gather(*tasks)  # Ensure both sender and receiver tasks run concurrently
 
 
 async def main():
@@ -43,6 +65,7 @@ async def main():
         print("DEV: LOCAL RELAY NODE TEST RUN")
         print("DEV: Starting TCP Client")
         print(f"DEV: Connecting to {config.TCP_SERVER_HOST}:{config.TCP_SERVER_PORT}")
+        local_port = config.TCP_SERVER_PORT
     else:
         print("PROD: PRODUCTION RUN")
         print("PROD: SSH Tunneling to Ultra96")
@@ -56,10 +79,12 @@ async def main():
 
         print(f"PROD: Forwarding port {server.local_bind_port} to ULTRA96 TCP Server port {config.TCP_SERVER_PORT}")
         print("PROD: Starting TCP Client")
+        local_port = server.local_bind_port
 
-    tcp_p1 = asyncio.create_task(run_tcp_client(send_queue=send_queue, receive_queue=receive_queue))
-    debug_input = asyncio.create_task(user_input(send_queue, receive_queue))
-    await asyncio.gather(tcp_p1, debug_input)
+    await run_tcp_client(send_queue, receive_queue, local_port)
+    #tcp_p1 = asyncio.create_task(run_tcp_client(send_queue=send_queue, receive_queue=receive_queue))
+    #debug_input = asyncio.create_task(user_input(send_queue, receive_queue))
+    #await asyncio.gather(tcp_p1, debug_input)
     server.stop()
 
 

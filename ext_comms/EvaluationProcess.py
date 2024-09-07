@@ -1,11 +1,12 @@
 import config
-from comms.TCPController import TCPController
+from comms.TCPC_Controller import TCPC_Controller
 
 
-async def start_evaluation_process(eval_server_port, evaluation_server_to_engine_queue, engine_to_evaluation_server_queue):
+async def start_evaluation_process(eval_server_port, evaluation_server_to_engine_queue,
+                                   engine_to_evaluation_server_queue):
     ec = EvaluationProcess(eval_server_port, evaluation_server_to_engine_queue, engine_to_evaluation_server_queue)
-    await ec.wsController.connect()
-    await ec.wsController.init_handshake()
+    await ec.tcpClient.connect()
+    await ec.tcpClient.init_handshake()
     while True:
         await ec.msg_sender()
         await ec.msg_receiver()
@@ -16,12 +17,12 @@ class EvaluationProcess:
     def __init__(self, eval_server_port, evaluation_server_to_engine_queue, engine_to_evaluation_server_queue):
         self.evaluation_server_to_engine_queue = evaluation_server_to_engine_queue
         self.engine_to_evaluation_server_queue = engine_to_evaluation_server_queue
-        self.wsController = TCPController(config.EVAL_SERVER_HOST, eval_server_port,
-                                              config.EVAL_SECRET_KEY)  # Used for communication with the evaluation server
+        self.tcpClient = TCPC_Controller(config.EVAL_SERVER_HOST, eval_server_port,
+                                            config.EVAL_SECRET_KEY)  # Used for communication with the evaluation server
         self.response_pending = False  # Flag to track if a response is pending
 
     async def msg_receiver(self):
-        msg = await self.wsController.receive()
+        msg = await self.tcpClient.recv()
         print(f"Received message from Evaluation Server: {msg}")
         await self.evaluation_server_to_engine_queue.put(msg)
         self.response_pending = False
@@ -32,5 +33,5 @@ class EvaluationProcess:
             print("Response already pending, skipping send")
             return
         print(f"Sending message to Evaluation Server: {message}")
-        await self.wsController.send(message)
+        await self.tcpClient.send(message)
         self.response_pending = True

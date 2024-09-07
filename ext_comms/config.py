@@ -7,8 +7,8 @@ EVAL_SECRET_KEY = "bitcoingoingmoon"
 
 # Ultra96 TCP Server Configuration
 TCP_SERVER_HOST = "127.0.0.1"
-TCP_SERVER_PORT = 12345
-TCP_SECRET_KEY = "ethgoingmoon"
+TCP_SERVER_PORT = 65000
+TCP_SECRET_KEY = "ethgoingmoonsoon"
 
 # Ultra96 SSH Credentials
 ssh_host = "172.26.190.125"

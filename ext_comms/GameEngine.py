@@ -1,13 +1,12 @@
 import asyncio
 import json
 
-import aiomqtt
-
 import config
 from EvaluationProcess import start_evaluation_process
-from GameDataProcess import game_state_manager
+from GameLogicProcess import game_state_manager
 from PredictionService import start_prediction_service_process
 from comms.AsyncMQTTController import AsyncMQTTController
+from comms.TCPS_Controller import TCPS_Controller
 
 
 class GamePlayerData:
@@ -44,18 +43,18 @@ class GameData:
 
     def __init__(self):
         self.p1 = GamePlayerData(1, 'none', {
-            'hp': 90,
+            'hp': 100,
             'bullets': 6,
             'bombs': 2,
-            'shield_hp': 30,
+            'shield_hp': 0,
             'deaths': 0,
             'shields': 3
         })
         self.p2 = GamePlayerData(2, 'none', {
-            'hp': 90,
+            'hp': 100,
             'bullets': 6,
             'bombs': 2,
-            'shield_hp': 30,
+            'shield_hp': 0,
             'deaths': 0,
             'shields': 3
         })
@@ -81,10 +80,7 @@ async def evaluation_server_job(curr_game_data: GameData, player_id: int, eval_i
     await eval_input_queue.put(json.dumps(EvalGameData))
     # Wait for evaluation response
     eval_resp = await eval_output_queue.get()
-
-    # Parse & update evaluation response
-    _, json_str = eval_resp.split('_', 1)
-    eval_gs = json.loads(json_str)
+    eval_gs = json.loads(eval_resp)
 
     # Update game state based on evaluation response
     curr_game_data.p1.game_state = eval_gs['p1']
@@ -100,12 +96,18 @@ async def start_mqtt_job(receive_topic: str, send_topic: str, receive_queue: asy
     await mqtt_client.start(receive_topic, send_topic)
 
 
+async def start_tcp_job(tcp_port: int, receive_queue: asyncio.Queue, send_queue: asyncio.Queue):
+    tcp_server = TCPS_Controller(ip=config.TCP_SERVER_HOST, port=tcp_port, secret_key=config.TCP_SECRET_KEY,
+                               receive_queue=receive_queue,
+                               send_queue=send_queue)
+    await tcp_server.start_server()
+
+
 class GameEngine:
     currGameData: GameData
 
     def __init__(self, eval_server_port):
         self.eval_server_port = eval_server_port
-        self.mqttClient = aiomqtt.Client(hostname=config.MQTT_BROKER_HOST, port=config.MQTT_BROKER_PORT)
 
         self.prediction_service_to_engine_queue_p1 = asyncio.Queue()
         self.prediction_service_to_engine_queue_p2 = asyncio.Queue()
@@ -131,12 +133,8 @@ class GameEngine:
         tasks = [
 
             # Start MQTT client for Relay Node & Visualizer
-            start_mqtt_job(config.MQTT_SENSOR_DATA_RELAY_TO_ENG_P1, config.MQTT_SENSOR_DATA_ENG_TO_RELAY_P1,
-                           receive_queue=self.relay_mqtt_to_engine_queue_p1,
-                           send_queue=self.engine_to_relay_mqtt_queue_p1),
-            start_mqtt_job(config.MQTT_SENSOR_DATA_RELAY_TO_ENG_P2, config.MQTT_SENSOR_DATA_ENG_TO_RELAY_P2,
-                           receive_queue=self.relay_mqtt_to_engine_queue_p2,
-                           send_queue=self.engine_to_relay_mqtt_queue_p2),
+            start_tcp_job(config.TCP_SERVER_PORT, self.relay_mqtt_to_engine_queue_p1,
+                          self.engine_to_relay_mqtt_queue_p1),
             start_mqtt_job(config.MQTT_VISUALIZER_TO_ENG, config.MQTT_ENG_TO_VISUALIZER,
                            receive_queue=self.engine_to_visualizer_queue,
                            send_queue=self.visualizer_to_engine_queue),
