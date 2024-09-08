@@ -7,15 +7,17 @@ EVAL_SECRET_KEY = "bitcoingoingmoon"
 
 # Ultra96 TCP Server Configuration
 TCP_SERVER_HOST = "127.0.0.1"
-TCP_SERVER_PORT = 65000
+TCP_SERVER_PORT = 65001
 TCP_SECRET_KEY = "ethgoingmoonsoon"
 
 # Ultra96 SSH Credentials
 ssh_host = "172.26.190.125"
 ssh_user = "xilinx"
-ssh_password = "leonardo"  # Add password here
+ssh_password = "leonardo"  # pushing password up to git, excellent swe practice
 
-# MQTT Broker Configurations
+# MQTT Configurations
+MQTT_GAME_ENGINE_USER = "game_engine"
+MQTT_GAME_ENGINE_PASS = "funemploymentlife" # pushing password up to git, excellent swe practice
 MQTT_BROKER_HOST = "35.247.174.182"
 MQTT_BROKER_PORT = 1884
 MQTT_QOS = 1  # Lower values mean less reliability but faster communication
