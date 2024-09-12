@@ -87,7 +87,7 @@ class Beetle:
                         self.beetle_seq_num = pkt.seq_num
                         resp = PacketConnEstab()
                         resp.crc8 = get_checksum(resp.to_bytearray())
-                        self.chr.write(resp.to_bytearray())
+                        self.write_packet(resp)
                         continue
                     
                     # The packet from here on is valid;
@@ -131,33 +131,56 @@ class Beetle:
         pass
 
     def write_packet(self, packet):
-        self.chr.write(packet.to_bytearray())
+        try:
+            self.chr.write(packet.to_bytearray())
+        except Exception as e:
+            print(f"Error writing, {e}")
+            self.connected = False
+
+    def get_notifications(self, timeout):
+        try:
+            return self.peripheral.waitForNotifications(timeout)
+        except Exception as e:
+            print(f"Error getting notif: {e}")
+            self.connected = False
+            return False
+
+    def reset_bluepy(self):
+        if self.peripheral is not None:
+            print("Disconnecting")
+            self.peripheral.disconnect()
+            self.peripheral = None
+
+        while(self.peripheral is None):
+            try:
+                self.peripheral = btle.Peripheral(BLUNO_MAC_ADDRESS)
+                self.peripheral.setDelegate(self.receiver)
+                self.chr = self.peripheral.getCharacteristics(uuid=CHARACTERISTIC_UUID)[0]
+                print("Setup!")
+                break
+            except Exception as e: # keep trying
+                print(f"peripheral fail: {e}")
+                continue
 
     def connect_to_beetle(self):
         """blocking 3 way handshake"""
-        while(self.peripheral is None):
-            try:
-                peripheral = btle.Peripheral(BLUNO_MAC_ADDRESS)
-                self.peripheral = peripheral
-                self.peripheral.setDelegate(self.receiver)
-                self.chr = self.peripheral.getCharacteristics(uuid=CHARACTERISTIC_UUID)[0]
-                break
-            except: # keep trying
-                print("peripheral fail")
-                pass
+        self.reset_bluepy()
         print("THREE WAY START")
         while(1):
+            if self.connected == False:
+                self.reset_bluepy()
             # STAGE 1: Hello
             pkt = PacketHello()
             pkt.seq_num = self.relay_seq_num
             pkt.crc8 = get_checksum(pkt.to_bytearray())
             print("THREE WAY: Sending HELLO")
-            self.chr.write(pkt.to_bytearray())
+            self.write_packet(pkt)
             self.receiver.flush_buffer() # clear the buffer
 
             # STAGE 2: SYN-ACK wait
             print("THREE WAY: Wait SYN-ACK")
-            if(self.peripheral.waitForNotifications(1000)):
+            if(self.get_notifications(500)):
+                print("hmm")
                 data = self.receiver.get_packet_bytes()
                 if data is None:
                     print("data not exist")
