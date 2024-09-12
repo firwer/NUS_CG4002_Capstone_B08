@@ -8,7 +8,7 @@
 #define IR_RECEIVE_PIN 4 // Define the pin for the IR receiver
 #define BUZZER_PIN 3     // Define the pin for the buzzer (PWM pin)
 #define NOTE_DELAY 50
-#define BULLET_DAMAGE 10
+#define BULLET_DAMAGE 5
 
 const uint16_t PLAYER_1_ADDRESS = 0x23; // Address of player 1
 const uint16_t PLAYER_2_ADDRESS = 0x77; // Address of player 2 <--
@@ -22,7 +22,6 @@ uint16_t incoming_healthState = 100; // To be unpacked from the incoming game_st
 
 Tone melody;
 
-cppQueue soundQueue(sizeof(int), 14, FIFO);
 ArduinoQueue<uint16_t> noteQueue(14);
 
 int soundList[14]{
@@ -141,15 +140,30 @@ void setup()
 
 void loop()
 {
+    // if (millis() - lastSoundTime > NOTE_DELAY)
+    // {
+    //     if (soundQueue.getCount() > 0)
+    //     {
+    //         uint16_t note;
+    //         soundQueue.pop(&note);
+    //         melody.play(note, 50);
+    //     }
+    //     else if (soundQueue.getCount() == 0)
+    //     {
+    //         IrReceiver.restartTimer();
+    //     }
+    //     lastSoundTime = millis();
+    // }
+
     if (millis() - lastSoundTime > NOTE_DELAY)
     {
-        if (soundQueue.getCount() > 0)
+        // Serial.println(soundQueue.itemCount());
+        if (noteQueue.itemCount() > 0)
         {
-            uint16_t note;
-            soundQueue.pop(&note);
-            melody.play(note, 50);
+            uint16_t note = noteQueue.dequeue();
+            melody.play(note, 50); // Play note for 50ms
         }
-        else if (soundQueue.getCount() == 0)
+        else if (noteQueue.itemCount() == 0)
         {
             IrReceiver.restartTimer();
         }
