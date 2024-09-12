@@ -22,30 +22,16 @@ ArduinoQueue<uint16_t> soundQueue(10); // Tones are now stored in 16-bit integer
 
 // Updated to uint16_t to support values up to 1000
 uint16_t soundList[10] = {
-    NOTE_C4,
-    NOTE_D4,
-    NOTE_E4,
-    NOTE_F4,
-    NOTE_G4,
-    NOTE_A4,
-    NOTE_B4,
-    NOTE_C5,
+    NOTE_C6,
+    NOTE_A5,
+    NOTE_G5,
+    NOTE_E5,
     NOTE_D5,
-    NOTE_E5};
-
-enum
-{
-  SOUND_C4,
-  SOUND_D4,
-  SOUND_E4,
-  SOUND_F4,
-  SOUND_G4,
-  SOUND_A4,
-  SOUND_B4,
-  SOUND_C5,
-  SOUND_D5,
-  SOUND_E5
-};
+    NOTE_C5,
+    NOTE_D6,
+    NOTE_E6,
+    NOTE_F6,
+    NOTE_G6};
 
 // For gun shot
 bool isReloaded = false;
@@ -201,9 +187,9 @@ void detectReload()
 
 void playNoBulletsLeftTone()
 {
-  soundQueue.enqueue(soundList[SOUND_G4]);
-  soundQueue.enqueue(soundList[SOUND_E4]);
-  soundQueue.enqueue(soundList[SOUND_C4]);
+  soundQueue.enqueue(NOTE_C6);
+  soundQueue.enqueue(NOTE_A5);
+  soundQueue.enqueue(NOTE_C5);
 }
 
 void motionDetected()
