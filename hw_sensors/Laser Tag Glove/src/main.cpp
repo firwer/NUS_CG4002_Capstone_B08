@@ -13,6 +13,7 @@
 #define FLEX_THRESHOLD 500
 #define NOTE_DELAY 50
 #define DEBOUNCE_DELAY 50
+#define MPU_SAMPLING_RATE 20
 
 const uint8_t PLAYER_1_ADDRESS = 0x23; // 8-bits, no need for 16-bits
 const uint8_t PLAYER_2_ADDRESS = 0x77;
@@ -36,9 +37,9 @@ uint16_t soundList[10] = {
 // For gun shot
 bool isReloaded = false;
 uint8_t curr_bulletsLeft = 6;
-uint8_t bulletState = 6; // No need for 16-bits
-
-uint16_t flexValue = 0; // Flex sensor value can reach up to 1023, use uint16_t
+uint8_t bulletState = 6;
+bool isFullMagazineTonePlayed = false;
+uint16_t flexValue = 0;
 bool isButtonPressed = false;
 bool shotBeenFired = false;
 uint8_t buttonState = HIGH;
@@ -48,20 +49,32 @@ unsigned long lastSoundTime = 0;
 Tone shotFired;
 
 MPU6050 mpu;
-const uint8_t samplingRate = 50; // Sampling interval, 8-bits is sufficient
+const unsigned long SAMPLING_DELAY = 1000 / MPU_SAMPLING_RATE;
 unsigned long lastSampleTime = 0;
 bool isRecording = false;
 bool isMotionDetected = false;
 
-int16_t recordedAccel[40][3]; // Sensor outputs 16-bit values
-int16_t recordedGyro[40][3];  // Same here
-uint8_t recordedPoints = 0;   // Max 40, 8-bits is enough
+struct MPUData
+{
+  int16_t ax;
+  int16_t ay;
+  int16_t az;
+  int16_t gx;
+  int16_t gy;
+  int16_t gz;
+} MPUData;
+
+// int16_t recordedAccel[40][3]; // Sensor outputs 16-bit values
+// int16_t recordedGyro[40][3];  // Same here
+uint8_t recordedPoints = 0; // Max 40, 8-bits is enough
 
 void motionDetected();
+void sendIMUData();
 void printArray(int16_t data[40][3], uint8_t index);
 void printResults();
 void detectReload();
 void playNoBulletsLeftTone();
+void playFullMagazineTone();
 
 void setup()
 {
@@ -74,12 +87,14 @@ void setup()
       ;
   }
 
-  mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_4);
+  mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_4); // can change to FS_2
+  mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_250);
 
   mpu.setDHPFMode(MPU6050_DHPF_0P63);
   mpu.setDLPFMode(MPU6050_DLPF_BW_20);
-  mpu.setMotionDetectionThreshold(15);
+  mpu.setMotionDetectionThreshold(60); // seems good for now
   mpu.setMotionDetectionDuration(5);
+
   mpu.setIntMotionEnabled(true);
 
   pinMode(IMU_INTERRUPT_PIN, INPUT);
@@ -96,7 +111,7 @@ void setup()
 
 void loop()
 {
-  // For shots
+  //==================== GUN SHOT SUBROUTINE ====================
   // detectReload(); //TODO integrate with game engine
   flexValue = analogRead(FLEX_SENSOR_PIN);
   buttonState = digitalRead(BUTTON_PIN);
@@ -116,7 +131,6 @@ void loop()
 
   if (millis() - lastSoundTime > NOTE_DELAY)
   {
-    // Serial.println(soundQueue.itemCount());
     if (soundQueue.itemCount() > 0)
     {
       uint16_t note = soundQueue.dequeue();
@@ -125,12 +139,19 @@ void loop()
     lastSoundTime = millis();
   }
 
+  if (curr_bulletsLeft == 6 && !isFullMagazineTonePlayed)
+  {
+    playFullMagazineTone();
+    isFullMagazineTonePlayed = true;
+  }
+
   if (isButtonPressed && !shotBeenFired && flexValue >= FLEX_THRESHOLD)
   {
     if (curr_bulletsLeft > 0)
     {
       IrSender.sendNEC2(PLAYER_1_ADDRESS, 0x23, 0);
       curr_bulletsLeft--;
+      isFullMagazineTonePlayed = false;
       soundQueue.enqueue(soundList[curr_bulletsLeft]);
       Serial.print("Bullets left: ");
       Serial.println(curr_bulletsLeft);
@@ -144,27 +165,30 @@ void loop()
     shotBeenFired = true;
   }
 
+  //==================== MPU6050 SUBROUTINE====================
   if (isRecording)
   {
-    if (millis() - lastSampleTime >= samplingRate && recordedPoints < 40)
+    if (millis() - lastSampleTime >= SAMPLING_DELAY && recordedPoints < 40)
     {
+      mpu.getMotion6(&MPUData.ax, &MPUData.ay, &MPUData.az, &MPUData.gx, &MPUData.gy, &MPUData.gz);
+      Serial.print("Accel/Gyra:\t");
+      Serial.print(MPUData.ax);
+      Serial.print("\t");
+      Serial.print(MPUData.ay);
+      Serial.print("\t");
+      Serial.print(MPUData.az);
+      Serial.print("\t");
+      Serial.print(MPUData.gx);
+      Serial.print("\t");
+      Serial.print(MPUData.gy);
+      Serial.print("\t");
+      Serial.println(MPUData.gz);
       lastSampleTime = millis();
-      int16_t ax, ay, az;
-      int16_t gx, gy, gz;
-      mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
-
-      recordedAccel[recordedPoints][0] = ax;
-      recordedAccel[recordedPoints][1] = ay;
-      recordedAccel[recordedPoints][2] = az;
-
-      recordedGyro[recordedPoints][0] = gx;
-      recordedGyro[recordedPoints][1] = gy;
-      recordedGyro[recordedPoints][2] = gz;
       recordedPoints++;
 
       if (recordedPoints >= 40)
       {
-        printResults();
+        // sendIMUData(ax,ay,az,gx,gy,gz);
         isRecording = false;
         recordedPoints = 0;
       }
@@ -192,53 +216,22 @@ void playNoBulletsLeftTone()
   soundQueue.enqueue(NOTE_C5);
 }
 
+void playFullMagazineTone()
+{
+  soundQueue.enqueue(NOTE_C5);
+  soundQueue.enqueue(NOTE_A5);
+  soundQueue.enqueue(NOTE_C6);
+}
+
 void motionDetected()
 {
   if (!isRecording)
   {
     isMotionDetected = true;
     isRecording = true;
-    Serial.println("Motion detected, recording started");
   }
 }
 
-void printArray(int16_t data[40][3], uint8_t index)
-{
-  Serial.print('"');
-  Serial.print("[");
-  for (uint8_t i = 0; i < 40; i++)
-  {
-    Serial.print(data[i][index]);
-    if (i < 39)
-      Serial.print(",");
-  }
-  Serial.print("]");
-  Serial.print('"');
-}
-
-void printResults()
-{
-  printArray(recordedAccel, 0);
-  Serial.print(",");
-  printArray(recordedAccel, 1);
-  Serial.print(",");
-  printArray(recordedAccel, 2);
-  Serial.print(",");
-  printArray(recordedGyro, 0);
-  Serial.print(",");
-  printArray(recordedGyro, 1);
-  Serial.print(",");
-  printArray(recordedGyro, 2);
-  Serial.print("\n");
-
-  recordedPoints = 0;
-  for (uint8_t i = 0; i < 40; i++)
-  {
-    recordedAccel[i][0] = 0;
-    recordedAccel[i][1] = 0;
-    recordedAccel[i][2] = 0;
-    recordedGyro[i][0] = 0;
-    recordedGyro[i][1] = 0;
-    recordedGyro[i][2] = 0;
-  }
-}
+// void sendIMUData(){
+//   //FOR INTERNAL COMMS
+// }
