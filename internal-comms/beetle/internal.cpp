@@ -4,28 +4,27 @@ volatile uint8_t beetle_seq_num = 0;  // data FROM beetle
 volatile uint8_t relay_seq_num = 0;   // data FROM relay
 
 volatile bool isConnected = false;
-uint8_t failed_transmissions = 0;
 
 #define BUFFER_SZ 200
 uint8_t buffer[BUFFER_SZ];
-unsigned int buffer_writer = 0; // write
-unsigned int buffer_reader = 0; // read
-unsigned int buffer_fills = 0; // |Bytes| the buffer has
+unsigned int buffer_writer = 0;  // write
+unsigned int buffer_reader = 0;  // read
+unsigned int buffer_fills = 0;   // |Bytes| the buffer has
 
 // fill the serial buffer
-void fill_buffer(uint8_t fill_for_ms){
+void fill_buffer() {
   unsigned int start = millis();
-  while(Serial.available() && buffer_fills < BUFFER_SZ){// && millis() - start < fill_for_ms) {
+  while (Serial.available() && buffer_fills < BUFFER_SZ) {  // && millis() - start < fill_for_ms) {
     buffer[buffer_writer] = Serial.read();
-    buffer_writer = (buffer_writer + 1) % BUFFER_SZ; 
+    buffer_writer = (buffer_writer + 1) % BUFFER_SZ;
     ++buffer_fills;
     if (buffer_fills >= BUFFER_SZ) {
-      break; 
+      break;
     }
   }
 }
 
-bool hasPacket(){
+bool hasPacket() {
   return buffer_fills >= 20;
 }
 
@@ -35,18 +34,17 @@ bool await_packet(struct packet_general_t* packet_buffer, int timeout_ms) {
   unsigned long start_time = millis();
 
   while (millis() - start_time < timeout_ms) {
-    fill_buffer(20);  // Fill buffer in small intervals
-
+    fill_buffer();  // Fill buffer in small intervals
     if (hasPacket()) {
       for (int i = 0; i < PACKET_SIZE; ++i) {
         packet_bytes[bytes_rcv++] = buffer[buffer_reader++];
         buffer_reader %= BUFFER_SZ;
       }
-      buffer_fills -= PACKET_SIZE; 
+      buffer_fills -= PACKET_SIZE;
       return true;
     }
   }
-  return false; // Timeout
+  return false;  // Timeout
 }
 
 // Calculate CRC8
@@ -98,13 +96,13 @@ uint8_t checkPacketValidity(packet_general_t* packet) {
 // The three-way handshake MUST be stop-and-wait.
 void await_handshake(bool helloReceived) {
   isConnected = false;  // TODO check if this should be removed
+  digitalWrite(13, 1);
   while (!isConnected) {
     // Stage 1 -- HELLO
     while (!helloReceived) {
       packet_general_t hello_packet = { 0 };
       // Wait forever for a HELLO to arrive.
-      while (await_packet(&hello_packet, TIMEOUT_MS))
-        ;
+      while(await_packet(&hello_packet, TIMEOUT_MS)){}
       // Check if its a HELLO packet
       if (hello_packet.packet_type == PACKET_HELLO && verifyChecksum(&hello_packet)) {
         break;
@@ -115,7 +113,7 @@ void await_handshake(bool helloReceived) {
     packet_ack_t syn_ack_packet = { 0 };
     syn_ack_packet.packet_type = PACKET_SYN_ACK;
     packet_general_t ack_packet = { 0 };
-    syn_ack_packet.seq_num = beetle_seq_num; // TODO: check if this is problematic
+    syn_ack_packet.seq_num = beetle_seq_num;  // TODO: check if this is problematic
 
     // Stage 2 -- SYN_ACK
     while (1) {  // keep retransmitting SYN-ACK
@@ -133,6 +131,7 @@ void await_handshake(bool helloReceived) {
     }
     helloReceived = (isConnected) ? true : false;
   }
+  digitalWrite(13, 0);
 }
 
 // --------------- TESTING CODE --------------
@@ -169,7 +168,7 @@ void flip_bits_with_probability(packet_general_t* pkt, float probability) {
   }
 }
 
-void nuke_packet(float probability); // simulate packet losses
+void nuke_packet(float probability);  // simulate packet losses
 
 // Test how resilient unreliable throughput is
 void test_throughput_unreliable(int rate_ms) {
@@ -196,73 +195,71 @@ void test_throughput_unreliable(int rate_ms) {
 
 // Test single stop-and-wait
 void test_throughput_reliable(int rate_ms) {
-  packet_health_t pkt = {0};
-  packet_general_t rcv = {0};
-  int await_delay = 20;
-  pkt.packet_type = PACKET_DATA_HEALTH;
-  pkt.health_count = 22;
-  pkt.seq_num = beetle_seq_num; //todo buggy
+  uint8_t exp_beetle_seq_num = beetle_seq_num; // this tracks the reliable seq_num
+  bool canSendReliable = true;
+  uint8_t test_health_number = 22;
+  uint8_t prev_rcv_ack = 0; // track the previously received ack number
+  long reliableTimeStart = 0;
+  uint8_t timeout_ms = max(rate_ms+100, 500);
+  packet_general_t cached_packet = {0};
+  uint8_t to_send = 10;
+  // simulate event driver
+  while (1) {
+    auto rate_start = millis();
 
-  packet_general_t cached_pkt;
-  // int expected_ack = 0;
-  unsigned long timer_expiry = 0;
-  memcpy(&cached_pkt, &pkt, sizeof(packet_general_t));
-
-  // expected_ack = pkt.seq_num + 1;
-  ++beetle_seq_num;
-  timer_expiry = millis();
-  // write_serial((packet_general_t*) &pkt);
-
-  while(1) {
-    // fill_buffer(20);
-    unsigned long start = millis();
-
-    if(await_packet((packet_general_t*)&rcv, 100)){
-      // handle reconnections 
-      if(rcv.packet_type == PACKET_HELLO) {
-        // digitalWrite(13, 0);
+    // bool resendReliable = false;
+    packet_general_t rcv = {0};
+    if (await_packet((packet_general_t*)&rcv, 50)) {
+      // case 1: checksum error
+      // > ignore
+      if(!verifyChecksum(&rcv)){
+        // oops!
+      }
+      // case 2: hello
+      // > relay wants to re-estab connections. handshake.
+      if(rcv.packet_type == PACKET_HELLO){
         await_handshake(true);
-        // digitalWrite(13, 1);
-        continue;
       }
-
-      if(rcv.packet_type == PACKET_CONN_ESTAB) {
-        // timer_expiry = millis();
-        // write_serial((packet_general_t*)&cached_pkt);
-        continue;
+      // case 3: conn_estab
+      // > ignore this duplicate
+      if(rcv.packet_type == PACKET_CONN_ESTAB){
+      
       }
-
-      // handle ACKnowledgements
+      // case 4: ACKn
       if(rcv.packet_type == PACKET_ACK){
-        // check which ACK it is OK
-        if(rcv.seq_num != beetle_seq_num) {
-          // resend the packet
-          // timer_expiry = millis();
-          // write_serial((packet_general_t*)&cached_pkt);
-        }else{
-          // we got the ack we are looking for. 
-          --pkt.health_count;
-          pkt.seq_num = beetle_seq_num;
-          memcpy(&cached_pkt, &pkt, sizeof(packet_general_t));    
-          write_serial_with_fuzz((packet_general_t*)&pkt, 1);
-          ++beetle_seq_num;
-          timer_expiry = millis();
+        if(rcv.seq_num == exp_beetle_seq_num){
+          // > flag that we need not resend
+          canSendReliable = true;
         }
       }
-      unsigned long end = millis();
-      if(end - start < rate_ms){
-        delay(rate_ms-(end-start));
-      }
     }
 
-    // handle timeouts
-    if(millis()-timer_expiry > TIMEOUT_MS){
-      // timeout! send the cached packet again
-      timer_expiry = millis();
+    // if ACKn received AND there is something to send, send it!
+    if(canSendReliable){
+      delay(rate_ms);
+        
+      canSendReliable = false;
+      packet_health_t pkt = {0};
+      pkt.health_count = test_health_number--;
+      pkt.packet_type = PACKET_DATA_HEALTH;
+      pkt.seq_num = beetle_seq_num;
+      ++beetle_seq_num;
+      exp_beetle_seq_num = beetle_seq_num;
+      setChecksum((packet_general_t*)&pkt);
+      write_serial((packet_general_t*)&pkt);
+      memcpy(&cached_packet, &pkt, 20);
+      reliableTimeStart = millis();
+      
+
+    }else if(millis() - reliableTimeStart > 1000){ // constant here must be big
+      // else we handle reliable packet timeout;
       digitalWrite(13, 1);
-      delay(10);
-      write_serial((packet_general_t*)&cached_pkt);
-      digitalWrite(13, 0);
+      reliableTimeStart = millis();
+      write_serial(&cached_packet);
+      digitalWrite(13, 0);     
     }
+
+    // then, do unreliable sending (omitted)
+
   }
 }
