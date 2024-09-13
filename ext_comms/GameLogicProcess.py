@@ -54,6 +54,7 @@ async def reload(targetGameState: dict):
 
 async def game_state_manager(currGameData, attacker_id: int, pred_output_queue: asyncio.Queue):
     prediction_action = await pred_output_queue.get()
+    print(f"Received prediction from PredictionService: {prediction_action} for player {attacker_id}")
 
     if attacker_id == 1:
         currGameData.p1.action = prediction_action
@@ -71,10 +72,12 @@ async def game_state_manager(currGameData, attacker_id: int, pred_output_queue: 
     elif prediction_action == "reload":
         await reload(targetPlayerData)
     elif prediction_action == "bomb":
+        # TODO: Implement bomb action
         pass
     elif prediction_action in {"basket", "soccer", "volley", "bowl"}:
         await reduce_health(OpponentPlayerData, config.GAME_AI_DMG)
     elif prediction_action == "logout":
+        # TODO: Implement logout action
         pass
     else:
         pass

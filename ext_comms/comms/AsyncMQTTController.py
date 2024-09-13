@@ -6,6 +6,10 @@ import config
 
 
 class AsyncMQTTController:
+    """
+        Class to handle asynchronous MQTT communication with the visualizers
+    """
+
     mqttc: aiomqtt.Client
     receive_data_queue: asyncio.Queue
     send_data_queue: asyncio.Queue

@@ -1,10 +1,12 @@
+import asyncio
+
 import config
 from comms.TCPC_Controller import TCPC_Controller
 
 
-async def start_evaluation_process(eval_server_port, evaluation_server_to_engine_queue,
-                                   engine_to_evaluation_server_queue):
-    ec = EvaluationProcess(eval_server_port, evaluation_server_to_engine_queue, engine_to_evaluation_server_queue)
+async def start_evaluation_process(eval_server_port: int, receive_queue: asyncio.Queue,
+                                   send_queue: asyncio.Queue):
+    ec = EvaluationProcess(eval_server_port, receive_queue, send_queue)
     await ec.tcpClient.connect()
     await ec.tcpClient.init_handshake()
     while True:
@@ -14,11 +16,18 @@ async def start_evaluation_process(eval_server_port, evaluation_server_to_engine
 
 # Evaluation Process is responsible for the communication between the Evaluation Server and the Game Engine
 class EvaluationProcess:
+    """
+        This class is responsible for the communication between the Evaluation Server and the Game Engine
+        It will handle the messages from the Evaluation Server and send messages to the Evaluation Server
+
+        receive_queue: Queue to receive messages from the Evaluation Server
+        send_queue: Queue to send messages to the Evaluation Server
+    """
     def __init__(self, eval_server_port, evaluation_server_to_engine_queue, engine_to_evaluation_server_queue):
         self.evaluation_server_to_engine_queue = evaluation_server_to_engine_queue
         self.engine_to_evaluation_server_queue = engine_to_evaluation_server_queue
         self.tcpClient = TCPC_Controller(config.EVAL_SERVER_HOST, eval_server_port,
-                                            config.EVAL_SECRET_KEY)  # Used for communication with the evaluation server
+                                         config.EVAL_SECRET_KEY)  # Used for communication with the evaluation server
         self.response_pending = False  # Flag to track if a response is pending
 
     async def msg_receiver(self):

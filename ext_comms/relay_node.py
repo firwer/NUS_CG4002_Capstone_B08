@@ -82,9 +82,6 @@ async def main():
         local_port = server.local_bind_port
 
     await run_tcp_client(send_queue, receive_queue, local_port)
-    #tcp_p1 = asyncio.create_task(run_tcp_client(send_queue=send_queue, receive_queue=receive_queue))
-    #debug_input = asyncio.create_task(user_input(send_queue, receive_queue))
-    #await asyncio.gather(tcp_p1, debug_input)
     server.stop()
 
 

@@ -1,3 +1,7 @@
+# Game Mode Configurations
+PLAYER_MODE = 1  # 1 for single player, 2 for multiplayer
+VISUALIZER_ENABLED = False  # KIV
+
 # Relay Node Configuration
 RELAY_NODE_LOCAL_TEST = True  # Set to True for local env relay node testing
 
@@ -17,7 +21,7 @@ ssh_password = "leonardo"  # pushing password up to git, excellent swe practice
 
 # MQTT Configurations
 MQTT_GAME_ENGINE_USER = "game_engine"
-MQTT_GAME_ENGINE_PASS = "funemploymentlife" # pushing password up to git, excellent swe practice
+MQTT_GAME_ENGINE_PASS = "funemploymentlife"  # pushing password up to git, excellent swe practice
 MQTT_BROKER_HOST = "35.247.174.182"
 MQTT_BROKER_PORT = 1884
 MQTT_QOS = 1  # Lower values mean less reliability but faster communication
