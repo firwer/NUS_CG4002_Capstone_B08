@@ -22,16 +22,16 @@ ArduinoQueue<uint16_t> soundQueue(10); // Tones are now stored in 16-bit integer
 
 // Updated to uint16_t to support values up to 1000
 uint16_t soundList[10] = {
-    NOTE_C6,
-    NOTE_A5,
-    NOTE_G5,
-    NOTE_E5,
-    NOTE_D5,
     NOTE_C5,
+    NOTE_D5,
+    NOTE_E5,
+    NOTE_F5,
+    NOTE_G5,
+    NOTE_A5,
+    NOTE_B5,
+    NOTE_C6,
     NOTE_D6,
-    NOTE_E6,
-    NOTE_F6,
-    NOTE_G6};
+    NOTE_E6};
 
 // For gun shot
 bool isReloaded = false;
@@ -131,7 +131,7 @@ void loop()
     {
       IrSender.sendNEC2(PLAYER_1_ADDRESS, 0x23, 0);
       curr_bulletsLeft--;
-      soundQueue.enqueue(soundList[6 - curr_bulletsLeft]);
+      soundQueue.enqueue(soundList[curr_bulletsLeft]);
       Serial.print("Bullets left: ");
       Serial.println(curr_bulletsLeft);
       Serial.println("Shot fired");

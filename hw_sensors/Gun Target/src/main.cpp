@@ -16,6 +16,8 @@ const uint16_t PLAYER_2_ADDRESS = 0x77; // Address of player 2 <--
 bool isShot = false;    // to send to game engine
 bool isRespawn = false; // to integrate with game engine
 unsigned long lastSoundTime = 0;
+bool isFullHealthplayed = false;
+bool isDeathPlayed = false;
 
 uint16_t curr_healthValue = 100;     // this is the outgoing health value
 uint16_t incoming_healthState = 100; // To be unpacked from the incoming game_state packet
@@ -140,21 +142,6 @@ void setup()
 
 void loop()
 {
-    // if (millis() - lastSoundTime > NOTE_DELAY)
-    // {
-    //     if (soundQueue.getCount() > 0)
-    //     {
-    //         uint16_t note;
-    //         soundQueue.pop(&note);
-    //         melody.play(note, 50);
-    //     }
-    //     else if (soundQueue.getCount() == 0)
-    //     {
-    //         IrReceiver.restartTimer();
-    //     }
-    //     lastSoundTime = millis();
-    // }
-
     if (millis() - lastSoundTime > NOTE_DELAY)
     {
         // Serial.println(soundQueue.itemCount());
@@ -168,6 +155,12 @@ void loop()
             IrReceiver.restartTimer();
         }
         lastSoundTime = millis();
+    }
+
+    if (curr_healthValue == 100 && !isFullHealthplayed)
+    {
+        playStartupTune();
+        isFullHealthplayed = true;
     }
 
     // Handle IR remote input
@@ -193,6 +186,7 @@ void loop()
         {
             digitalWrite(LED_BUILTIN, HIGH);
             curr_healthValue -= BULLET_DAMAGE;
+            isFullHealthplayed = false;
             playhealthDecrementTune();
             Serial.print(F("Player 1 shot! Health: "));
             Serial.println(curr_healthValue);
@@ -201,9 +195,10 @@ void loop()
     }
 
     // Play death tune if health is 0 or less
-    if (curr_healthValue <= 0)
+    if (curr_healthValue <= 0 && !isDeathPlayed)
     {
         playDeathTune();
+        isDeathPlayed = true;
         Serial.println(F("Player 1 is dead!"));
     }
 
