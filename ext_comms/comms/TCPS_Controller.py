@@ -17,7 +17,8 @@ class TCPS_Controller:
         self.port = port
         self.receive_queue = receive_queue
         self.send_queue = send_queue
-        self.current_writer = None
+        self.writer = None
+        self.reader = None
 
     async def start_server(self):
         server = await asyncio.start_server(self.handle_client, host=self.ip, port=self.port)
@@ -29,15 +30,13 @@ class TCPS_Controller:
         addr = writer.get_extra_info('peername')
         print(f"Connection established with {addr}")
 
-        # if self.current_writer:
-        #     await self.clean_up_connection(self.current_writer)  # Clean up old connection
-        # self.current_writer = writer
-
+        self.writer = writer
+        self.reader = reader
         tasks = []
         try:
             while True:
-                receive_task = asyncio.create_task(self._receive_task(reader, writer))
-                send_task = asyncio.create_task(self._send_task(writer))
+                receive_task = asyncio.create_task(self._receive_task())
+                send_task = asyncio.create_task(self._send_task())
                 tasks.extend([receive_task, send_task])
                 # Wait for both tasks to run concurrently
                 await asyncio.gather(receive_task, send_task)
@@ -45,32 +44,34 @@ class TCPS_Controller:
             print(f"Exception occurred: {e}")
         finally:
             print(f"Closing connection with {addr}")
-            await self.clean_up_connection(writer, tasks)
+            await self.clean_up_connection()
 
-    async def _receive_task(self, reader, writer):
+    async def _receive_task(self):
         """Continuously receive messages from the client and place them in the receive_queue."""
-        addr = writer.get_extra_info('peername')
+        addr = self.writer.get_extra_info('peername')
         try:
             while True:
-                success, message = await self._recv_message(reader)
+                success, message = await self._recv_message(self.reader)
                 if not success:
-                    await self._send_message(writer, "ERROR: Malformed data received.")
+                    await self._send_message(self.writer, "ERROR: Malformed data received.")
                     print(f"Error in data received from {addr}. Sent error response.")
                     continue
                 print(f"Received message from {addr}: {message}")
                 await self.receive_queue.put(message)  # Place the received message in the queue
         except Exception as e:
             print(f"Exception in receiving messages: {e}")
+            await self.clean_up_connection()
 
-    async def _send_task(self, writer):
+    async def _send_task(self):
         """Continuously send messages from the send_queue to the connected client."""
         try:
             while True:
                 # Wait until there's a message to send
                 message = await self.send_queue.get()
-                await self._send_message(writer, message)  # Send the message to the client
+                await self._send_message(self.writer, message)  # Send the message to the client
         except Exception as e:
             print(f"Exception in sending messages: {e}")
+            await self.clean_up_connection()
 
     async def _send_message(self, writer, message):
         encrypted_message = encrypt_msg(message, self.secret_key)
@@ -97,17 +98,8 @@ class TCPS_Controller:
             print("Connection aborted by Relay Node's TCP Client")
             return False, None
 
-    async def clean_up_connection(self, writer):
-        """Clean up resources when a client disconnects."""
-        # Cancel all active tasks (receive and send)
-        # for task in tasks:
-        #     task.cancel()
-        #     try:
-        #         await task
-        #     except asyncio.CancelledError:
-        #         pass
-
-        # Close the writer (which will also close the reader)
-        # writer.close()
-        # await writer.wait_closed()
-        # print(f"Cleaned up connection and closed writer.")
+    async def clean_up_connection(self):
+        if not self.writer.is_closing():
+            self.writer.close()
+            await self.writer.wait_closed()
+        print("Cleaned up connection and closed writer.")
