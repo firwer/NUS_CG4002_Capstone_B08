@@ -18,7 +18,9 @@ class AsyncMQTTController:
 
     async def run_tasks(self, receive_topic: str, send_topic: str):
         try:
-            async with aiomqtt.Client(hostname=config.MQTT_BROKER_HOST, port=self.mqtt_port) as client:
+            async with (aiomqtt.Client(hostname=config.MQTT_BROKER_HOST, port=self.mqtt_port,
+                                       username=config.MQTT_GAME_ENGINE_USER, password=config.MQTT_GAME_ENGINE_PASS)
+                        as client):
                 self.mqttc = client
                 self.connected = True
                 listen_task = asyncio.create_task(self.listen(receive_topic))
