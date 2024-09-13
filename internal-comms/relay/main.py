@@ -9,112 +9,121 @@ CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"  # Correct characte
 TIMEOUT_MS = 1000
 
 class NotifyDelegate(btle.DefaultDelegate):
-    def __init__(self, buffer):
+    def __init__(self):
         btle.DefaultDelegate.__init__(self)
-        self.buffer = buffer
+        self.buffer = bytearray()
         self.buffer_len = len(self.buffer)
-        self.buffer_ptr = 0
-        self.buffer_read = 0
-        self.buffer_filled = 0
         self.lock = threading.Lock()  # Lock to manage concurrency
 
     def handleNotification(self, cHandle, data: bytes):
-        # print(f"Got a notification: {len(data)}")
-        # print(f"{self.buffer_ptr}, {self.buffer_filled}")
-        for byte in data:
-            if self.buffer_filled == self.buffer_len:
-                break  # Buffer full, stop processing
-            self.buffer[self.buffer_ptr] = byte
-            self.buffer_ptr = (self.buffer_ptr + 1) % self.buffer_len
-        self.buffer_filled += len(data)
+        # print(f"Got a notification: {len(data)}: {data.hex()}")
+        # TODO: write the fragmentation logic here and count fragments
+        self.buffer += bytearray(data)
 
     def has_packet(self) -> bool:
-        return self.buffer_filled > 20
+        return len(self.buffer) >= 20
 
     def get_packet_bytes(self) -> bytearray | None:
-        """returns a 20B bytearray representing a packet. else, None"""
-        if self.buffer_filled < 20:
+        """returns a 20B bytearray representing a packet from the buffer. else, None"""
+        if not self.has_packet():
             return None
-        data = bytearray(20)
-        for i in range(20):
-            data[i] = self.buffer[(self.buffer_read + i) % self.buffer_len]
-        self.buffer_read = (self.buffer_read + 20) % self.buffer_len
-        self.buffer_filled -= 20
+        data = self.buffer[:20]
+        self.buffer = self.buffer[20:]
+        # print(len(self.buffer)//20)
         return data
-
-    def flush_buffer(self):
-        """reset buffer_filled"""
-        self.buffer_filled = 0
+    
+    def reset_buffer(self):
+        data = bytearray()
 
 # A beetle object maintains its own connection and state
 class Beetle:
     def __init__(self, MAC_ADDRESS) -> None:
         self.relay_seq_num = 0
-        self.beetle_seq_num = 0
+        self.beetle_seq_num = 0 # expected number
         self.MAC = MAC_ADDRESS
         self.chr = CHARACTERISTIC_UUID
         self.connected = False
-        self.packet_buffer = bytearray(20*10)
-        self.receiver = NotifyDelegate(self.packet_buffer)
+        self.receiver = NotifyDelegate()
         self.errors = 0
         self.peripheral = None
 
     def run(self):
-        while(1):
+        while True:
             if not self.connected or self.errors > 2:
+                print(f"Restarting connection: {self.connected}, {self.errors}")
+                self.receiver.reset_buffer()
                 self.errors = 0
                 self.connect_to_beetle()
-            else: # connected
-                # collect data
-                try:
-                    self.peripheral.waitForNotifications(timeout=500)
-                except:
-                    print("Device disconnected. Re-connecting...")
-                    self.connected = False
+                continue
+            # Collect notifications
+            try:
+                # print("Waiting for notifications...")
+                self.peripheral.waitForNotifications(1)
+            except Exception as e:
+                print(f"Device disconnected {e}. Re-connecting...")
+                self.connected = False
+                continue
+            # TODO: check if have things to send
+            # Otherwise, receive...
+            shouldConnEstab = True
+            ackNum = -1 # track the largest reliable ack num rcv
+            latestPacket = None
+            # print(f"{len(self.receiver.buffer)}")
+            while(self.receiver.has_packet()):
+                if self.errors > 3:
+                    break
+
+                data = self.receiver.get_packet_bytes()
+                # data should be hex
+                # check for incomplete data
+                # print(data.hex())
+                if not verify_checksum(data):
+                    print("err: checksum failed")
+                    self.errors += 1
                     continue
-                # check if there is something to receive
-                if self.receiver.has_packet():
-                    bytearr = self.receiver.get_packet_bytes()
-                    pkt = self.bytes_to_packet(bytearr)
-                    if pkt.packet_type == PACKET_INVALID:
-                        print("err: invalid packet")
-                        self.errors += 1
-                        continue
-                    # SYNACK duplicate received, reply with CONN_ESTAB
-                    if pkt.packet_type == PACKET_SYN_ACK:
-                        print("Dup SYN_ACK, sending CONN_ESTAB")
-                        # assert(self.beetle_seq_num == pkt.seq_num)
+
+                pkt = get_packet(data)
+
+                # check what kind of packet
+                if pkt.packet_type == PACKET_SYN_ACK:
+                    print("skipping due to SYN ACK")
+                    continue
+
+                # if we get normal data packets, then no need to comm_estab
+                shouldConnEstab = False
+                # Is unreliable send
+                if pkt.packet_type == PACKET_DATA_IMU:
+                    # do work
+                    print(f"PKT {pkt.seq_num}")
+                    continue
+
+                # Is reliable packet
+                if pkt.packet_type == PACKET_DATA_HEALTH: # or ...
+                    latestPacket = pkt
+                    ackNum = pkt.seq_num 
+                    if pkt.seq_num == (self.beetle_seq_num + 1) % 256:
+                        print(f"PKT {latestPacket.seq_num}, {latestPacket.health}")
                         self.beetle_seq_num = pkt.seq_num
-                        resp = PacketConnEstab()
-                        resp.crc8 = get_checksum(resp.to_bytearray())
-                        self.write_packet(resp)
-                        continue
-                    
-                    # The packet from here on is valid;
-                    # Handle the packet
-                    if pkt.packet_type == PACKET_DATA_IMU:
-                        # stream of data, no need to ACK
-                        print("IMU")
-                        self.print_packet(pkt)
-                    elif pkt.packet_type == PACKET_DATA_HEALTH:
-                        # reliable receive
-                        ack = PacketAck()
-                        if pkt.seq_num == self.beetle_seq_num:
-                            # correct seq num received
-                            self.beetle_seq_num = (self.beetle_seq_num + 1 ) % 256
-                            ack.seq_num = self.beetle_seq_num
-                            ack.crc8 = get_checksum(ack.to_bytearray())
-                            self.write_packet(ack)
-                            print(f"ACK {ack.seq_num} PKT {pkt.seq_num}, {pkt.health}")
-                        else:
-                            # ask for the last expected seq num
-                            ack.seq_num = self.beetle_seq_num
-                            ack.crc8 = get_checksum(ack.to_bytearray())
-                            self.write_packet(ack)
-                            print(f"NACK: {self.beetle_seq_num}, rcv: {pkt.seq_num}")
-                    else: 
-                        # do nothing
-                        pass
+
+            # handle post-buffer drain actions
+            if shouldConnEstab:
+                resp = PacketConnEstab()
+                resp.seq_num = self.relay_seq_num
+                resp.crc8 = get_checksum(resp.to_bytearray())
+                self.write_packet(resp)
+            if ackNum == -1:
+                continue
+            # we received an 
+            resp = PacketAck()
+            resp.seq_num = (ackNum + 1) % 256
+            resp.crc8 = get_checksum(resp.to_bytearray())
+            self.write_packet(resp)
+            # finally, deal with the packet
+            if latestPacket is not None:
+                print(f"ACK {resp.seq_num}, for PKT {latestPacket.seq_num}, {latestPacket.health}")
+            else:
+                print(f"ACK {resp.seq_num}")
+
 
     def bytes_to_packet(self, bytearray):
         """takes a 20B bytearray, CRC8 checks, then wraps it in the packet class.
@@ -126,9 +135,6 @@ class Beetle:
             print("err: checksum failed")
             return PacketInvalid()
         return get_packet(bytearray)
-    
-    def reliable_receive(self):
-        pass
 
     def write_packet(self, packet):
         try:
@@ -137,7 +143,7 @@ class Beetle:
             print(f"Error writing, {e}")
             self.connected = False
 
-    def get_notifications(self, timeout):
+    def get_notifications(self, timeout=1.5):
         try:
             return self.peripheral.waitForNotifications(timeout)
         except Exception as e:
@@ -147,7 +153,7 @@ class Beetle:
 
     def reset_bluepy(self):
         if self.peripheral is not None:
-            print("Disconnecting")
+            # print("Disconnecting")
             self.peripheral.disconnect()
             self.peripheral = None
 
@@ -175,47 +181,47 @@ class Beetle:
             pkt.crc8 = get_checksum(pkt.to_bytearray())
             print("THREE WAY: Sending HELLO")
             self.write_packet(pkt)
-            self.receiver.flush_buffer() # clear the buffer
 
             # STAGE 2: SYN-ACK wait
             print("THREE WAY: Wait SYN-ACK")
-            if(self.get_notifications(500)):
-                print("hmm")
-                data = self.receiver.get_packet_bytes()
-                if data is None:
-                    print("data not exist")
-                    continue
-                if not verify_checksum(data):
-                    print(f"checksum fail {data.hex()}")
-                    continue
-                packet = get_packet(data)
-                if packet is None:
-                    print("packet type unknown")
-                    continue
-                if packet.packet_type != PACKET_SYN_ACK:
-                    print("non SYNACK received")
-                    continue
-                # syn-ack received
-                self.beetle_seq_num = pkt.seq_num
-                print("SYN-ACK received")
+            hasSynAck = False
+            if(self.get_notifications(1)): # cannot set too low
+                while self.receiver.has_packet():
+                    data = self.receiver.get_packet_bytes()
+                    if data is None:
+                        print("data not exist")
+                        continue
+                    if not verify_checksum(data):
+                        print(f"checksum fail {data.hex()}")
+                        continue
+                    packet = get_packet(data)
+                    if packet is None:
+                        print("packet type unknown")
+                        continue
+                    if packet.packet_type != PACKET_SYN_ACK:
+                        print("non SYNACK received")
+                        continue
+                    # syn-ack received
+                    self.beetle_seq_num = pkt.seq_num
+                    hasSynAck = True
+                    print("SYN-ACK received")
             else:
                 print("Timeout: SYN-ACK not received.")
                 continue  # Retry the handshake
-
-            # STAGE 3: ACK
-            ack = PacketAck()
-            ack.seq_num = self.beetle_seq_num
-            ack.crc8 = get_checksum(ack.to_bytearray())
-            print("THREE WAY: ACK")
-            self.write_packet(ack)
+            if not hasSynAck:
+                continue
+            # STAGE 3: CONN_ESTAB
+            resp = PacketConnEstab()
+            resp.seq_num = self.relay_seq_num
+            resp.crc8 = get_checksum(resp.to_bytearray())
+            print(f"THREE WAY: ACK")
+            self.write_packet(resp)
             self.connected = True
             break  # Exit the loop after successful connection
         print("Connection established.")
-        self.receiver.flush_buffer() # clear the buffer
         
     def print_packet(self, packet):
         print(f"PKT: {packet.packet_type}, {packet.seq_num}")
-
 
 def discover_services_and_characteristics(bluno):
     print("Discovering services and characteristics...")
