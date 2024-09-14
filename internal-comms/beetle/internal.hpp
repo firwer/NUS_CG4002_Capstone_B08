@@ -30,7 +30,7 @@ void flip_bits_with_probability(packet_general_t* pkt, float probability);
 void test_throughput_unreliable(int rate_ms);
 void test_throughput_reliable(int rate_ms);
 void test_receive_reliable();
-
+void communicate(uint8_t rel_tx_rate, uint8_t unrel_tx_rate);
 
 // External variable declarations
 // extern uint8_t beetle_seq_num;
