@@ -7,7 +7,6 @@ import threading
 
 BLUNO_MAC_ADDRESS = "F4:B8:5E:42:4C:BB"
 CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"  # Correct characteristic UUID
-TIMEOUT_MS = 1000
 
 class NotifyDelegate(btle.DefaultDelegate):
     def __init__(self):
@@ -61,7 +60,7 @@ class Beetle:
             shouldAck = False
 
             if not self.connected or self.errors > 2 or self.repeatedReliableSend > 2:
-                print(f"Restarting connection: {self.connected}, {self.errors}")
+                print(f"Restarting connection: {self.connected}, {self.errors}, {self.repeatedReliableSend}")
                 self.receiver.reset_buffer()
                 self.errors = 0
                 self.repeatedReliableSend = 0
@@ -72,7 +71,7 @@ class Beetle:
                 # print("Waiting for notifications...")
                 self.peripheral.waitForNotifications(1)
             except Exception as e:
-                print(f"Device disconnected {e}. Re-connecting...")
+                print(f"Error: {(e)}. Re-connecting...")
                 self.connected = False
                 continue
             # TODO: check if have things to send
@@ -108,20 +107,21 @@ class Beetle:
                 # Is unreliable send
                 if pkt.packet_type == PACKET_DATA_IMU:
                     # do work
-                    print(f"RCV PKT b{pkt.seq_num} (udp)")
+                    print(f"RX PKT b{pkt.seq_num} (beetle udp)")
                     continue
 
                 # Is reliable packet
                 if pkt.packet_type == PACKET_DATA_HEALTH: # or ...
+                    shouldAck = True
                     latestPacket = pkt
                     self.beetle_seq_num = max(self.beetle_seq_num, pkt.seq_num + 1)
                     ackNum = pkt.seq_num 
-                    print(f"RCV PKT b{latestPacket.seq_num}, {latestPacket.health}")
+                    print(f"RX PKT b{latestPacket.seq_num}, Data: {latestPacket.health} (beetle tcp)")
 
                 # Is an ACK
                 if pkt.packet_type == PACKET_ACK:
                     # is the ACK what we expected?
-                    print(f"RCV PKT r{pkt.seq_num}, curr r{self.relay_seq_num}")
+                    print(f"RX PKT r{pkt.seq_num}, Relay SN: r{self.relay_seq_num} (relay tcp)")
                     if pkt.seq_num == (self.relay_seq_num + 1) % 256:
                         # We got the ack we wanted!
                         # canSendReliable implies that no more unacked pkt is in-flight
@@ -136,6 +136,7 @@ class Beetle:
                 resp.seq_num = self.relay_seq_num
                 resp.crc8 = get_checksum(resp.to_bytearray())
                 self.write_packet(resp)
+            # print(f"{shouldAck}, {ackNum}")
             if shouldAck and ackNum != -1:
                 # we received an ACK-able data
                 resp = PacketAck()
@@ -144,26 +145,27 @@ class Beetle:
                 self.write_packet(resp)
                 # finally, deal with the packet
                 if latestPacket is not None:
-                    print(f"RX ACK {resp.seq_num}, for PKT {latestPacket.seq_num}, {latestPacket.health}")
+                    print(f"TX ACK b{resp.seq_num}, for RX b{latestPacket.seq_num}, {latestPacket.health} (beetle tcp)")
                 else:
-                    print(f"RX ACK {resp.seq_num} (dup)")
+                    print(f"RX ACK b{resp.seq_num} (dup)")
             
             # STEP 3: SEND DATA 
             if canSendReliable:
                 sendPkt = self.getDataToSend()
+                # sendPkt = None # TODO remove me
                 if sendPkt is not None:
                     self.cachedPacket = sendPkt
-                    sendPkt = self.corrupt_packet(sendPkt) # WARN: should be removed in prod
+                    # sendPkt = self.corrupt_packet(sendPkt) # WARN: should be removed in prod
                     self.sendReliableStart = time.time()
-                    print(f"TX PKT r{sendPkt.seq_num}, curr r{self.relay_seq_num}")
+                    print(f"TX PKT r{sendPkt.seq_num}, curr r{self.relay_seq_num} (relay reliable)")
                     self.write_packet(sendPkt)
                     canSendReliable = False
             elif time.time() - self.sendReliableStart > 1:  # 1000 ms = 1 second
                 self.repeatedReliableSend += 1
                 self.sendReliableStart = time.time()
-                print(f"TX PKT r{self.cachedPacket.seq_num}, curr {self.relay_seq_num}, {self.cachedPacket.to_bytearray().hex()}")
+                print(f"TX PKT r{self.cachedPacket.seq_num}, curr {self.relay_seq_num}, {self.cachedPacket.to_bytearray().hex()} (relay reliable, timeout)")
                 sendPkt = self.cachedPacket
-                sendPkt = self.corrupt_packet(sendPkt) # WARN: should be removed in prod
+                # sendPkt = self.corrupt_packet(sendPkt) # WARN: should be removed in prod
                 self.write_packet(sendPkt)
                 canSendReliable = False
 
@@ -205,7 +207,7 @@ class Beetle:
                 self.peripheral = btle.Peripheral(BLUNO_MAC_ADDRESS)
                 self.peripheral.setDelegate(self.receiver)
                 self.chr = self.peripheral.getCharacteristics(uuid=CHARACTERISTIC_UUID)[0]
-                print("Setup!")
+                # print("Setup!")
                 break
             except Exception as e: # keep trying
                 print(f"peripheral fail: {e}")
@@ -226,28 +228,28 @@ class Beetle:
             self.write_packet(pkt)
 
             # STAGE 2: SYN-ACK wait
-            print("THREE WAY: Wait SYN-ACK")
+            print("THREE WAY: Wait for SYN-ACK")
             hasSynAck = False
             if(self.get_notifications(1)): # cannot set too low
                 while self.receiver.has_packet():
                     data = self.receiver.get_packet_bytes()
                     if data is None:
-                        print("data not exist")
+                        # print("data not exist")
                         continue
                     if not verify_checksum(data):
-                        print(f"checksum fail {data.hex()}")
+                        # print(f"checksum fail {data.hex()}")
                         continue
                     packet = get_packet(data)
                     if packet is None:
-                        print("packet type unknown")
+                        # print("packet type unknown")
                         continue
                     if packet.packet_type != PACKET_SYN_ACK:
-                        print("non SYNACK received")
+                        # print("non SYNACK received")
                         continue
                     # syn-ack received
                     self.beetle_seq_num = pkt.seq_num
                     hasSynAck = True
-                    print("SYN-ACK received")
+                    print("THREE WAY: SYN-ACK received")
             else:
                 print("Timeout: SYN-ACK not received.")
                 continue  # Retry the handshake
@@ -257,11 +259,11 @@ class Beetle:
             resp = PacketConnEstab()
             resp.seq_num = self.relay_seq_num
             resp.crc8 = get_checksum(resp.to_bytearray())
-            print(f"THREE WAY: ACK")
+            print(f"THREE WAY: Sending ACK/CONN_ESTAB")
             self.write_packet(resp)
             self.connected = True
             break  # Exit the loop after successful connection
-        print("Connection established.")
+        print("---- Connection established. ----")
         
     def getDataToSend(self):
         """Check if there is data to send to the beetle. Returns a packet if so, else None"""
