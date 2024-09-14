@@ -168,3 +168,29 @@ class PacketImu():
         byte_array.extend(self.padding)
         byte_array.append(self.crc8)
         return byte_array
+
+class PacketGamestate():
+    def __init__(self, byteArray=None) -> None:
+        self.packet_type = PACKET_DATA_GAMESTATE
+        if byteArray is None:
+            self.seq_num = 0x0
+            self.bullet = 0x0
+            self.health = 0x0
+            self.padding = bytearray(15)
+            self.crc8 = 0x0
+        else:
+            self.seq_num = byteArray[1]
+            self.bullet = byteArray[2]
+            self.health = byteArray[3]
+            self.padding = byteArray[4:20]
+            self.crc8 = byteArray[19]
+
+    def to_bytearray(self) -> bytearray:
+        byte_array = bytearray()
+        byte_array.append(self.packet_type)
+        byte_array.append(self.seq_num)
+        byte_array.append(self.bullet)
+        byte_array.append(self.health)
+        byte_array.extend(self.padding)
+        byte_array.append(self.crc8)
+        return byte_array
