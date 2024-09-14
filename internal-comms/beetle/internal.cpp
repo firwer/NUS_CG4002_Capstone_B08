@@ -246,7 +246,7 @@ void test_throughput_reliable(int rate_ms) {
       ++beetle_seq_num;
       exp_beetle_seq_num = beetle_seq_num;
       setChecksum((packet_general_t*)&pkt);
-      write_serial((packet_general_t*)&pkt);
+      write_serial_with_fuzz((packet_general_t*)&pkt, 1);
       memcpy(&cached_packet, &pkt, 20);
       reliableTimeStart = millis();
       
@@ -255,7 +255,7 @@ void test_throughput_reliable(int rate_ms) {
       // else we handle reliable packet timeout;
       digitalWrite(13, 1);
       reliableTimeStart = millis();
-      write_serial(&cached_packet);
+      write_serial_with_fuzz(&cached_packet, 1);
       digitalWrite(13, 0);     
     }
 
