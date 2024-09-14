@@ -168,8 +168,6 @@ void flip_bits_with_probability(packet_general_t* pkt, float probability) {
   }
 }
 
-void nuke_packet(float probability);  // simulate packet losses
-
 // Test how resilient unreliable throughput is
 void test_throughput_unreliable(int rate_ms) {
   packet_imu_t pkt = { 0 };
@@ -212,24 +210,23 @@ void test_throughput_reliable(int rate_ms) {
     if (await_packet((packet_general_t*)&rcv, 50)) {
       // case 1: checksum error
       // > ignore
-      if(!verifyChecksum(&rcv)){
-        // oops!
-      }
-      // case 2: hello
-      // > relay wants to re-estab connections. handshake.
-      if(rcv.packet_type == PACKET_HELLO){
-        await_handshake(true);
-      }
-      // case 3: conn_estab
-      // > ignore this duplicate
-      if(rcv.packet_type == PACKET_CONN_ESTAB){
-      
-      }
-      // case 4: ACKn
-      if(rcv.packet_type == PACKET_ACK){
-        if(rcv.seq_num == exp_beetle_seq_num){
-          // > flag that we need not resend
-          canSendReliable = true;
+      if(verifyChecksum(&rcv)){
+        // case 2: hello
+        // > relay wants to re-estab connections. handshake.
+        if(rcv.packet_type == PACKET_HELLO){
+          await_handshake(true);
+        }
+        // case 3: conn_estab
+        // > ignore this duplicate
+        if(rcv.packet_type == PACKET_CONN_ESTAB){
+        
+        }
+        // case 4: ACKn
+        if(rcv.packet_type == PACKET_ACK){
+          if(rcv.seq_num == exp_beetle_seq_num){
+            // > flag that we need not resend
+            canSendReliable = true;
+          }
         }
       }
     }
