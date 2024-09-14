@@ -105,6 +105,7 @@ void await_handshake(bool helloReceived) {
       while(await_packet(&hello_packet, TIMEOUT_MS)){}
       // Check if its a HELLO packet
       if (hello_packet.packet_type == PACKET_HELLO && verifyChecksum(&hello_packet)) {
+        relay_seq_num = hello_packet.seq_num;
         break;
       }
     }
@@ -126,6 +127,7 @@ void await_handshake(bool helloReceived) {
         continue;
       if (ack_packet.packet_type == PACKET_CONN_ESTAB) {
         isConnected = true;
+        relay_seq_num = ack_packet.seq_num; // we expect the next SN to be +1
         break;
       }
     }
@@ -258,5 +260,41 @@ void test_throughput_reliable(int rate_ms) {
 
     // then, do unreliable sending (omitted)
 
+  }
+}
+
+void test_receive_reliable(){
+  while(1){
+    packet_general_t rcv = {0};
+
+    bool shouldAck = false;
+    if (await_packet((packet_general_t*)&rcv, 50)) {
+      if(verifyChecksum(&rcv)){
+        // case 2: hello
+        // > relay wants to re-estab connections. handshake.
+        if(rcv.packet_type == PACKET_HELLO){
+          await_handshake(true);
+        }
+        // handle receives
+        if(rcv.packet_type == PACKET_DATA_GAMESTATE){
+          // check if relay sequence number is correct
+          shouldAck = true;
+          if(relay_seq_num == rcv.seq_num) {
+            // correct sequence number. 
+            relay_seq_num = (relay_seq_num + 1) % 256;
+            // TODO: handle the packet!
+          }
+          // incorrect serial number, ignore
+        }
+      }
+    }
+
+    if(shouldAck) {
+      packet_ack_t ack = {0};
+      ack.packet_type = PACKET_ACK;
+      ack.seq_num = relay_seq_num;
+      setChecksum((packet_general_t*)&ack);
+      write_serial((packet_general_t*)&ack);
+    }
   }
 }
