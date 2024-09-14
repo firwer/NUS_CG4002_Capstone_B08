@@ -20,7 +20,8 @@ void loop() {
     while(1){
       // test_throughput_unreliable(50);
       // test_throughput_reliable(50);
-      test_receive_reliable();
+      // test_receive_reliable();
+      communicate(50, 100);
     }
 
 }
