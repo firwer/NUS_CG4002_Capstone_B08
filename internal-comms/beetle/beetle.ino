@@ -19,7 +19,8 @@ void loop() {
     // setLED(1);
     while(1){
       // test_throughput_unreliable(50);
-      test_throughput_reliable(50);
+      // test_throughput_reliable(50);
+      test_receive_reliable();
     }
 
 }
