@@ -78,8 +78,9 @@ class Beetle:
                 # check for incomplete data
                 # print(data.hex())
                 if not verify_checksum(data):
-                    print("err: checksum failed")
+                    print(f"err: checksum failed for PKT {self.beetle_seq_num}")
                     self.errors += 1
+                    print(f"Moving to next packet in buffer...")
                     continue
 
                 pkt = get_packet(data)
@@ -100,10 +101,9 @@ class Beetle:
                 # Is reliable packet
                 if pkt.packet_type == PACKET_DATA_HEALTH: # or ...
                     latestPacket = pkt
+                    self.beetle_seq_num = max(self.beetle_seq_num, pkt.seq_num + 1)
                     ackNum = pkt.seq_num 
-                    if pkt.seq_num == (self.beetle_seq_num + 1) % 256:
-                        print(f"PKT {latestPacket.seq_num}, {latestPacket.health}")
-                        self.beetle_seq_num = pkt.seq_num
+                    print(f"RCV PKT {latestPacket.seq_num}, {latestPacket.health}")
 
             # handle post-buffer drain actions
             if shouldConnEstab:
