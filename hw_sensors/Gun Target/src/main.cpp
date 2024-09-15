@@ -27,73 +27,46 @@ Tone melody;
 ArduinoQueue<uint16_t> noteQueue(14);
 
 int soundList[14]{
+    NOTE_E3,
+    NOTE_G3,
+    NOTE_A3,
+    NOTE_AS3, // A#3
+    NOTE_B3,
+    NOTE_GS3, // G#3
     NOTE_C4,
     NOTE_E4,
     NOTE_G4,
-    NOTE_C5,
-    NOTE_E5,
-    NOTE_G3,
-    NOTE_E3,
-    NOTE_A3,
-    NOTE_B3,
-    NOTE_GS3,
-    NOTE_AS3,
     NOTE_A4,
     NOTE_B4,
+    NOTE_C5,
     NOTE_D5,
-};
-
-enum
-{
-    SOUND_C4,
-    SOUND_E4,
-    SOUND_G4,
-    SOUND_C5,
-    SOUND_E5,
-    SOUND_G3,
-    SOUND_E3,
-    SOUND_A3,
-    SOUND_B3,
-    SOUND_GS3,
-    SOUND_AS3,
-    SOUND_A4,
-    SOUND_B4,
-    SOUND_D5,
-};
+    NOTE_E5};
 
 void playhealthDecrementTune()
 {
     // NOTE_E5, NOTE_C5
-    noteQueue.enqueue(soundList[SOUND_E5]);
-    noteQueue.enqueue(soundList[SOUND_C5]);
+    noteQueue.enqueue(NOTE_E5);
+    noteQueue.enqueue(NOTE_C5);
 }
 void playStartupTune()
 {
     // NOTE_C4, NOTE_E4, NOTE_G4, NOTE_C5
-    noteQueue.enqueue(soundList[SOUND_C4]);
-    noteQueue.enqueue(soundList[SOUND_E4]);
-    noteQueue.enqueue(soundList[SOUND_G4]);
-    noteQueue.enqueue(soundList[SOUND_C5]);
+    noteQueue.enqueue(NOTE_C4);
+    noteQueue.enqueue(NOTE_E4);
+    noteQueue.enqueue(NOTE_G4);
+    noteQueue.enqueue(NOTE_C5);
 }
 void playDeathTune()
 {
     // NOTE_C4, NOTE_G3, NOTE_E3, NOTE_A3, NOTE_B3, NOTE_A3, NOTE_GS3, NOTE_AS3
-    noteQueue.enqueue(soundList[SOUND_C4]);
-    noteQueue.enqueue(soundList[SOUND_G3]);
-    noteQueue.enqueue(soundList[SOUND_E3]);
-    noteQueue.enqueue(soundList[SOUND_A3]);
-    noteQueue.enqueue(soundList[SOUND_B3]);
-    noteQueue.enqueue(soundList[SOUND_A3]);
-    noteQueue.enqueue(soundList[SOUND_GS3]);
-    noteQueue.enqueue(soundList[SOUND_AS3]);
-}
-void playRespawnTune()
-{
-    // NOTE_G4, NOTE_A4, NOTE_B4, NOTE_D5
-    noteQueue.enqueue(soundList[SOUND_G4]);
-    noteQueue.enqueue(soundList[SOUND_A4]);
-    noteQueue.enqueue(soundList[SOUND_B4]);
-    noteQueue.enqueue(soundList[SOUND_D5]);
+    noteQueue.enqueue(NOTE_C4);
+    noteQueue.enqueue(NOTE_G3);
+    noteQueue.enqueue(NOTE_E3);
+    noteQueue.enqueue(NOTE_A3);
+    noteQueue.enqueue(NOTE_B3);
+    noteQueue.enqueue(NOTE_A3);
+    noteQueue.enqueue(NOTE_GS3);
+    noteQueue.enqueue(NOTE_AS3);
 }
 
 /*
@@ -118,7 +91,6 @@ void handleRespawn()
         curr_healthValue = 100; // reset health to 100
         Serial.print(F("Player 1 respawned! Health: "));
         Serial.println(curr_healthValue);
-        playRespawnTune();
         isRespawn = false;
     }
 }
@@ -187,7 +159,7 @@ void loop()
             digitalWrite(LED_BUILTIN, HIGH);
             curr_healthValue -= BULLET_DAMAGE;
             isFullHealthplayed = false;
-            playhealthDecrementTune();
+            playhealthDecrementTune(); // Each hit has the same tune for now, will implement different tunes for in different health ranges
             Serial.print(F("Player 1 shot! Health: "));
             Serial.println(curr_healthValue);
         }

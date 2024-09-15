@@ -53,6 +53,7 @@ const unsigned long SAMPLING_DELAY = 1000 / MPU_SAMPLING_RATE;
 unsigned long lastSampleTime = 0;
 bool isRecording = false;
 bool isMotionDetected = false;
+bool isMotionTunePlayed = false;
 
 struct MPUData
 {
@@ -63,9 +64,6 @@ struct MPUData
   int16_t gy;
   int16_t gz;
 } MPUData;
-
-// int16_t recordedAccel[40][3]; // Sensor outputs 16-bit values
-// int16_t recordedGyro[40][3];  // Same here
 uint8_t recordedPoints = 0; // Max 40, 8-bits is enough
 
 void motionDetected();
@@ -75,6 +73,7 @@ void printResults();
 void detectReload();
 void playNoBulletsLeftTone();
 void playFullMagazineTone();
+void playMotionFeedback();
 
 void setup()
 {
@@ -168,6 +167,12 @@ void loop()
   //==================== MPU6050 SUBROUTINE====================
   if (isRecording)
   {
+    if (!isMotionTunePlayed)
+    {
+      Serial.println("Motion Detected");
+      playMotionFeedback();
+      isMotionTunePlayed = true;
+    }
     if (millis() - lastSampleTime >= SAMPLING_DELAY && recordedPoints < 40)
     {
       mpu.getMotion6(&MPUData.ax, &MPUData.ay, &MPUData.az, &MPUData.gx, &MPUData.gy, &MPUData.gz);
@@ -191,6 +196,7 @@ void loop()
         // sendIMUData(ax,ay,az,gx,gy,gz);
         isRecording = false;
         recordedPoints = 0;
+        isMotionTunePlayed = false;
       }
     }
   }
@@ -232,6 +238,12 @@ void motionDetected()
   }
 }
 
+void playMotionFeedback()
+{
+  soundQueue.enqueue(NOTE_CS6);
+  soundQueue.enqueue(NOTE_D6);
+  soundQueue.enqueue(NOTE_E6);
+}
 // void sendIMUData(){
 //   //FOR INTERNAL COMMS
 // }
