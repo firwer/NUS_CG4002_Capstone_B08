@@ -19,54 +19,85 @@ unsigned long lastSoundTime = 0;
 bool isFullHealthplayed = false;
 bool isDeathPlayed = false;
 
-uint16_t curr_healthValue = 100;     // this is the outgoing health value
-uint16_t incoming_healthState = 100; // To be unpacked from the incoming game_state packet
+int16_t curr_healthValue = 100;     // this is the outgoing health value
+int16_t incoming_healthState = 100; // To be unpacked from the incoming game_state packet
 
 Tone melody;
 
 ArduinoQueue<uint16_t> noteQueue(14);
 
-int soundList[14]{
-    NOTE_E3,
-    NOTE_G3,
-    NOTE_A3,
-    NOTE_AS3, // A#3
-    NOTE_B3,
-    NOTE_GS3, // G#3
-    NOTE_C4,
-    NOTE_E4,
-    NOTE_G4,
-    NOTE_A4,
-    NOTE_B4,
-    NOTE_C5,
-    NOTE_D5,
-    NOTE_E5};
+// Define the healthNotes array with 5 notes per tune
+int healthNotes[10][5] = {
+    // Index 0: Health 91-99
+    {NOTE_C4, NOTE_D4, NOTE_E4, NOTE_D4, NOTE_C4},
+    // Index 1: Health 81-90
+    {NOTE_E4, NOTE_G4, NOTE_A4, NOTE_G4, NOTE_E4},
+    // Index 2: Health 71-80
+    {NOTE_G4, NOTE_A4, NOTE_C5, NOTE_A4, NOTE_G4},
+    // Index 3: Health 61-70
+    {NOTE_B4, NOTE_D5, NOTE_E5, NOTE_D5, NOTE_B4},
+    // Index 4: Health 51-60
+    {NOTE_D5, NOTE_F5, NOTE_G5, NOTE_F5, NOTE_D5},
+    // Index 5: Health 41-50
+    {NOTE_F5, NOTE_A5, NOTE_C6, NOTE_A5, NOTE_F5},
+    // Index 6: Health 31-40
+    {NOTE_A5, NOTE_C6, NOTE_D6, NOTE_C6, NOTE_A5},
+    // Index 7: Health 21-30
+    {NOTE_C6, NOTE_E6, NOTE_G6, NOTE_E6, NOTE_C6},
+    // Index 8: Health 11-20
+    {NOTE_E6, NOTE_G6, NOTE_A6, NOTE_G6, NOTE_E6},
+    // Index 9: Health 1-10
+    {NOTE_G6, NOTE_B6, NOTE_C7, NOTE_B6, NOTE_G6}};
 
-void playhealthDecrementTune()
+// void playhealthDecrementTune()
+// {
+//     // NOTE_E5, NOTE_C5
+//     noteQueue.enqueue(NOTE_E5);
+//     noteQueue.enqueue(NOTE_C5);
+// }
+
+void playHealthDecrementTune(int16_t health)
 {
-    // NOTE_E5, NOTE_C5
-    noteQueue.enqueue(NOTE_E5);
-    noteQueue.enqueue(NOTE_C5);
+    if (health >= 100 || health <= 0)
+    {
+        return; // they have their own tunes
+    }
+    int8_t index = (100 - health) / 10;
+
+    if (index < 0)
+    {
+        index = 0;
+    }
+    if (index > 9)
+    {
+        index = 9;
+    }
+    noteQueue.enqueue(healthNotes[index][0]);
+    noteQueue.enqueue(healthNotes[index][1]);
+    noteQueue.enqueue(healthNotes[index][2]);
+    noteQueue.enqueue(healthNotes[index][3]);
+    noteQueue.enqueue(healthNotes[index][4]);
 }
 void playStartupTune()
 {
-    // NOTE_C4, NOTE_E4, NOTE_G4, NOTE_C5
-    noteQueue.enqueue(NOTE_C4);
-    noteQueue.enqueue(NOTE_E4);
-    noteQueue.enqueue(NOTE_G4);
-    noteQueue.enqueue(NOTE_C5);
+
+    noteQueue.enqueue(NOTE_E5);
+    noteQueue.enqueue(NOTE_G5);
+    noteQueue.enqueue(NOTE_E6);
+    noteQueue.enqueue(NOTE_C6);
+    noteQueue.enqueue(NOTE_D6);
+    noteQueue.enqueue(NOTE_G6);
 }
 void playDeathTune()
 {
-    // NOTE_C4, NOTE_G3, NOTE_E3, NOTE_A3, NOTE_B3, NOTE_A3, NOTE_GS3, NOTE_AS3
+    noteQueue.enqueue(NOTE_C5);
+    noteQueue.enqueue(NOTE_B4);
+    noteQueue.enqueue(NOTE_A4);
+    noteQueue.enqueue(NOTE_G4);
+    noteQueue.enqueue(NOTE_F4);
+    noteQueue.enqueue(NOTE_E4);
+    noteQueue.enqueue(NOTE_D4);
     noteQueue.enqueue(NOTE_C4);
-    noteQueue.enqueue(NOTE_G3);
-    noteQueue.enqueue(NOTE_E3);
-    noteQueue.enqueue(NOTE_A3);
-    noteQueue.enqueue(NOTE_B3);
-    noteQueue.enqueue(NOTE_A3);
-    noteQueue.enqueue(NOTE_GS3);
-    noteQueue.enqueue(NOTE_AS3);
 }
 
 /*
@@ -120,7 +151,7 @@ void loop()
         if (noteQueue.itemCount() > 0)
         {
             uint16_t note = noteQueue.dequeue();
-            melody.play(note, 50); // Play note for 50ms
+            melody.play(note, 150); // Play note for 100ms
         }
         else if (noteQueue.itemCount() == 0)
         {
@@ -159,7 +190,7 @@ void loop()
             digitalWrite(LED_BUILTIN, HIGH);
             curr_healthValue -= BULLET_DAMAGE;
             isFullHealthplayed = false;
-            playhealthDecrementTune(); // Each hit has the same tune for now, will implement different tunes for in different health ranges
+            playHealthDecrementTune(curr_healthValue);
             Serial.print(F("Player 1 shot! Health: "));
             Serial.println(curr_healthValue);
         }
