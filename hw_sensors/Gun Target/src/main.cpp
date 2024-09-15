@@ -49,82 +49,11 @@ int healthNotes[10][5] = {
     // Index 9: Health 1-10
     {NOTE_G6, NOTE_B6, NOTE_C7, NOTE_B6, NOTE_G6}};
 
-// void playhealthDecrementTune()
-// {
-//     // NOTE_E5, NOTE_C5
-//     noteQueue.enqueue(NOTE_E5);
-//     noteQueue.enqueue(NOTE_C5);
-// }
-
-void playHealthDecrementTune(int16_t health)
-{
-    if (health >= 100 || health <= 0)
-    {
-        return; // they have their own tunes
-    }
-    int8_t index = (100 - health) / 10;
-
-    if (index < 0)
-    {
-        index = 0;
-    }
-    if (index > 9)
-    {
-        index = 9;
-    }
-    noteQueue.enqueue(healthNotes[index][0]);
-    noteQueue.enqueue(healthNotes[index][1]);
-    noteQueue.enqueue(healthNotes[index][2]);
-    noteQueue.enqueue(healthNotes[index][3]);
-    noteQueue.enqueue(healthNotes[index][4]);
-}
-void playStartupTune()
-{
-
-    noteQueue.enqueue(NOTE_E5);
-    noteQueue.enqueue(NOTE_G5);
-    noteQueue.enqueue(NOTE_E6);
-    noteQueue.enqueue(NOTE_C6);
-    noteQueue.enqueue(NOTE_D6);
-    noteQueue.enqueue(NOTE_G6);
-}
-void playDeathTune()
-{
-    noteQueue.enqueue(NOTE_C5);
-    noteQueue.enqueue(NOTE_B4);
-    noteQueue.enqueue(NOTE_A4);
-    noteQueue.enqueue(NOTE_G4);
-    noteQueue.enqueue(NOTE_F4);
-    noteQueue.enqueue(NOTE_E4);
-    noteQueue.enqueue(NOTE_D4);
-    noteQueue.enqueue(NOTE_C4);
-}
-
-/*
-Game engine handles health calculation for non-bullet damage.
-This function will handle the health agreement between the game engine and the hardware.
-*/
-void healthSynchronisation()
-{
-    if (curr_healthValue != incoming_healthState)
-    {
-        curr_healthValue = incoming_healthState;
-    }
-}
-
-/*
-This function will give feedback that the player has respawned.
-*/
-void handleRespawn()
-{
-    if (isRespawn)
-    {
-        curr_healthValue = 100; // reset health to 100
-        Serial.print(F("Player 1 respawned! Health: "));
-        Serial.println(curr_healthValue);
-        isRespawn = false;
-    }
-}
+void playHealthDecrementTune(int16_t health);
+void playStartupTune();
+void playDeathTune();
+void healthSynchronisation(); // TODO: Integrate with internal comms
+void handleRespawn();         // TODO: Integrate with internal comms
 
 void setup()
 {
@@ -206,4 +135,75 @@ void loop()
     }
 
     // handleRespawn(); //TODO: Integrate with internal comms
+}
+
+void playHealthDecrementTune(int16_t health)
+{
+    if (health >= 100 || health <= 0)
+    {
+        return; // they have their own tunes
+    }
+    int8_t index = (100 - health) / 10;
+
+    if (index < 0)
+    {
+        index = 0;
+    }
+    if (index > 9)
+    {
+        index = 9;
+    }
+    noteQueue.enqueue(healthNotes[index][0]);
+    noteQueue.enqueue(healthNotes[index][1]);
+    noteQueue.enqueue(healthNotes[index][2]);
+    noteQueue.enqueue(healthNotes[index][3]);
+    noteQueue.enqueue(healthNotes[index][4]);
+}
+
+void playStartupTune()
+{
+
+    noteQueue.enqueue(NOTE_E5);
+    noteQueue.enqueue(NOTE_G5);
+    noteQueue.enqueue(NOTE_E6);
+    noteQueue.enqueue(NOTE_C6);
+    noteQueue.enqueue(NOTE_D6);
+    noteQueue.enqueue(NOTE_G6);
+}
+void playDeathTune()
+{
+    noteQueue.enqueue(NOTE_C5);
+    noteQueue.enqueue(NOTE_B4);
+    noteQueue.enqueue(NOTE_A4);
+    noteQueue.enqueue(NOTE_G4);
+    noteQueue.enqueue(NOTE_F4);
+    noteQueue.enqueue(NOTE_E4);
+    noteQueue.enqueue(NOTE_D4);
+    noteQueue.enqueue(NOTE_C4);
+}
+
+/*
+Game engine handles health calculation for non-bullet damage.
+This function will handle the health agreement between the game engine and the hardware.
+*/
+void healthSynchronisation()
+{
+    if (curr_healthValue != incoming_healthState)
+    {
+        curr_healthValue = incoming_healthState;
+    }
+}
+
+/*
+This function will give feedback that the player has respawned.
+*/
+void handleRespawn()
+{
+    if (isRespawn)
+    {
+        curr_healthValue = 100; // reset health to 100
+        Serial.print(F("Player 1 respawned! Health: "));
+        Serial.println(curr_healthValue);
+        isRespawn = false;
+    }
 }
