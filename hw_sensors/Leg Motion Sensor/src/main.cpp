@@ -3,23 +3,28 @@
 #include <EEPROM.h>
 #define LED_OUTPUT_PIN 5
 #define IMU_INTERRUPT_PIN 2
+#define MPU_SAMPLE_RATE 20
 
 MPU6050 mpu;
+struct MPUData
+{
+  int16_t ax;
+  int16_t ay;
+  int16_t az;
+  int16_t gx;
+  int16_t gy;
+  int16_t gz;
+} MPUData;
 
-const uint8_t samplingRate = 50; // Sampling interval, 8-bits is sufficient
+const unsigned long SAMPLING_DELAY = 1000 / MPU_SAMPLE_RATE; // Sampling interval, 8-bits is sufficient
 unsigned long lastSampleTime = 0;
 bool isRecording = false;
 bool isMotionDetected = false;
 bool isKickDetected = false;
 
-int16_t recordedAccel[40][3]; // Sensor outputs 16-bit values
-int16_t recordedGyro[40][3];  // Same here
-uint8_t recordedPoints = 0;   // Max 40, 8-bits is enough
+uint8_t recordedPoints = 0; // Max 40, 8-bits is enough
 
 void motionDetected();
-void printResults();
-void printArray(int16_t data[40][3], uint8_t index);
-
 unsigned long previousMillis = 0;
 const long interval = 100;
 bool isLedOn = false;
@@ -63,12 +68,12 @@ void setup()
   Serial.print("ZG offset: ");
   Serial.println(storedCalibration.zgoffset);
 
-  // mpu.setXAccelOffset(storedCalibration.xoffset);
-  // mpu.setYAccelOffset(storedCalibration.yoffset);
-  // mpu.setZAccelOffset(storedCalibration.zoffset);
-  // mpu.setXGyroOffset(storedCalibration.xgoffset);
-  // mpu.setYGyroOffset(storedCalibration.ygoffset);
-  // mpu.setZGyroOffset(storedCalibration.zgoffset);
+  mpu.setXAccelOffset(storedCalibration.xoffset);
+  mpu.setYAccelOffset(storedCalibration.yoffset);
+  mpu.setZAccelOffset(storedCalibration.zoffset);
+  mpu.setXGyroOffset(storedCalibration.xgoffset);
+  mpu.setYGyroOffset(storedCalibration.ygoffset);
+  mpu.setZGyroOffset(storedCalibration.zgoffset);
 
   mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_16);
   mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_2000);
@@ -91,19 +96,29 @@ void loop()
 
   if (isRecording)
   {
-    if (millis() - lastSampleTime >= samplingRate && recordedPoints < 40)
+    if (millis() - lastSampleTime >= SAMPLING_DELAY && recordedPoints < 40)
     {
       isKickDetected = true;
       lastSampleTime = millis();
-      int16_t ax, ay, az;
-      int16_t gx, gy, gz;
-      mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
-
+      mpu.getMotion6(&MPUData.ax, &MPUData.ay, &MPUData.az, &MPUData.gx, &MPUData.gy, &MPUData.gz);
+      Serial.print("Accel/Gyra:\t");
+      Serial.print(MPUData.ax);
+      Serial.print("\t");
+      Serial.print(MPUData.ay);
+      Serial.print("\t");
+      Serial.print(MPUData.az);
+      Serial.print("\t");
+      Serial.print(MPUData.gx);
+      Serial.print("\t");
+      Serial.print(MPUData.gy);
+      Serial.print("\t");
+      Serial.println(MPUData.gz);
+      lastSampleTime = millis();
       recordedPoints++;
 
       if (recordedPoints >= 40)
       {
-        printResults();
+
         isRecording = false;
         recordedPoints = 0;
       }
@@ -131,46 +146,5 @@ void motionDetected()
     isMotionDetected = true;
     isRecording = true;
     isKickDetected = true;
-  }
-}
-
-void printArray(int16_t data[40][3], uint8_t index)
-{
-  Serial.print('"');
-  Serial.print("[");
-  for (uint8_t i = 0; i < 40; i++)
-  {
-    Serial.print(data[i][index]);
-    if (i < 39)
-      Serial.print(",");
-  }
-  Serial.print("]");
-  Serial.print('"');
-}
-
-void printResults()
-{
-  printArray(recordedAccel, 0);
-  Serial.print(",");
-  printArray(recordedAccel, 1);
-  Serial.print(",");
-  printArray(recordedAccel, 2);
-  Serial.print(",");
-  printArray(recordedGyro, 0);
-  Serial.print(",");
-  printArray(recordedGyro, 1);
-  Serial.print(",");
-  printArray(recordedGyro, 2);
-  Serial.print("\n");
-
-  recordedPoints = 0;
-  for (uint8_t i = 0; i < 40; i++)
-  {
-    recordedAccel[i][0] = 0;
-    recordedAccel[i][1] = 0;
-    recordedAccel[i][2] = 0;
-    recordedGyro[i][0] = 0;
-    recordedGyro[i][1] = 0;
-    recordedGyro[i][2] = 0;
   }
 }

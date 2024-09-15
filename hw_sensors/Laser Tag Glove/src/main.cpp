@@ -3,6 +3,7 @@
 #include <MPU6050.h>
 #include <Tone.h>
 #include <ArduinoQueue.h>
+#include <EEPROM.h>
 
 // Define I/O pins
 #define IMU_INTERRUPT_PIN 2
@@ -10,7 +11,7 @@
 #define BUTTON_PIN 4
 #define BUZZER_PIN 3
 #define FLEX_SENSOR_PIN A0
-#define FLEX_THRESHOLD 500
+#define FLEX_THRESHOLD 450
 #define NOTE_DELAY 50
 #define DEBOUNCE_DELAY 50
 #define MPU_SAMPLING_RATE 20
@@ -64,6 +65,17 @@ struct MPUData
   int16_t gy;
   int16_t gz;
 } MPUData;
+struct CalibrationData
+{
+  int16_t xoffset;
+  int16_t yoffset;
+  int16_t zoffset;
+  int16_t xgoffset;
+  int16_t ygoffset;
+  int16_t zgoffset;
+};
+
+CalibrationData calibrationData;
 uint8_t recordedPoints = 0; // Max 40, 8-bits is enough
 
 void motionDetected();
@@ -85,6 +97,15 @@ void setup()
     while (1)
       ;
   }
+
+  calibrationData.xoffset = -1060;
+  calibrationData.yoffset = -872;
+  calibrationData.zoffset = 1611;
+  calibrationData.xgoffset = -7;
+  calibrationData.ygoffset = -32;
+  calibrationData.zgoffset = 27;
+
+  // EEPROM.put(0, calibrationData);
 
   mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_4); // can change to FS_2
   mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_250);
