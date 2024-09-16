@@ -6,8 +6,9 @@ from checksum import *
 import threading
 
 BLUNO0_MAC_ADDRESS = "F4:B8:5E:42:4C:BB"
-BLUNO1_MAC_ADDRESS = "F4:B8:5E:42:4C:BB"
-BLUNO2_MAC_ADDRESS = "F4:B8:5E:42:4C:BB"
+BLUNO1_MAC_ADDRESS = "F4:B8:5E:42:61:6A"
+BLUNO2_MAC_ADDRESS = "F4:B8:5E:42:6D:1E"
+
 CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"  # Correct characteristic UUID
 
 def millis():
@@ -18,6 +19,7 @@ class NotifyDelegate(btle.DefaultDelegate):
         btle.DefaultDelegate.__init__(self)
         self.buffer = bytearray()
         self.buffer_len = len(self.buffer)
+        self.fragmented_packets = 0
 
         # TODO: Remove the testing flags
         self.dropProbability = 0.0
@@ -26,8 +28,12 @@ class NotifyDelegate(btle.DefaultDelegate):
         # TODO: write the fragmentation logic here and count fragments
         self.buffer += bytearray(data)
         if len(data) < 20: # data is fragmented
-            print(f"fragmentation: {len(data)}: {data.hex()}")
+            # print(f"fragmentation: {len(data)}: {data.hex()}")
+            self.fragmented_packets += 1
 
+    def get_fragemented_packets(self):
+        # TODO
+        pass
 
     def has_packet(self) -> bool:
         return len(self.buffer) >= 20
@@ -49,7 +55,7 @@ class NotifyDelegate(btle.DefaultDelegate):
         return data
     
     def reset_buffer(self):
-        data = bytearray()
+        self.data = bytearray()
 
 # A beetle object maintains its own connection and state
 class Beetle:
@@ -80,15 +86,15 @@ class Beetle:
         canSendReliable = True
         while True:
             shouldAck = False
-
+            # STEP 1. Handle reconnections if applicable
             if not self.connected or self.errors > 2 or self.repeatedReliableSend > 2:
-                print(f"Restarting connection: {self.connected}, {self.errors}, {self.repeatedReliableSend}")
+                print(f"Restarting connection: isConnected={self.connected}, errors={self.errors}, retx={self.repeatedReliableSend}")
                 self.receiver.reset_buffer()
                 self.errors = 0
                 self.repeatedReliableSend = 0
                 self.connect_to_beetle()
                 continue
-            # Collect notifications
+            # STEP 2. Collect notifications 
             try:
                 # print("Waiting for notifications...")
                 self.peripheral.waitForNotifications(1)
@@ -96,13 +102,11 @@ class Beetle:
                 print(f"Error: {(e)}. Re-connecting...")
                 self.connected = False
                 continue
-            # TODO: check if have things to send
                
-            # STEP 1: RECEIVE DATA WHERE APPLICABLE 
+            # STEP 3: RECEIVE DATA WHERE APPLICABLE 
             shouldConnEstab = True
             ackNum = -1 # track the largest reliable ack num rcv
             latestPacket = None
-            # print(f"{len(self.receiver.buffer)}")
             while(self.receiver.has_packet()):
                 if self.errors > 3:
                     break
@@ -110,13 +114,13 @@ class Beetle:
                 data = self.receiver.get_packet_bytes()
                 if data is None: continue
 
-                # TODO: REMOVE ME -- TESTING LOGIC
-                # Test: corrupt packet with probability of 10%
+                # TODO: REMOVE ME -- SUBCOMPONENT TESTING LOGIC
+                # TEST: corrupt packet with probability of 10%
                 if random.random() <= self.corruptProbability:
                     print("Corrupting RX packet...")
-                    byte_to_corrupt = random.randint(0, len(data) - 1)  # Pick a random byte
-                    bit_to_flip = 1 << random.randint(0, 7)  # Pick a random bit to flip (0-7)
-                    data[byte_to_corrupt] ^= bit_to_flip  # XOR the bit to flip it
+                    byte_to_corrupt = random.randint(0, len(data) - 1)
+                    bit_to_flip = 1 << random.randint(0, 7) 
+                    data[byte_to_corrupt] ^= bit_to_flip
 
                 # verify the checksum - if fail, process the next packet
                 if not verify_checksum(data):
@@ -127,13 +131,14 @@ class Beetle:
 
                 pkt = get_packet(data)
 
-                # check what kind of packet
-                if pkt.packet_type == PACKET_SYN_ACK:
-                    print("skipping due to SYN ACK")
-                    continue
+                # Process based on packet type
+
+                # ignore SYN_ACK packets
+                if pkt.packet_type == PACKET_SYN_ACK: continue
 
                 # if we get normal data packets, then no need to comm_estab
                 shouldConnEstab = False
+
                 # Is unreliable send
                 if pkt.packet_type == PACKET_DATA_IMU:
                     # do work
@@ -159,14 +164,14 @@ class Beetle:
                         canSendReliable = True
 
 
-            # STEP 2: HANDLE POST-BUFFER DRAIN ACTIONS
-            # handle post-buffer drain actions
+            # STEP 4: HANDLE SYN-ACK RECIEVES
             if shouldConnEstab:
                 resp = PacketConnEstab()
                 resp.seq_num = self.relay_seq_num
                 resp.crc8 = get_checksum(resp.to_bytearray())
                 self.write_packet(resp)
-            # print(f"{shouldAck}, {ackNum}")
+
+            # STEP 5: ACKNOWLEDGE RELIABLE BEETLE DATA
             if shouldAck and ackNum != -1:
                 # we received an ACK-able data
                 resp = PacketAck()
@@ -179,7 +184,7 @@ class Beetle:
                 else:
                     print(f"RX ACK b{resp.seq_num} (dup)")
             
-            # STEP 3: SEND DATA 
+            # STEP 6: SEND RELIABLE RELAY DATA 
             # TODO: remove this if wrapper when testing is done
             if self.testRelayReliable:
                 if canSendReliable:
@@ -322,7 +327,7 @@ class Beetle:
         return pkt
 
 def main():
-    beetle = Beetle(BLUNO0_MAC_ADDRESS)
+    beetle = Beetle(BLUNO2_MAC_ADDRESS)
     beetle.run()
 
 if __name__ == "__main__":
