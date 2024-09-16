@@ -5,20 +5,29 @@ from packet import *
 from checksum import *
 import threading
 
-BLUNO_MAC_ADDRESS = "F4:B8:5E:42:4C:BB"
+BLUNO0_MAC_ADDRESS = "F4:B8:5E:42:4C:BB"
+BLUNO1_MAC_ADDRESS = "F4:B8:5E:42:4C:BB"
+BLUNO2_MAC_ADDRESS = "F4:B8:5E:42:4C:BB"
 CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"  # Correct characteristic UUID
+
+def millis():
+    return time.time_ns() // 1_000_000
 
 class NotifyDelegate(btle.DefaultDelegate):
     def __init__(self):
         btle.DefaultDelegate.__init__(self)
         self.buffer = bytearray()
         self.buffer_len = len(self.buffer)
-        self.lock = threading.Lock()  # Lock to manage concurrency
 
+        # TODO: Remove the testing flags
+        self.dropProbability = 0.0
+        
     def handleNotification(self, cHandle, data: bytes):
-        # print(f"Got a notification: {len(data)}: {data.hex()}")
         # TODO: write the fragmentation logic here and count fragments
         self.buffer += bytearray(data)
+        if len(data) < 20: # data is fragmented
+            print(f"fragmentation: {len(data)}: {data.hex()}")
+
 
     def has_packet(self) -> bool:
         return len(self.buffer) >= 20
@@ -27,6 +36,13 @@ class NotifyDelegate(btle.DefaultDelegate):
         """returns a 20B bytearray representing a packet from the buffer. else, None"""
         if not self.has_packet():
             return None
+        # TODO: TESTING: Remove dropping logic
+        if random.random() <= self.dropProbability:
+            data = self.buffer[:20]
+            self.buffer = self.buffer[20:]
+            print(f"Dropping packet: {data.hex()}")
+            return None
+        # end test
         data = self.buffer[:20]
         self.buffer = self.buffer[20:]
         # print(len(self.buffer)//20)
@@ -53,6 +69,12 @@ class Beetle:
         self.sendReliableStart = 0
         self.cachedPacket = None
         self.repeatedReliableSend = 0
+        self.reliableTxRate = 10000 # ms
+        self.reliableTimeout = 1000 # ms
+
+        # CONFIG TEST: subcomponent test flags
+        self.testRelayReliable = False
+        self.corruptProbability = 0.1
 
     def run(self):
         canSendReliable = True
@@ -86,11 +108,19 @@ class Beetle:
                     break
 
                 data = self.receiver.get_packet_bytes()
-                # data should be hex
-                # check for incomplete data
-                # print(data.hex())
+                if data is None: continue
+
+                # TODO: REMOVE ME -- TESTING LOGIC
+                # Test: corrupt packet with probability of 10%
+                if random.random() <= self.corruptProbability:
+                    print("Corrupting RX packet...")
+                    byte_to_corrupt = random.randint(0, len(data) - 1)  # Pick a random byte
+                    bit_to_flip = 1 << random.randint(0, 7)  # Pick a random bit to flip (0-7)
+                    data[byte_to_corrupt] ^= bit_to_flip  # XOR the bit to flip it
+
+                # verify the checksum - if fail, process the next packet
                 if not verify_checksum(data):
-                    print(f"err: checksum failed for PKT b{self.beetle_seq_num}")
+                    print(f"Error: checksum failed for this PKT {data.hex()}")
                     self.errors += 1
                     print(f"Moving to next packet in buffer...")
                     continue
@@ -116,7 +146,7 @@ class Beetle:
                     latestPacket = pkt
                     self.beetle_seq_num = max(self.beetle_seq_num, pkt.seq_num + 1)
                     ackNum = pkt.seq_num 
-                    print(f"RX PKT b{latestPacket.seq_num}, Data: {latestPacket.health} (beetle tcp)")
+                    print(f"RX PKT b{latestPacket.seq_num} (beetle tcp)")
 
                 # Is an ACK
                 if pkt.packet_type == PACKET_ACK:
@@ -145,29 +175,31 @@ class Beetle:
                 self.write_packet(resp)
                 # finally, deal with the packet
                 if latestPacket is not None:
-                    print(f"TX ACK b{resp.seq_num}, for RX b{latestPacket.seq_num}, {latestPacket.health} (beetle tcp)")
+                    print(f"TX ACK b{resp.seq_num}, for RX b{latestPacket.seq_num} (beetle tcp)")
                 else:
                     print(f"RX ACK b{resp.seq_num} (dup)")
             
             # STEP 3: SEND DATA 
-            if canSendReliable:
-                sendPkt = self.getDataToSend()
-                # sendPkt = None # TODO remove me
-                if sendPkt is not None:
-                    self.cachedPacket = sendPkt
+            # TODO: remove this if wrapper when testing is done
+            if self.testRelayReliable:
+                if canSendReliable:
+                    if millis() - self.sendReliableStart > self.reliableTxRate:
+                        sendPkt = self.getDataToSend()
+                        if sendPkt is not None:
+                            self.cachedPacket = sendPkt
+                            # sendPkt = self.corrupt_packet(sendPkt) # WARN: should be removed in prod
+                            self.sendReliableStart = millis()
+                            print(f"TX PKT r{sendPkt.seq_num}, curr r{self.relay_seq_num} (relay tcp)")
+                            self.write_packet(sendPkt)
+                            canSendReliable = False
+                elif millis() - self.sendReliableStart > self.reliableTimeout:  # 1000 ms = 1 second
+                    self.sendReliableStart = millis()
+                    self.repeatedReliableSend += 1
+                    print(f"TX PKT r{self.cachedPacket.seq_num}, curr {self.relay_seq_num}, {self.cachedPacket.to_bytearray().hex()} (relay reliable, timeout)")
+                    sendPkt = self.cachedPacket
                     # sendPkt = self.corrupt_packet(sendPkt) # WARN: should be removed in prod
-                    self.sendReliableStart = time.time()
-                    print(f"TX PKT r{sendPkt.seq_num}, curr r{self.relay_seq_num} (relay reliable)")
                     self.write_packet(sendPkt)
                     canSendReliable = False
-            elif time.time() - self.sendReliableStart > 1:  # 1000 ms = 1 second
-                self.repeatedReliableSend += 1
-                self.sendReliableStart = time.time()
-                print(f"TX PKT r{self.cachedPacket.seq_num}, curr {self.relay_seq_num}, {self.cachedPacket.to_bytearray().hex()} (relay reliable, timeout)")
-                sendPkt = self.cachedPacket
-                # sendPkt = self.corrupt_packet(sendPkt) # WARN: should be removed in prod
-                self.write_packet(sendPkt)
-                canSendReliable = False
 
 
     def bytes_to_packet(self, bytearray):
@@ -204,7 +236,7 @@ class Beetle:
 
         while(self.peripheral is None):
             try:
-                self.peripheral = btle.Peripheral(BLUNO_MAC_ADDRESS)
+                self.peripheral = btle.Peripheral(self.MAC)
                 self.peripheral.setDelegate(self.receiver)
                 self.chr = self.peripheral.getCharacteristics(uuid=CHARACTERISTIC_UUID)[0]
                 # print("Setup!")
@@ -279,7 +311,7 @@ class Beetle:
 
     def corrupt_packet(self, pkt):
         """Corrupt a gamestate packet for testing purposes"""
-        if random.random() < 0.5:  # 10% chance
+        if random.random() < 0.1:  # 10% chance
             print("Corrupting packet...")
             byte_array = pkt.to_bytearray()
             byte_to_corrupt = random.randint(0, len(byte_array) - 1)  # Pick a random byte
@@ -289,15 +321,8 @@ class Beetle:
             pkt = PacketGamestate(byte_array)
         return pkt
 
-def discover_services_and_characteristics(bluno):
-    print("Discovering services and characteristics...")
-    for service in bluno.getServices():
-        print(f"Service: {service.uuid}")
-        for char in service.getCharacteristics():
-            print(f"Characteristic: {char.uuid} (Handle: {char.getHandle()})")
-
 def main():
-    beetle = Beetle(BLUNO_MAC_ADDRESS)
+    beetle = Beetle(BLUNO0_MAC_ADDRESS)
     beetle.run()
 
 if __name__ == "__main__":
