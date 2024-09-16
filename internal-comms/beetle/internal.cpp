@@ -297,16 +297,23 @@ void test_receive_reliable() {
   }
 }
 
+// Test code to get dummy data
+
+
+
 // ----- Two-way TX/RX -----
 uint8_t exp_beetle_seq_num = beetle_seq_num;  // this tracks the reliable seq_num
-bool canSendReliable = true;
 bool reliableBufferFilled = true; // CONFIG: simulate buffer full (has something to send reliably)
 bool unreliableBufferFilled = true; // CONFIG: simulate udp buffer full (has something to send unreliably)
+long unreliableStartRateTime = 0; // TESTING: rate limit for unreliable sending
+long reliableStartRateTime = 0;  // TESTING: rate limit for reliable sending
+bool canSendReliable = true; // flag to allow tx
+long reliableTimeStart = 0; // timeout
+
 uint8_t test_health_number = 22;
 uint8_t prev_rcv_ack = 0;  // track the previously received ack number
-long reliableTimeStart = 0;
 packet_general_t cached_packet = { 0 };
-uint8_t to_send = 10;
+
 
 void communicate(uint8_t rel_tx_rate, uint8_t unrel_tx_rate) {
   auto rate_start = millis();
@@ -351,8 +358,8 @@ void communicate(uint8_t rel_tx_rate, uint8_t unrel_tx_rate) {
   // SEND RELIABLE DATA
   // if ACKn received AND there is something to send, send it!
   if (canSendReliable) {
-    delay(rel_tx_rate);
-    if(reliableBufferFilled){ // simulate checking of reliableBuffer to send
+    if(reliableBufferFilled && millis() - reliableStartRateTime > rel_tx_rate){ // simulate checking of reliableBuffer to send
+      unreliableStartRateTime = millis();
       canSendReliable = false;
       packet_health_t pkt = { 0 };
       pkt.health_count = test_health_number--;
@@ -384,7 +391,8 @@ void communicate(uint8_t rel_tx_rate, uint8_t unrel_tx_rate) {
   }
 
   // TRANSMIT UNRELIABLE DATA
-  if(unreliableBufferFilled) {
+  if(unreliableBufferFilled && millis() - unreliableStartRateTime > unrel_tx_rate) {
+    unreliableStartRateTime = millis();
     packet_imu_t pkt = {0};
     pkt.packet_type = PACKET_DATA_IMU;
     pkt.seq_num = beetle_seq_num;
