@@ -302,20 +302,23 @@ void test_receive_reliable() {
 
 
 // ----- Two-way TX/RX -----
-uint8_t exp_beetle_seq_num = beetle_seq_num;  // this tracks the reliable seq_num
 bool reliableBufferFilled = true; // CONFIG: simulate buffer full (has something to send reliably)
 bool unreliableBufferFilled = true; // CONFIG: simulate udp buffer full (has something to send unreliably)
+uint8_t rel_tx_rate = 1000; // CONFIG: Tuning of reliable transfer rate in ms
+uint8_t unrel_tx_rate = 200; // CONFIG: Tuning of unreliable transfer rate in ms 
 long unreliableStartRateTime = 0; // TESTING: rate limit for unreliable sending
 long reliableStartRateTime = 0;  // TESTING: rate limit for reliable sending
+
 bool canSendReliable = true; // flag to allow tx
 long reliableTimeStart = 0; // timeout
+uint8_t exp_beetle_seq_num = beetle_seq_num;  // this tracks the reliable seq_num
 
 uint8_t test_health_number = 22;
 uint8_t prev_rcv_ack = 0;  // track the previously received ack number
 packet_general_t cached_packet = { 0 };
 
 
-void communicate(uint8_t rel_tx_rate, uint8_t unrel_tx_rate) {
+void communicate() {
   auto rate_start = millis();
 
   // ---- RECEIVING LOGIC ----
@@ -329,9 +332,6 @@ void communicate(uint8_t rel_tx_rate, uint8_t unrel_tx_rate) {
       if (rcv.packet_type == PACKET_HELLO) {
         await_handshake(true);
       }
-      // case 3: conn_estab
-      // > ignore this duplicate
-      if (rcv.packet_type == PACKET_CONN_ESTAB);
 
       // case 4: ACKn
       if (rcv.packet_type == PACKET_ACK) {
@@ -345,21 +345,37 @@ void communicate(uint8_t rel_tx_rate, uint8_t unrel_tx_rate) {
         // check if relay sequence number is correct
         shouldAck = true;
         if (relay_seq_num == rcv.seq_num) {
-          // correct sequence number.
+          // we have found the correct sequence number.
           relay_seq_num = (relay_seq_num + 1) % 256;
-          // TODO: handle the packet!
+          // TODO: actually handle the packet for hardware integration
         }
         // incorrect serial number, ignore
       }
+
+      // For all other packet types from relay, we ignore them
     }
   }
 
   // ---- TRANSMISSION LOGIC ----
+
+  // TRANSMIT UNRELIABLE DATA
+  if(unreliableBufferFilled && millis() - unreliableStartRateTime > unrel_tx_rate) {
+    digitalWrite(13,1);
+    unreliableStartRateTime = millis();
+    packet_imu_t pkt = {0};
+    pkt.packet_type = PACKET_DATA_IMU;
+    pkt.seq_num = beetle_seq_num;
+    ++beetle_seq_num;
+    setChecksum((packet_general_t*)&pkt);
+    write_serial((packet_general_t*)&pkt);
+    digitalWrite(13,0);
+  }
+
   // SEND RELIABLE DATA
   // if ACKn received AND there is something to send, send it!
   if (canSendReliable) {
     if(reliableBufferFilled && millis() - reliableStartRateTime > rel_tx_rate){ // simulate checking of reliableBuffer to send
-      unreliableStartRateTime = millis();
+      reliableStartRateTime = millis();
       canSendReliable = false;
       packet_health_t pkt = { 0 };
       pkt.health_count = test_health_number--;
@@ -381,6 +397,7 @@ void communicate(uint8_t rel_tx_rate, uint8_t unrel_tx_rate) {
     digitalWrite(13, 0);
   }
 
+  
   // TRANSMIT ACK 
   if (shouldAck) {
     packet_ack_t ack = { 0 };
@@ -390,14 +407,4 @@ void communicate(uint8_t rel_tx_rate, uint8_t unrel_tx_rate) {
     write_serial((packet_general_t*)&ack);
   }
 
-  // TRANSMIT UNRELIABLE DATA
-  if(unreliableBufferFilled && millis() - unreliableStartRateTime > unrel_tx_rate) {
-    unreliableStartRateTime = millis();
-    packet_imu_t pkt = {0};
-    pkt.packet_type = PACKET_DATA_IMU;
-    pkt.seq_num = beetle_seq_num;
-    ++beetle_seq_num;
-    setChecksum((packet_general_t*)&pkt);
-    write_serial((packet_general_t*)&pkt);
-  }
 }
