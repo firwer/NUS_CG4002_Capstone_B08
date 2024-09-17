@@ -1,3 +1,4 @@
+import argparse
 import random
 import time
 from bluepy import btle
@@ -20,20 +21,43 @@ class NotifyDelegate(btle.DefaultDelegate):
         self.buffer = bytearray()
         self.buffer_len = len(self.buffer)
         self.fragmented_packets = 0
-
+        self.total_packets = 0
+        self.throughputStartTime = millis()
+        self.bitsReceived = 0
+        
         # TODO: Remove the testing flags
-        self.dropProbability = 0.0
+        self.dropProbability = 0.1
+        # TODO: Remove the throughput flags
+        # we take throughput readings every 10 notifications
+        self.notificationsRcv = 0
+        self.notificationMod = 20
         
     def handleNotification(self, cHandle, data: bytes):
+        self.notificationsRcv += 1
+        self.bitsReceived += len(data) * 8
         # TODO: write the fragmentation logic here and count fragments
         self.buffer += bytearray(data)
         if len(data) < 20: # data is fragmented
             # print(f"fragmentation: {len(data)}: {data.hex()}")
             self.fragmented_packets += 1
+            self.total_packets += 0.5
+        self.total_packets += 1
+        if self.notificationsRcv >= self.notificationMod:
+            self.notificationsRcv = 0
+            self.get_throughput()
+        
+    def get_throughput(self):
+        """return the throughput in kbps (kilobits) from the last time this function was called"""
+        elapsed_time_seconds = (millis() - self.throughputStartTime) / 1000  # Time in seconds
+        kbps = (self.bitsReceived / 1000) / elapsed_time_seconds  # Convert bits to kilobits
+        print(f"=============================== Tx Rate: {kbps:.3f} kbps")
+        self.get_fragmented_packets()
+        self.throughputStartTime = millis()
+        self.bitsReceived = 0
+        return kbps
 
-    def get_fragemented_packets(self):
-        # TODO
-        pass
+    def get_fragmented_packets(self):
+        print(f"=============================== Fragmented Packets: {self.fragmented_packets//2}")
 
     def has_packet(self) -> bool:
         return len(self.buffer) >= 20
@@ -59,7 +83,17 @@ class NotifyDelegate(btle.DefaultDelegate):
 
 # A beetle object maintains its own connection and state
 class Beetle:
-    def __init__(self, MAC_ADDRESS) -> None:
+    def __init__(self, MAC_ADDRESS, beetle_id=None) -> None:
+        RESET_COLOR = "\033[0m"  # Reset color
+        RED_COLOR = "\033[31m"   # Red color
+        GREEN_COLOR = "\033[32m"  # Green color
+        YELLOW_COLOR = "\033[33m"  # Yellow color
+        BLUE_COLOR = "\033[34m"   # Blue color
+        MAGENTA_COLOR = "\033[35m" # Magenta color
+        CYAN_COLOR = "\033[36m"   # Cyan color
+        colors = [BLUE_COLOR, GREEN_COLOR, RED_COLOR]
+
+        self.COLOR = RESET_COLOR if beetle_id is None else colors[beetle_id]
         self.relay_seq_num = 0
         self.beetle_seq_num = 0 # expected number
         self.MAC = MAC_ADDRESS
@@ -79,16 +113,18 @@ class Beetle:
         self.reliableTimeout = 1000 # ms
 
         # CONFIG TEST: subcomponent test flags
-        self.testRelayReliable = False
+        self.testRelayReliable = True
         self.corruptProbability = 0.1
+        self.killThread = False
 
     def run(self):
         canSendReliable = True
-        while True:
+        while not self.killThread:
+
             shouldAck = False
             # STEP 1. Handle reconnections if applicable
             if not self.connected or self.errors > 2 or self.repeatedReliableSend > 2:
-                print(f"Restarting connection: isConnected={self.connected}, errors={self.errors}, retx={self.repeatedReliableSend}")
+                print(f"{self.COLOR}Restarting connection: isConnected={self.connected}, errors={self.errors}, retx={self.repeatedReliableSend}")
                 self.receiver.reset_buffer()
                 self.errors = 0
                 self.repeatedReliableSend = 0
@@ -96,7 +132,7 @@ class Beetle:
                 continue
             # STEP 2. Collect notifications 
             try:
-                # print("Waiting for notifications...")
+                # print("Getting notifications...")
                 self.peripheral.waitForNotifications(1)
             except Exception as e:
                 print(f"Error: {(e)}. Re-connecting...")
@@ -112,7 +148,9 @@ class Beetle:
                     break
 
                 data = self.receiver.get_packet_bytes()
-                if data is None: continue
+                if data is None:
+                    print("no packet received, continuing to read buffer...")
+                    continue
 
                 # TODO: REMOVE ME -- SUBCOMPONENT TESTING LOGIC
                 # TEST: corrupt packet with probability of 10%
@@ -247,7 +285,7 @@ class Beetle:
                 # print("Setup!")
                 break
             except Exception as e: # keep trying
-                print(f"peripheral fail: {e}")
+                print(f"Bluepy peripheral fail: {e}")
                 continue
 
     def connect_to_beetle(self):
@@ -326,9 +364,34 @@ class Beetle:
             pkt = PacketGamestate(byte_array)
         return pkt
 
-def main():
-    beetle = Beetle(BLUNO2_MAC_ADDRESS)
+def run_beetle(beetle):
+    print("Running")
     beetle.run()
+    
+def main():
+    # Set up argument parser
+    parser = argparse.ArgumentParser(description="Run a Beetle instance with a specific ID.")
+    parser.add_argument("beetle_id", type=int, help="ID of the Beetle instance to run (0, 1, or 2)")
+
+    # Parse arguments
+    args = parser.parse_args()
+    beetle_id = args.beetle_id
+
+    # Validate beetle_id
+    if beetle_id not in [0, 1, 2]:
+        print("Invalid beetle_id. Must be 0, 1, or 2.")
+        return
+
+    # Create Beetle instances
+    beetle0 = Beetle(BLUNO0_MAC_ADDRESS, 0)
+    beetle1 = Beetle(BLUNO1_MAC_ADDRESS, 1)
+    beetle2 = Beetle(BLUNO2_MAC_ADDRESS, 2)
+
+    # Dictionary to map beetle_id to Beetle instance
+    beetles = {0: beetle0, 1: beetle1, 2: beetle2}
+
+    # Run the selected Beetle instance
+    beetles[beetle_id].run()
 
 if __name__ == "__main__":
     main()
