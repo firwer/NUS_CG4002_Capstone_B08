@@ -92,7 +92,7 @@ async def game_state_manager(currGameData, attacker_id: int,
                 else:
                     print("Target is not in FOV, Invalid attack")
                     targetInFOV = False
-        except TimeoutError as e:
+        except asyncio.TimeoutError:
             print("Visualizer did not respond in time. Default True")
             targetInFOV = True
     else:
