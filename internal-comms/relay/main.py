@@ -15,6 +15,10 @@ CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"  # Correct characte
 def millis():
     return time.time_ns() // 1_000_000
 
+def delay(time_ms): # spinlock
+    start = millis()
+    while(millis() - start < time_ms): pass
+
 class NotifyDelegate(btle.DefaultDelegate):
     def __init__(self):
         btle.DefaultDelegate.__init__(self)
@@ -26,12 +30,14 @@ class NotifyDelegate(btle.DefaultDelegate):
         self.bitsReceived = 0
         
         # TODO: Remove the testing flags
-        self.dropProbability = 0.1
+        self.dropProbability = 0.005
         # TODO: Remove the throughput flags
         # we take throughput readings every 10 notifications
         self.notificationsRcv = 0
-        self.notificationMod = 20
-        
+        self.notificationMod = 256
+        self.highestThroughput = 0
+        self.lowestThroughput = 1e9        
+
     def handleNotification(self, cHandle, data: bytes):
         self.notificationsRcv += 1
         self.bitsReceived += len(data) * 8
@@ -44,20 +50,25 @@ class NotifyDelegate(btle.DefaultDelegate):
         self.total_packets += 1
         if self.notificationsRcv >= self.notificationMod:
             self.notificationsRcv = 0
-            self.get_throughput()
-        
+            self.print_statistics()
+
+    def print_statistics(self):
+        print(f"============================== TRANSMISSION STATISTICS ==============================")
+        self.get_throughput()
+
     def get_throughput(self):
         """return the throughput in kbps (kilobits) from the last time this function was called"""
         elapsed_time_seconds = (millis() - self.throughputStartTime) / 1000  # Time in seconds
         kbps = (self.bitsReceived / 1000) / elapsed_time_seconds  # Convert bits to kilobits
-        print(f"=============================== Tx Rate: {kbps:.3f} kbps")
-        self.get_fragmented_packets()
+        self.highestThroughput = max(kbps, self.highestThroughput)
+        self.lowestThroughput = min(kbps, self.lowestThroughput)
+        print(f"{'=' * 30} Tx Rate: {kbps:>3.3f} kbps     {'=' * 30}")
+        print(f"{'=' * 30} Min Rate: {self.lowestThroughput:>3.3f} kbps    {'=' * 30}")
+        print(f"{'=' * 30} Max Rate: {self.highestThroughput:>3.3f} kbps    {'=' * 30}")
+        print(f"{'=' * 30} Fragmented Pkts: {self.fragmented_packets//2:>3}    {'=' * 30}")
         self.throughputStartTime = millis()
         self.bitsReceived = 0
         return kbps
-
-    def get_fragmented_packets(self):
-        print(f"=============================== Fragmented Packets: {self.fragmented_packets//2}")
 
     def has_packet(self) -> bool:
         return len(self.buffer) >= 20
@@ -109,12 +120,12 @@ class Beetle:
         self.sendReliableStart = 0
         self.cachedPacket = None
         self.repeatedReliableSend = 0
-        self.reliableTxRate = 10000 # ms
+        self.reliableTxRate = 0 # ms
         self.reliableTimeout = 1000 # ms
 
         # CONFIG TEST: subcomponent test flags
         self.testRelayReliable = True
-        self.corruptProbability = 0.1
+        self.corruptProbability = 0.05
         self.killThread = False
 
     def run(self):
@@ -180,7 +191,7 @@ class Beetle:
                 # Is unreliable send
                 if pkt.packet_type == PACKET_DATA_IMU:
                     # do work
-                    print(f"RX PKT b{pkt.seq_num} (beetle udp)")
+                    print(f"RX PKT b{pkt.seq_num} (beetle stream)")
                     continue
 
                 # Is reliable packet
@@ -189,16 +200,16 @@ class Beetle:
                     latestPacket = pkt
                     self.beetle_seq_num = max(self.beetle_seq_num, pkt.seq_num + 1)
                     ackNum = pkt.seq_num 
-                    print(f"RX PKT b{latestPacket.seq_num} (beetle tcp)")
+                    print(f"RX PKT b{latestPacket.seq_num} (beetle reliable)")
 
                 # Is an ACK
                 if pkt.packet_type == PACKET_ACK:
                     # is the ACK what we expected?
-                    print(f"RX PKT r{pkt.seq_num}, Relay SN: r{self.relay_seq_num} (relay tcp)")
+                    print(f"RX PKT r{pkt.seq_num}, Relay SN: r{self.relay_seq_num} (relay reliable)")
                     if pkt.seq_num == (self.relay_seq_num + 1) % 256:
                         # We got the ack we wanted!
                         # canSendReliable implies that no more unacked pkt is in-flight
-                        self.relay_seq_num = (self.relay_seq_num + 1 % 256)
+                        self.relay_seq_num = (self.relay_seq_num + 1) % 256
                         canSendReliable = True
 
 
@@ -218,9 +229,9 @@ class Beetle:
                 self.write_packet(resp)
                 # finally, deal with the packet
                 if latestPacket is not None:
-                    print(f"TX ACK b{resp.seq_num}, for RX b{latestPacket.seq_num} (beetle tcp)")
+                    print(f"TX ACK b{resp.seq_num}, for RX b{latestPacket.seq_num} (beetle reliable)")
                 else:
-                    print(f"RX ACK b{resp.seq_num} (dup)")
+                    print(f"RX ACK b{resp.seq_num} (duplicate)")
             
             # STEP 6: SEND RELIABLE RELAY DATA 
             # TODO: remove this if wrapper when testing is done
@@ -232,13 +243,13 @@ class Beetle:
                             self.cachedPacket = sendPkt
                             # sendPkt = self.corrupt_packet(sendPkt) # WARN: should be removed in prod
                             self.sendReliableStart = millis()
-                            print(f"TX PKT r{sendPkt.seq_num}, curr r{self.relay_seq_num} (relay tcp)")
+                            print(f"TX PKT r{sendPkt.seq_num}, curr r{self.relay_seq_num} (relay reliable)")
                             self.write_packet(sendPkt)
                             canSendReliable = False
                 elif millis() - self.sendReliableStart > self.reliableTimeout:  # 1000 ms = 1 second
                     self.sendReliableStart = millis()
                     self.repeatedReliableSend += 1
-                    print(f"TX PKT r{self.cachedPacket.seq_num}, curr {self.relay_seq_num}, {self.cachedPacket.to_bytearray().hex()} (relay reliable, timeout)")
+                    print(f"TX PKT r{self.cachedPacket.seq_num}, curr {self.relay_seq_num}, (relay reliable, timeout)")
                     sendPkt = self.cachedPacket
                     # sendPkt = self.corrupt_packet(sendPkt) # WARN: should be removed in prod
                     self.write_packet(sendPkt)
@@ -291,6 +302,8 @@ class Beetle:
     def connect_to_beetle(self):
         """blocking 3 way handshake"""
         self.reset_bluepy()
+
+
         print("THREE WAY START")
         while(1):
             if self.connected == False:
@@ -301,6 +314,8 @@ class Beetle:
             pkt.crc8 = get_checksum(pkt.to_bytearray())
             print(f"THREE WAY: Sending HELLO r{self.relay_seq_num}")
             self.write_packet(pkt)
+
+            delay(1000)
 
             # STAGE 2: SYN-ACK wait
             print("THREE WAY: Wait for SYN-ACK")
