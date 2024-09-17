@@ -102,7 +102,7 @@ void await_handshake(bool helloReceived) {
     while (!helloReceived) {
       packet_general_t hello_packet = { 0 };
       // Wait forever for a HELLO to arrive.
-      while (await_packet(&hello_packet, TIMEOUT_MS)) {}
+      while (await_packet(&hello_packet, 500)) {}
       // Check if its a HELLO packet
       if (hello_packet.packet_type == PACKET_HELLO && verifyChecksum(&hello_packet)) {
         relay_seq_num = hello_packet.seq_num;
@@ -299,13 +299,28 @@ void test_receive_reliable() {
 
 // Test code to get dummy data
 
+void getRandomReliablePacket(packet_general_t* pkt) {
+    int packet_choice = rand() % 3;
+    if (packet_choice == 0) {
+        pkt->packet_type = PACKET_DATA_BULLET;
+        packet_bullet_t* tmp = (packet_bullet_t*) pkt;
+        tmp->bullet_count = rand() % 256; // choose between 0-255
+    } else if (packet_choice == 1) {
+        pkt->packet_type = PACKET_DATA_HEALTH;
+        packet_health_t* tmp = (packet_health_t*) pkt;
+        tmp->health_count = rand() % 256; // choose between 0-255
+    } else {
+        pkt->packet_type = PACKET_DATA_KICK;
+        packet_kick_t* tmp = (packet_kick_t*) pkt;
+    }
+}
 
 
 // ----- Two-way TX/RX -----
 bool reliableBufferFilled = true; // CONFIG: simulate buffer full (has something to send reliably)
 bool unreliableBufferFilled = true; // CONFIG: simulate udp buffer full (has something to send unreliably)
-uint8_t rel_tx_rate = 1000; // CONFIG: Tuning of reliable transfer rate in ms
-uint8_t unrel_tx_rate = 200; // CONFIG: Tuning of unreliable transfer rate in ms 
+uint8_t rel_tx_rate = 0; // CONFIG: Tuning of reliable transfer rate in ms
+uint8_t unrel_tx_rate = 0; // CONFIG: Tuning of unreliable transfer rate in ms 
 long unreliableStartRateTime = 0; // TESTING: rate limit for unreliable sending
 long reliableStartRateTime = 0;  // TESTING: rate limit for reliable sending
 
@@ -324,7 +339,7 @@ void communicate() {
   // ---- RECEIVING LOGIC ----
   packet_general_t rcv = { 0 };
   bool shouldAck = false;
-  if (await_packet((packet_general_t*)&rcv, 50)) {
+  if (await_packet((packet_general_t*)&rcv, 100)) {
     // case 1: checksum error (continue)
     if (verifyChecksum(&rcv)) {
       // case 2: hello
@@ -360,7 +375,6 @@ void communicate() {
 
   // TRANSMIT UNRELIABLE DATA
   if(unreliableBufferFilled && millis() - unreliableStartRateTime > unrel_tx_rate) {
-    digitalWrite(13,1);
     unreliableStartRateTime = millis();
     packet_imu_t pkt = {0};
     pkt.packet_type = PACKET_DATA_IMU;
@@ -368,7 +382,6 @@ void communicate() {
     ++beetle_seq_num;
     setChecksum((packet_general_t*)&pkt);
     write_serial((packet_general_t*)&pkt);
-    digitalWrite(13,0);
   }
 
   // SEND RELIABLE DATA
@@ -377,9 +390,8 @@ void communicate() {
     if(reliableBufferFilled && millis() - reliableStartRateTime > rel_tx_rate){ // simulate checking of reliableBuffer to send
       reliableStartRateTime = millis();
       canSendReliable = false;
-      packet_health_t pkt = { 0 };
-      pkt.health_count = test_health_number--;
-      pkt.packet_type = PACKET_DATA_HEALTH;
+      packet_general_t pkt = {0};
+      getRandomReliablePacket(&pkt); // randomy choose a packet
       pkt.seq_num = beetle_seq_num;
       ++beetle_seq_num;
       exp_beetle_seq_num = beetle_seq_num;
