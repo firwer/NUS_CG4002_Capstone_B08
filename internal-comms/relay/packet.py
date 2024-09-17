@@ -129,6 +129,47 @@ class PacketHealth():
         byte_array.append(self.crc8)
         return byte_array
 
+class PacketBullet():
+    def __init__(self, byteArray=None) -> None:
+        self.packet_type = PACKET_DATA_BULLET
+        if byteArray is None:
+            self.seq_num = 0x0
+            self.bullet = 0x0
+            self.padding = bytearray(16)
+            self.crc8 = 0x0
+        else:
+            self.seq_num = byteArray[1]
+            self.bullet = byteArray[2]
+            self.padding = byteArray[3:19]
+            self.crc8 = byteArray[19]
+    def to_bytearray(self) -> bytearray:
+        byte_array = bytearray()
+        byte_array.append(self.packet_type)
+        byte_array.append(self.seq_num)
+        byte_array.append(self.bullet)
+        byte_array.extend(self.padding)
+        byte_array.append(self.crc8)
+        return byte_array
+
+class PacketKick():
+    def __init__(self, byteArray=None) -> None:
+        self.packet_type = PACKET_DATA_KICK
+        if byteArray is None:
+            self.seq_num = 0x0
+            self.padding = bytearray(17)
+            self.crc8 = 0x0
+        else:
+            self.seq_num = byteArray[1]
+            self.padding = byteArray[2:19]
+            self.crc8 = byteArray[19]
+    def to_bytearray(self) -> bytearray:
+        byte_array = bytearray()
+        byte_array.append(self.packet_type)
+        byte_array.append(self.seq_num)
+        byte_array.extend(self.padding)
+        byte_array.append(self.crc8)
+        return byte_array
+
 class PacketImu():
     def __init__(self, byteArray=None) -> None:
         self.packet_type = PACKET_DATA_IMU
