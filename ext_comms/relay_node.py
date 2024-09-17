@@ -11,6 +11,9 @@ from comms.TCPC_Controller import TCPC_Controller
 async def user_input(send_queue: asyncio.Queue, receive_queue: asyncio.Queue):
     while True:
         message = input("Input message: ")
+        if not message.startswith("p1_") and not message.startswith("p2_"):
+            print("Invalid message format. Must start with 'p1_' or 'p2_'")
+            continue
         await send_queue.put(message)
         print(f"Waiting for message")
         msg = await receive_queue.get()

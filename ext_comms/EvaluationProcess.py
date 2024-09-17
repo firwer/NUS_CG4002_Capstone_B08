@@ -26,8 +26,8 @@ class EvaluationProcess:
     def __init__(self, eval_server_port, evaluation_server_to_engine_queue, engine_to_evaluation_server_queue):
         self.evaluation_server_to_engine_queue = evaluation_server_to_engine_queue
         self.engine_to_evaluation_server_queue = engine_to_evaluation_server_queue
-        self.tcpClient = TCPC_Controller(config.EVAL_SERVER_HOST, eval_server_port,
-                                         config.EVAL_SECRET_KEY)  # Used for communication with the evaluation server
+        self.tcpClient = TCPC_Controller(ip=config.EVAL_SERVER_HOST,port=eval_server_port,
+                                         secret_key=config.EVAL_SECRET_KEY)  # Used for communication with the evaluation server
         self.response_pending = False  # Flag to track if a response is pending
 
     async def msg_receiver(self):

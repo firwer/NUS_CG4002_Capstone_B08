@@ -3,7 +3,7 @@ PLAYER_MODE = 1  # 1 for single player, 2 for multiplayer
 VISUALIZER_ENABLED = False  # KIV
 
 # Relay Node Configuration
-RELAY_NODE_LOCAL_TEST = True  # Set to True for local env relay node testing
+RELAY_NODE_LOCAL_TEST = False  # Set to True for local env relay node testing
 
 # Evaluation Server Configurations
 EVAL_SERVER_HOST = '127.0.0.1'
@@ -33,15 +33,14 @@ MQTT_SENSOR_DATA_RELAY_TO_ENG_P2 = "sensor_data/p2/relay_to_engine"
 MQTT_SENSOR_DATA_ENG_TO_RELAY_P2 = "sensor_data/p2/engine_to_relay"
 
 MQTT_ENG_TO_VISUALIZER = "game_state/engine_to_visualizer"
-MQTT_VISUALIZER_TO_ENG = "game_state/visualizer_to_engine"
+MQTT_VISUALIZER_TO_ENG_P1 = "game_state/visualizer_to_engine/p1"
+MQTT_VISUALIZER_TO_ENG_P2 = "game_state/visualizer_to_engine/p2"
 
 MQTT_ENGINE_TO_RELAY = "sensor_data/return"
 
 # MQTT Broker Exponential Backoff Recovery Config
 FIRST_RECONNECT_DELAY = 1
-MAX_RECONNECT_COUNT = 5
-RECONNECT_RATE = 2
-MAX_RECONNECT_DELAY = 60
+MAX_RECONNECT_COUNT = 10
 
 # Game Player Max Attribute Configurations
 GAME_MAX_BOMBS = 2

@@ -90,10 +90,16 @@ async def evaluation_server_job(curr_game_data: GameData, player_id: int, eval_i
 # Need this function for visualizer to provide feedback on whether player is in sight. If game state did not change (
 # i.e. health is unchanged, it means player is not in sight)
 
-async def start_mqtt_job(receive_topic: str, send_topic: str, receive_queue: asyncio.Queue,
+async def start_mqtt_job(receive_topic_p1: str,
+                         receive_topic_p2: str,
+                         send_topic: str,
+                         receive_queue_p1: asyncio.Queue,
+                         receive_queue_p2: asyncio.Queue,
                          send_queue: asyncio.Queue):
-    mqtt_client = AsyncMQTTController(config.MQTT_BROKER_PORT, receive_queue=receive_queue, send_queue=send_queue)
-    await mqtt_client.start(receive_topic, send_topic)
+    mqtt_client = AsyncMQTTController(config.MQTT_BROKER_PORT, receive_queue_p1=receive_queue_p1,
+                                      receive_queue_p2=receive_queue_p2,
+                                      send_queue=send_queue)
+    await mqtt_client.start(receive_topic_p1, receive_topic_p2, send_topic)
 
 
 async def start_tcp_job(tcp_port: int, receive_queue: asyncio.Queue, send_queue: asyncio.Queue):
@@ -138,11 +144,9 @@ class GameEngine:
         self.relay_mqtt_to_engine_queue = asyncio.Queue()  # Pipeline from relay node for P1
         self.engine_to_relay_mqtt_queue = asyncio.Queue()  # Pipeline to relay node for P1
 
-        #self.relay_mqtt_to_engine_queue_p2 = asyncio.Queue()  # Pipeline from relay node for P2
-        #self.engine_to_relay_mqtt_queue_p2 = asyncio.Queue()  # Pipeline to relay node for P2
-
-        self.engine_to_visualizer_queue = asyncio.Queue()  # Pipeline from engine to visualizer for p1
-        self.visualizer_to_engine_queue = asyncio.Queue()  # Pipeline from visualizer to engine for p2
+        self.engine_to_visualizer_queue = asyncio.Queue()
+        self.visualizer_to_engine_queue_p1 = asyncio.Queue()
+        self.visualizer_to_engine_queue_p2 = asyncio.Queue()
 
         self.currGameData = GameData()
 
@@ -154,10 +158,12 @@ class GameEngine:
                           receive_queue=self.relay_mqtt_to_engine_queue,
                           send_queue=self.engine_to_relay_mqtt_queue),
 
-            start_mqtt_job(receive_topic=config.MQTT_VISUALIZER_TO_ENG,
+            start_mqtt_job(receive_topic_p1=config.MQTT_VISUALIZER_TO_ENG_P1,
+                           receive_topic_p2=config.MQTT_VISUALIZER_TO_ENG_P2,
                            send_topic=config.MQTT_ENG_TO_VISUALIZER,
-                           receive_queue=self.engine_to_visualizer_queue,
-                           send_queue=self.visualizer_to_engine_queue),
+                           receive_queue_p1=self.visualizer_to_engine_queue_p1,
+                           receive_queue_p2=self.visualizer_to_engine_queue_p2,
+                           send_queue=self.engine_to_visualizer_queue),
 
             start_relay_node_data_sorter(src_input_queue=self.relay_mqtt_to_engine_queue,
                                          output_sensor_data_p1=self.prediction_input_queue_p1,
@@ -187,27 +193,24 @@ class GameEngine:
 
     async def game_data_process(self, player_id):
         # Select appropriate queues based on player_id
-        visualizer_input_queue = self.engine_to_visualizer_queue
-        visualizer_output_queue = self.visualizer_to_engine_queue
-
+        visualizer_send_queue = self.engine_to_visualizer_queue
         # Currently all data for relay node sent back to this queue regardless of player
         relay_node_input_queue = self.engine_to_relay_mqtt_queue
 
         if player_id == 1:
             pred_output_queue = self.prediction_output_queue_p1
+            visualizer_receive_queue = self.visualizer_to_engine_queue_p1
         else:
             pred_output_queue = self.prediction_output_queue_p2
+            visualizer_receive_queue = self.visualizer_to_engine_queue_p2
 
         while True:
             # Check for predicted action
+
             await game_state_manager(currGameData=self.currGameData, attacker_id=player_id,
-                                     pred_output_queue=pred_output_queue)
-
-            print("Updating VISUALIZER...")
-            # Send updated game state to visualizer
-            await visualizer_output_queue.put(self.currGameData.to_json())
-
-            # await visualizer_input_queue.get()  # Wait for visualizer response
+                                     pred_output_queue=pred_output_queue,
+                                     visualizer_receive_queue=visualizer_receive_queue,
+                                     visualizer_send_queue=visualizer_send_queue)
             print("EVALUATING...")
             # Send updated game state to evaluation server
             await evaluation_server_job(curr_game_data=self.currGameData,

@@ -52,7 +52,18 @@ async def reload(targetGameState: dict):
         targetGameState["bullets"] = config.GAME_MAX_BULLETS
 
 
-async def game_state_manager(currGameData, attacker_id: int, pred_output_queue: asyncio.Queue):
+async def bomb_player(targetGameState: dict, opponentGameState: dict):
+    """Throw a bomb at opponent"""
+    if targetGameState["bombs"] <= 0:
+        return
+    targetGameState["bombs"] -= 1
+    await reduce_health(opponentGameState, config.GAME_BOMB_DMG)
+
+
+async def game_state_manager(currGameData, attacker_id: int,
+                             pred_output_queue: asyncio.Queue,
+                             visualizer_receive_queue: asyncio.Queue,
+                             visualizer_send_queue: asyncio.Queue):
     prediction_action = await pred_output_queue.get()
     print(f"Received prediction from PredictionService: {prediction_action} for player {attacker_id}")
 
@@ -65,6 +76,28 @@ async def game_state_manager(currGameData, attacker_id: int, pred_output_queue: 
         targetPlayerData = currGameData.p1.game_state
         OpponentPlayerData = currGameData.p2.game_state
 
+    print("Updating Visualizer..")
+    # Send game state to visualizer (Attributes not yet adjusted, Visualizer will do on its own)
+    await visualizer_send_queue.put(currGameData.to_json())
+    targetInFOV = False
+    if prediction_action in {"basket", "soccer", "volley", "bowl", "bomb"}:
+        try:
+            msg = await asyncio.wait_for(visualizer_receive_queue.get(),
+                                         3)  # Wait for visualizer response, timeout 3 seconds
+            msgStr = msg.decode()
+            if msgStr.startswith('in_sight_'):
+                if msgStr[9:] == "True":
+                    print("Target is in FOV, Valid attack")
+                    targetInFOV = True
+                else:
+                    print("Target is not in FOV, Invalid attack")
+                    targetInFOV = False
+        except TimeoutError as e:
+            print("Visualizer did not respond in time. Default True")
+            targetInFOV = True
+    else:
+        targetInFOV = True
+
     if prediction_action == "gun":
         await gun_shoot(targetPlayerData, OpponentPlayerData)
     elif prediction_action == "shield":
@@ -72,10 +105,11 @@ async def game_state_manager(currGameData, attacker_id: int, pred_output_queue: 
     elif prediction_action == "reload":
         await reload(targetPlayerData)
     elif prediction_action == "bomb":
-        # TODO: Implement bomb action
-        pass
+        if targetInFOV:
+            await bomb_player(targetPlayerData, OpponentPlayerData)
     elif prediction_action in {"basket", "soccer", "volley", "bowl"}:
-        await reduce_health(OpponentPlayerData, config.GAME_AI_DMG)
+        if targetInFOV:
+            await reduce_health(OpponentPlayerData, config.GAME_AI_DMG)
     elif prediction_action == "logout":
         # TODO: Implement logout action
         pass
