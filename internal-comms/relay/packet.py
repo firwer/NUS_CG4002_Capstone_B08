@@ -1,6 +1,3 @@
-PACKET_INVALID = 0xE
-PACKET_HELLO = 0xF
-PACKET_CONN_ESTAB = 0xD
 PACKET_ACK = 0x1
 PACKET_SYN_ACK = 0x2
 PACKET_DATA_IMU = 0x3
@@ -8,7 +5,21 @@ PACKET_DATA_KICK = 0x4
 PACKET_DATA_BULLET = 0x5
 PACKET_DATA_HEALTH = 0x6
 PACKET_DATA_GAMESTATE = 0x7
+PACKET_CONN_ESTAB = 0xD
+PACKET_INVALID = 0xE
+PACKET_HELLO = 0xF
 
+def get_packettype_string(packet_type):
+    """Takes in a byte and returns the associated type"""
+    if packet_type == PACKET_DATA_HEALTH:
+        return "Health"
+    elif packet_type == PACKET_DATA_KICK:
+        return "Kick"
+    elif packet_type == PACKET_DATA_BULLET:
+        return "Bullet"
+    elif packet_type == PACKET_DATA_IMU:
+        return "IMU"
+    return "Unknown"
 
 def get_packet(bytearray: bytearray):
     """Convert the bytearray a PacketClass and returns it."""
@@ -21,10 +32,14 @@ def get_packet(bytearray: bytearray):
         return PacketAck(bytearray)
     elif pkt_typ == PACKET_DATA_HEALTH:
         return PacketHealth(bytearray)
+    elif pkt_typ == PACKET_DATA_BULLET:
+        return PacketBullet(bytearray)
+    elif pkt_typ == PACKET_DATA_KICK:
+        return PacketKick(bytearray)
     elif pkt_typ == PACKET_DATA_IMU:
         return PacketImu(bytearray)
     else:
-        print("err: unknown packet type:", pkt_typ)
+        print(f"err: unknown packet type: {pkt_typ}, {bytearray.hex()}")
         return PacketInvalid()
 
 class PacketInvalid():
