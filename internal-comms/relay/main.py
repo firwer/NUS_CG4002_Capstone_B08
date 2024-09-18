@@ -10,7 +10,7 @@ BLUNO0_MAC_ADDRESS = "F4:B8:5E:42:4C:BB"
 BLUNO1_MAC_ADDRESS = "F4:B8:5E:42:61:6A"
 BLUNO2_MAC_ADDRESS = "F4:B8:5E:42:6D:1E"
 
-CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"  # Correct characteristic UUID
+CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"
 
 def millis():
     return time.time_ns() // 1_000_000
@@ -129,9 +129,9 @@ class Beetle:
             if not self.connected or self.errors > 2 or self.reliableRetransmissions > 2:
                 print(f"{self.COLOR}Restarting connection: isConnected={self.connected}, errors={self.errors}, retx={self.reliableRetransmissions}")
                 self.receiver.reset_buffer() # should prevent bitshift fragmentations
+                self.connect_to_beetle()
                 self.errors = 0
                 self.reliableRetransmissions = 0
-                self.connect_to_beetle()
                 continue
             # STEP 2. Collect notifications 
             try:
@@ -311,34 +311,22 @@ class Beetle:
             waitCount = 3 
             while waitCount > 0:
                 waitCount -= 1
-                if(self.get_notifications(1)): # cannot set too low
+                if(self.get_notifications(1)):
                     while self.receiver.has_packet():
                         data = self.receiver.get_packet_bytes()
-                        if data is None:
-                            # print("Data not exist")
-                            continue
-                        if not verify_checksum(data):
-                            # print(f"checksum fail {data.hex()}, {len(self.receiver.buffer)}")
-                            continue
+                        if data is None: continue
+                        if not verify_checksum(data): continue
                         packet = get_packet(data)
-                        if packet is None:
-                            # print("Packet type unknown")
-                            continue
-                        if packet.packet_type != PACKET_SYN_ACK:
-                            # print("non SYNACK received")
-                            continue
-                        # syn-ack received
+                        if packet is None: continue
+                        if packet.packet_type != PACKET_SYN_ACK: continue
                         print("THREE WAY: SYN-ACK received")
                         self.beetle_seq_num = pkt.seq_num
                         hasSynAck = True
-                        waitCount = 0
+                        waitCount = 0 # break out of outer wait loop
                         break
-                else:
-                    print("Timeout: SYN-ACK not received.")
-                    continue  # Retry the handshake
                 if not hasSynAck:
-                    # print("No synack")
-                    continue
+                    print("Timeout: SYN-ACK not received.")
+                    continue # Hello likely did not go thru. Re-send hello!
 
             # STAGE 3: CONN_ESTAB
             resp = PacketConnEstab()
