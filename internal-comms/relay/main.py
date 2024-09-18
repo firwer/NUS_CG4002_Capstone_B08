@@ -123,7 +123,6 @@ class Beetle:
     def run(self):
         canSendReliable = True
         while not self.killThread:
-
             shouldAck = False
             # STEP 1. Handle reconnections if applicable
             if not self.connected or self.errors > 2 or self.reliableRetransmissions > 2:
@@ -309,24 +308,25 @@ class Beetle:
             print("THREE WAY: Wait for SYN-ACK")
             hasSynAck = False
             waitCount = 3 
-            while waitCount > 0:
-                waitCount -= 1
-                if(self.get_notifications(1)):
-                    while self.receiver.has_packet():
-                        data = self.receiver.get_packet_bytes()
-                        if data is None: continue
-                        if not verify_checksum(data): continue
-                        packet = get_packet(data)
-                        if packet is None: continue
-                        if packet.packet_type != PACKET_SYN_ACK: continue
-                        print("THREE WAY: SYN-ACK received")
-                        self.beetle_seq_num = pkt.seq_num
-                        hasSynAck = True
-                        waitCount = 0 # break out of outer wait loop
+            if(self.get_notifications(1)):
+                while self.receiver.has_packet():
+                    data = self.receiver.get_packet_bytes()
+                    if data is None: continue
+                    if not verify_checksum(data):
+                        self.receiver.reset_buffer()
+                        continue
+                    packet = get_packet(data)
+                    if packet is None: continue
+                    if packet.packet_type != PACKET_SYN_ACK:
                         break
-                if not hasSynAck:
-                    print("Timeout: SYN-ACK not received.")
-                    continue # Hello likely did not go thru. Re-send hello!
+                    print("THREE WAY: SYN-ACK received")
+                    self.beetle_seq_num = pkt.seq_num
+                    hasSynAck = True
+                    waitCount = 0 # break out of outer wait loop
+                    break
+            if not hasSynAck:
+                print(f"Timeout {waitCount}: SYNACK not received. Resending hello...")
+                continue # resend hello
 
             # STAGE 3: CONN_ESTAB
             resp = PacketConnEstab()
