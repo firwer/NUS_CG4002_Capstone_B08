@@ -30,30 +30,30 @@ class NotifyDelegate(btle.DefaultDelegate):
         self.bitsReceived = 0
         
         # TODO: Remove the testing flags
-        self.dropProbability = 0.005
+        self.dropProbability = 0.1
         # TODO: Remove the throughput flags
         # we take throughput readings every 10 notifications
         self.notificationsRcv = 0
-        self.notificationMod = 256
+        self.notificationMod = 64
         self.highestThroughput = 0
         self.lowestThroughput = 1e9        
 
     def handleNotification(self, cHandle, data: bytes):
+        if len(data) < 20: # data is fragmented
+            # print(f"Fragmentation: {len(data)}: {data.hex()}")
+            self.fragmented_packets += 1
+        elif random.random() <= self.dropProbability:
+            print(f"Dropping packet: {data.hex()}")
+            return 
         self.notificationsRcv += 1
         self.bitsReceived += len(data) * 8
-        # TODO: write the fragmentation logic here and count fragments
         self.buffer += bytearray(data)
-        if len(data) < 20: # data is fragmented
-            # print(f"fragmentation: {len(data)}: {data.hex()}")
-            self.fragmented_packets += 1
-            self.total_packets += 0.5
-        self.total_packets += 1
         if self.notificationsRcv >= self.notificationMod:
             self.notificationsRcv = 0
             self.print_statistics()
 
     def print_statistics(self):
-        print(f"============================== TRANSMISSION STATISTICS ==============================")
+        print(f"=============== TRANSMISSION STATISTICS ===============")
         self.get_throughput()
 
     def get_throughput(self):
@@ -62,31 +62,23 @@ class NotifyDelegate(btle.DefaultDelegate):
         kbps = (self.bitsReceived / 1000) / elapsed_time_seconds  # Convert bits to kilobits
         self.highestThroughput = max(kbps, self.highestThroughput)
         self.lowestThroughput = min(kbps, self.lowestThroughput)
-        print(f"{'=' * 30} Tx Rate: {kbps:>3.3f} kbps     {'=' * 30}")
-        print(f"{'=' * 30} Min Rate: {self.lowestThroughput:>3.3f} kbps    {'=' * 30}")
-        print(f"{'=' * 30} Max Rate: {self.highestThroughput:>3.3f} kbps    {'=' * 30}")
-        print(f"{'=' * 30} Fragmented Pkts: {self.fragmented_packets//2:>3}    {'=' * 30}")
+        print(f"{'=' * 15} Tx Rate: {kbps:>3.3f} kbps     {'=' * 15}")
+        print(f"{'=' * 15} Min Rate: {self.lowestThroughput:>3.3f} kbps    {'=' * 15}")
+        print(f"{'=' * 15} Max Rate: {self.highestThroughput:>3.3f} kbps    {'=' * 15}")
+        print(f"{'=' * 15} Fragmented Pkts: {self.fragmented_packets//2:>3}    {'=' * 15}")
         self.throughputStartTime = millis()
         self.bitsReceived = 0
         return kbps
 
     def has_packet(self) -> bool:
-        return len(self.buffer) >= 20
+        return len(self.buffer) >= 20 and len(self.buffer) % 20 == 0
 
     def get_packet_bytes(self) -> bytearray | None:
         """returns a 20B bytearray representing a packet from the buffer. else, None"""
         if not self.has_packet():
             return None
-        # TODO: TESTING: Remove dropping logic
-        if random.random() <= self.dropProbability:
-            data = self.buffer[:20]
-            self.buffer = self.buffer[20:]
-            print(f"Dropping packet: {data.hex()}")
-            return None
-        # end test
         data = self.buffer[:20]
         self.buffer = self.buffer[20:]
-        # print(len(self.buffer)//20)
         return data
     
     def reset_buffer(self):
@@ -125,7 +117,7 @@ class Beetle:
 
         # CONFIG TEST: subcomponent test flags
         self.testRelayReliable = True
-        self.corruptProbability = 0.05
+        self.corruptProbability = 0.1
         self.killThread = False
 
     def run(self):
@@ -136,7 +128,7 @@ class Beetle:
             # STEP 1. Handle reconnections if applicable
             if not self.connected or self.errors > 2 or self.repeatedReliableSend > 2:
                 print(f"{self.COLOR}Restarting connection: isConnected={self.connected}, errors={self.errors}, retx={self.repeatedReliableSend}")
-                self.receiver.reset_buffer()
+                self.receiver.reset_buffer() # should prevent bitshift fragmentations
                 self.errors = 0
                 self.repeatedReliableSend = 0
                 self.connect_to_beetle()
@@ -160,13 +152,13 @@ class Beetle:
 
                 data = self.receiver.get_packet_bytes()
                 if data is None:
-                    print("no packet received, continuing to read buffer...")
+                    print("No packet received (dropped?), continuing to read buffer...")
                     continue
 
                 # TODO: REMOVE ME -- SUBCOMPONENT TESTING LOGIC
                 # TEST: corrupt packet with probability of 10%
                 if random.random() <= self.corruptProbability:
-                    print("Corrupting RX packet...")
+                    # print("Corrupting RX packet...")
                     byte_to_corrupt = random.randint(0, len(data) - 1)
                     bit_to_flip = 1 << random.randint(0, 7) 
                     data[byte_to_corrupt] ^= bit_to_flip
@@ -195,12 +187,14 @@ class Beetle:
                     continue
 
                 # Is reliable packet
-                if pkt.packet_type == PACKET_DATA_HEALTH: # or ...
+                if pkt.packet_type == PACKET_DATA_HEALTH or \
+                    pkt.packet_type == PACKET_DATA_BULLET or \
+                        pkt.packet_type == PACKET_DATA_KICK: # or ...
                     shouldAck = True
                     latestPacket = pkt
                     self.beetle_seq_num = max(self.beetle_seq_num, pkt.seq_num + 1)
                     ackNum = pkt.seq_num 
-                    print(f"RX PKT b{latestPacket.seq_num} (beetle reliable)")
+                    print(f"RX PKT b{latestPacket.seq_num} <{get_packettype_string(pkt.packet_type)}> (beetle reliable)")
 
                 # Is an ACK
                 if pkt.packet_type == PACKET_ACK:
@@ -291,6 +285,7 @@ class Beetle:
         while(self.peripheral is None):
             try:
                 self.peripheral = btle.Peripheral(self.MAC)
+                self.receiver = NotifyDelegate()
                 self.peripheral.setDelegate(self.receiver)
                 self.chr = self.peripheral.getCharacteristics(uuid=CHARACTERISTIC_UUID)[0]
                 # print("Setup!")
@@ -315,36 +310,40 @@ class Beetle:
             print(f"THREE WAY: Sending HELLO r{self.relay_seq_num}")
             self.write_packet(pkt)
 
-            delay(1000)
-
             # STAGE 2: SYN-ACK wait
             print("THREE WAY: Wait for SYN-ACK")
             hasSynAck = False
-            if(self.get_notifications(1)): # cannot set too low
-                while self.receiver.has_packet():
-                    data = self.receiver.get_packet_bytes()
-                    if data is None:
-                        # print("data not exist")
-                        continue
-                    if not verify_checksum(data):
-                        # print(f"checksum fail {data.hex()}")
-                        continue
-                    packet = get_packet(data)
-                    if packet is None:
-                        # print("packet type unknown")
-                        continue
-                    if packet.packet_type != PACKET_SYN_ACK:
-                        # print("non SYNACK received")
-                        continue
-                    # syn-ack received
-                    self.beetle_seq_num = pkt.seq_num
-                    hasSynAck = True
-                    print("THREE WAY: SYN-ACK received")
-            else:
-                print("Timeout: SYN-ACK not received.")
-                continue  # Retry the handshake
-            if not hasSynAck:
-                continue
+            waitCount = 3 
+            while waitCount > 0:
+                waitCount -= 1
+                if(self.get_notifications(1)): # cannot set too low
+                    while self.receiver.has_packet():
+                        data = self.receiver.get_packet_bytes()
+                        if data is None:
+                            # print("Data not exist")
+                            continue
+                        if not verify_checksum(data):
+                            # print(f"checksum fail {data.hex()}, {len(self.receiver.buffer)}")
+                            continue
+                        packet = get_packet(data)
+                        if packet is None:
+                            # print("Packet type unknown")
+                            continue
+                        if packet.packet_type != PACKET_SYN_ACK:
+                            # print("non SYNACK received")
+                            continue
+                        # syn-ack received
+                        print("THREE WAY: SYN-ACK received")
+                        self.beetle_seq_num = pkt.seq_num
+                        hasSynAck = True
+                        waitCount = 0
+                        break
+                else:
+                    print("Timeout: SYN-ACK not received.")
+                    continue  # Retry the handshake
+                if not hasSynAck:
+                    # print("No synack")
+                    continue
             # STAGE 3: CONN_ESTAB
             resp = PacketConnEstab()
             resp.seq_num = self.relay_seq_num
@@ -370,7 +369,7 @@ class Beetle:
     def corrupt_packet(self, pkt):
         """Corrupt a gamestate packet for testing purposes"""
         if random.random() < 0.1:  # 10% chance
-            print("Corrupting packet...")
+            # print("Corrupting packet...")
             byte_array = pkt.to_bytearray()
             byte_to_corrupt = random.randint(0, len(byte_array) - 1)  # Pick a random byte
             bit_to_flip = 1 << random.randint(0, 7)  # Pick a random bit to flip (0-7)
@@ -379,10 +378,6 @@ class Beetle:
             pkt = PacketGamestate(byte_array)
         return pkt
 
-def run_beetle(beetle):
-    print("Running")
-    beetle.run()
-    
 def main():
     # Set up argument parser
     parser = argparse.ArgumentParser(description="Run a Beetle instance with a specific ID.")
