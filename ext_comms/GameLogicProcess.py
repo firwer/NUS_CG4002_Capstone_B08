@@ -73,8 +73,8 @@ async def game_state_manager(currGameData, attacker_id: int,
         OpponentPlayerData = currGameData.p2.game_state
     else:
         currGameData.p2.action = prediction_action
-        targetPlayerData = currGameData.p1.game_state
-        OpponentPlayerData = currGameData.p2.game_state
+        targetPlayerData = currGameData.p2.game_state
+        OpponentPlayerData = currGameData.p1.game_state
 
     print("Updating Visualizer..")
     # Send game state to visualizer (Attributes not yet adjusted, Visualizer will do on its own)
@@ -83,7 +83,7 @@ async def game_state_manager(currGameData, attacker_id: int,
     if prediction_action in {"basket", "soccer", "volley", "bowl", "bomb"}:
         try:
             msg = await asyncio.wait_for(visualizer_receive_queue.get(),
-                                         3)  # Wait for visualizer response, timeout 3 seconds
+                                         config.VISUALIZER_RESPONSE_TIMEOUT)  # Wait for visualizer response
             msgStr = msg.decode()
             if msgStr.startswith('in_sight_'):
                 if msgStr[9:] == "True":

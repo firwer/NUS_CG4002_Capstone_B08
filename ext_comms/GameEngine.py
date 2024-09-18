@@ -70,7 +70,7 @@ async def evaluation_server_job(curr_game_data: GameData, player_id: int, eval_i
                                 eval_output_queue: asyncio.Queue):
     EvalGameData = {
         "player_id": player_id,
-        "action": curr_game_data.p1.action,
+        "action": curr_game_data.p1.action if player_id == 1 else curr_game_data.p2.action,
         "game_state": {
             "p1": curr_game_data.p1.game_state,
             "p2": curr_game_data.p2.game_state
@@ -135,11 +135,8 @@ class GameEngine:
         self.prediction_output_queue_p1 = asyncio.Queue()
         self.prediction_output_queue_p2 = asyncio.Queue()
 
-        self.engine_to_evaluation_server_queue_p1 = asyncio.Queue()
-        self.engine_to_evaluation_server_queue_p2 = asyncio.Queue()
-
-        self.evaluation_server_to_engine_queue_p1 = asyncio.Queue()
-        self.evaluation_server_to_engine_queue_p2 = asyncio.Queue()
+        self.engine_to_evaluation_server_queue = asyncio.Queue()
+        self.evaluation_server_to_engine_queue = asyncio.Queue()
 
         self.relay_mqtt_to_engine_queue = asyncio.Queue()  # Pipeline from relay node for P1
         self.engine_to_relay_mqtt_queue = asyncio.Queue()  # Pipeline to relay node for P1
@@ -177,12 +174,8 @@ class GameEngine:
 
             # Start Evaluation Server Process
             start_evaluation_process(eval_server_port=self.eval_server_port,
-                                     receive_queue=self.evaluation_server_to_engine_queue_p1,
-                                     send_queue=self.engine_to_evaluation_server_queue_p1),
-
-            start_evaluation_process(eval_server_port=self.eval_server_port,
-                                     receive_queue=self.evaluation_server_to_engine_queue_p2,
-                                     send_queue=self.engine_to_evaluation_server_queue_p2),
+                                     receive_queue=self.evaluation_server_to_engine_queue,
+                                     send_queue=self.engine_to_evaluation_server_queue),
 
             self.game_data_process(1),
             self.game_data_process(2)
@@ -214,14 +207,9 @@ class GameEngine:
             print("EVALUATING...")
             # Send updated game state to evaluation server
             await evaluation_server_job(curr_game_data=self.currGameData,
-                                        player_id=1,
-                                        eval_input_queue=self.engine_to_evaluation_server_queue_p1,
-                                        eval_output_queue=self.evaluation_server_to_engine_queue_p1)
-            # if config.PLAYER_MODE == 2:
-            #     await evaluation_server_job(curr_game_data=self.currGameData,
-            #                                 player_id=2,
-            #                                 eval_input_queue=self.engine_to_evaluation_server_queue_p2,
-            #                                 eval_output_queue=self.evaluation_server_to_engine_queue_p2)
+                                        player_id=player_id,
+                                        eval_input_queue=self.engine_to_evaluation_server_queue,
+                                        eval_output_queue=self.evaluation_server_to_engine_queue)
 
             print(f"SENDING TO RELAY: {self.currGameData.to_json()}")
             # Send validated/verified game state to relay node
