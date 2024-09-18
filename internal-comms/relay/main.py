@@ -30,7 +30,7 @@ class NotifyDelegate(btle.DefaultDelegate):
         self.bitsReceived = 0
         
         # TODO: Remove the testing flags
-        self.dropProbability = 0.1
+        self.dropProbability = 0.0
         # TODO: Remove the throughput flags
         # we take throughput readings every 10 notifications
         self.notificationsRcv = 0
@@ -111,7 +111,7 @@ class Beetle:
         self.health = 20
         self.sendReliableStart = 0
         self.cachedPacket = None
-        self.repeatedReliableSend = 0
+        self.reliableRetransmissions = 0
         self.reliableTxRate = 0 # ms
         self.reliableTimeout = 1000 # ms
 
@@ -126,11 +126,11 @@ class Beetle:
 
             shouldAck = False
             # STEP 1. Handle reconnections if applicable
-            if not self.connected or self.errors > 2 or self.repeatedReliableSend > 2:
-                print(f"{self.COLOR}Restarting connection: isConnected={self.connected}, errors={self.errors}, retx={self.repeatedReliableSend}")
+            if not self.connected or self.errors > 2 or self.reliableRetransmissions > 2:
+                print(f"{self.COLOR}Restarting connection: isConnected={self.connected}, errors={self.errors}, retx={self.reliableRetransmissions}")
                 self.receiver.reset_buffer() # should prevent bitshift fragmentations
                 self.errors = 0
-                self.repeatedReliableSend = 0
+                self.reliableRetransmissions = 0
                 self.connect_to_beetle()
                 continue
             # STEP 2. Collect notifications 
@@ -242,7 +242,7 @@ class Beetle:
                             canSendReliable = False
                 elif millis() - self.sendReliableStart > self.reliableTimeout:  # 1000 ms = 1 second
                     self.sendReliableStart = millis()
-                    self.repeatedReliableSend += 1
+                    self.reliableRetransmissions += 1
                     print(f"TX PKT r{self.cachedPacket.seq_num}, curr {self.relay_seq_num}, (relay reliable, timeout)")
                     sendPkt = self.cachedPacket
                     # sendPkt = self.corrupt_packet(sendPkt) # WARN: should be removed in prod
@@ -278,7 +278,6 @@ class Beetle:
 
     def reset_bluepy(self):
         if self.peripheral is not None:
-            # print("Disconnecting")
             self.peripheral.disconnect()
             self.peripheral = None
 
@@ -288,7 +287,6 @@ class Beetle:
                 self.receiver = NotifyDelegate()
                 self.peripheral.setDelegate(self.receiver)
                 self.chr = self.peripheral.getCharacteristics(uuid=CHARACTERISTIC_UUID)[0]
-                # print("Setup!")
                 break
             except Exception as e: # keep trying
                 print(f"Bluepy peripheral fail: {e}")
@@ -296,13 +294,10 @@ class Beetle:
 
     def connect_to_beetle(self):
         """blocking 3 way handshake"""
-        self.reset_bluepy()
+        while True:
+            self.reset_bluepy()
 
-
-        print("THREE WAY START")
-        while(1):
-            if self.connected == False:
-                self.reset_bluepy()
+            print("THREE WAY START")
             # STAGE 1: Hello
             pkt = PacketHello()
             pkt.seq_num = self.relay_seq_num
@@ -344,6 +339,7 @@ class Beetle:
                 if not hasSynAck:
                     # print("No synack")
                     continue
+
             # STAGE 3: CONN_ESTAB
             resp = PacketConnEstab()
             resp.seq_num = self.relay_seq_num
