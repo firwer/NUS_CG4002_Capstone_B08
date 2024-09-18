@@ -38,6 +38,8 @@ MQTT_VISUALIZER_TO_ENG_P2 = "game_state/visualizer_to_engine/p2"
 
 MQTT_ENGINE_TO_RELAY = "sensor_data/return"
 
+VISUALIZER_RESPONSE_TIMEOUT = 3 # seconds
+
 # MQTT Broker Exponential Backoff Recovery Config
 FIRST_RECONNECT_DELAY = 1
 MAX_RECONNECT_COUNT = 10
