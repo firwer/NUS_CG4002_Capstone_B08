@@ -55,6 +55,7 @@ unsigned long lastSampleTime = 0;
 bool isRecording = false;
 bool isMotionDetected = false;
 bool isMotionTunePlayed = false;
+bool hasMotionEnded = false;
 
 struct MPUData
 {
@@ -86,6 +87,7 @@ void detectReload();
 void playNoBulletsLeftTone();
 void playFullMagazineTone();
 void playMotionFeedback();
+void playMotionEndFeedback();
 
 void setup()
 {
@@ -107,11 +109,18 @@ void setup()
 
   // EEPROM.put(0, calibrationData);
 
+  mpu.setXAccelOffset(calibrationData.xoffset);
+  mpu.setYAccelOffset(calibrationData.yoffset);
+  mpu.setZAccelOffset(calibrationData.zoffset);
+  mpu.setXGyroOffset(calibrationData.xgoffset);
+  mpu.setYGyroOffset(calibrationData.ygoffset);
+  mpu.setZGyroOffset(calibrationData.zgoffset);
+
   mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_4); // can change to FS_2
   mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_250);
 
   mpu.setDHPFMode(MPU6050_DHPF_0P63);
-  mpu.setDLPFMode(MPU6050_DLPF_BW_20);
+  mpu.setDLPFMode(MPU6050_DLPF_BW_42);
   mpu.setMotionDetectionThreshold(60); // seems good for now
   mpu.setMotionDetectionDuration(5);
 
@@ -193,10 +202,24 @@ void loop()
       Serial.println("Motion Detected");
       playMotionFeedback();
       isMotionTunePlayed = true;
+      hasMotionEnded = false;
     }
     if (millis() - lastSampleTime >= SAMPLING_DELAY && recordedPoints < 40)
     {
       mpu.getMotion6(&MPUData.ax, &MPUData.ay, &MPUData.az, &MPUData.gx, &MPUData.gy, &MPUData.gz);
+      // Take the raw 16bit data, divide by 32767 to get the ratio, multiply by 4g to get the real value,
+      // then multiply by 9.81 to get m/s^2
+      float accelXreal = ((MPUData.ax) / 32767.0) * 4.0 * 9.81;
+      float accelYreal = ((MPUData.ay) / 32767.0) * 4.0 * 9.81;
+      float accelZreal = ((MPUData.az) / 32767.0) * 4.0 * 9.81;
+
+      Serial.print("Real Accel:\t");
+      Serial.print(accelXreal);
+      Serial.print("\t");
+      Serial.print(accelYreal);
+      Serial.print("\t");
+      Serial.println(accelZreal);
+
       Serial.print("Accel/Gyra:\t");
       Serial.print(MPUData.ax);
       Serial.print("\t");
@@ -212,12 +235,14 @@ void loop()
       lastSampleTime = millis();
       recordedPoints++;
 
-      if (recordedPoints >= 40)
+      if (recordedPoints >= 40 && !hasMotionEnded)
       {
         // sendIMUData(ax,ay,az,gx,gy,gz);
+        playMotionEndFeedback();
         isRecording = false;
         recordedPoints = 0;
         isMotionTunePlayed = false;
+        hasMotionEnded = true;
       }
     }
   }
@@ -264,6 +289,12 @@ void playMotionFeedback()
   soundQueue.enqueue(NOTE_CS6);
   soundQueue.enqueue(NOTE_D6);
   soundQueue.enqueue(NOTE_E6);
+}
+void playMotionEndFeedback()
+{
+  soundQueue.enqueue(NOTE_E6);
+  soundQueue.enqueue(NOTE_D6);
+  soundQueue.enqueue(NOTE_CS6);
 }
 // void sendIMUData(){
 //   //FOR INTERNAL COMMS
