@@ -7,7 +7,7 @@
 #define DECODE_NEC       // Enable NEC protocol. This is the protocol used for the IR receiver
 #define IR_RECEIVE_PIN 4 // Define the pin for the IR receiver
 #define BUZZER_PIN 3     // Define the pin for the buzzer (PWM pin)
-#define NOTE_DELAY 50
+#define NOTE_DELAY 75
 #define BULLET_DAMAGE 5
 
 const uint16_t PLAYER_1_ADDRESS = 0x23; // Address of player 1
@@ -18,42 +18,64 @@ bool isRespawn = false; // to integrate with game engine
 unsigned long lastSoundTime = 0;
 bool isFullHealthplayed = false;
 bool isDeathPlayed = false;
+bool isCriticalHealth = false;
+unsigned long lastCriticalTuneTime = 0;
 
 int16_t curr_healthValue = 100;     // this is the outgoing health value
 int16_t incoming_healthState = 100; // To be unpacked from the incoming game_state packet
 
 Tone melody;
 
-ArduinoQueue<uint16_t> noteQueue(14);
+ArduinoQueue<uint16_t> noteQueue(20);
 
 // Define the healthNotes array with 5 notes per tune
-int healthNotes[10][5] = {
-    // Index 0: Health 91-99
-    {NOTE_C4, NOTE_D4, NOTE_E4, NOTE_D4, NOTE_C4},
-    // Index 1: Health 81-90
-    {NOTE_E4, NOTE_G4, NOTE_A4, NOTE_G4, NOTE_E4},
-    // Index 2: Health 71-80
-    {NOTE_G4, NOTE_A4, NOTE_C5, NOTE_A4, NOTE_G4},
-    // Index 3: Health 61-70
-    {NOTE_B4, NOTE_D5, NOTE_E5, NOTE_D5, NOTE_B4},
-    // Index 4: Health 51-60
-    {NOTE_D5, NOTE_F5, NOTE_G5, NOTE_F5, NOTE_D5},
-    // Index 5: Health 41-50
+int healthNotes[19][5] = {
+    // Tune 0: Health 95
+    {NOTE_F4, NOTE_A4, NOTE_C5, NOTE_A4, NOTE_F4},
+    // Tune 1: Health 90
+    {NOTE_G4, NOTE_B4, NOTE_D5, NOTE_B4, NOTE_G4},
+    // Tune 2: Health 85
+    {NOTE_A4, NOTE_C5, NOTE_E5, NOTE_C5, NOTE_A4},
+    // Tune 3: Health 80
+    {NOTE_B4, NOTE_D5, NOTE_FS5, NOTE_D5, NOTE_B4},
+    // Tune 4: Health 75
+    {NOTE_C5, NOTE_E5, NOTE_G5, NOTE_E5, NOTE_C5},
+    // Tune 5: Health 70
+    {NOTE_D5, NOTE_FS5, NOTE_A5, NOTE_FS5, NOTE_D5},
+    // Tune 6: Health 65
+    {NOTE_E5, NOTE_GS5, NOTE_B5, NOTE_GS5, NOTE_E5},
+    // Tune 7: Health 60
     {NOTE_F5, NOTE_A5, NOTE_C6, NOTE_A5, NOTE_F5},
-    // Index 6: Health 31-40
-    {NOTE_A5, NOTE_C6, NOTE_D6, NOTE_C6, NOTE_A5},
-    // Index 7: Health 21-30
+    // Tune 8: Health 55
+    {NOTE_G5, NOTE_B5, NOTE_D6, NOTE_B5, NOTE_G5},
+    // Tune 9: Health 50
+    {NOTE_A5, NOTE_C6, NOTE_E6, NOTE_C6, NOTE_A5},
+    // Tune 10: Health 45
+    {NOTE_B5, NOTE_D6, NOTE_FS6, NOTE_D6, NOTE_B5},
+    // Tune 11: Health 40
     {NOTE_C6, NOTE_E6, NOTE_G6, NOTE_E6, NOTE_C6},
-    // Index 8: Health 11-20
-    {NOTE_E6, NOTE_G6, NOTE_A6, NOTE_G6, NOTE_E6},
-    // Index 9: Health 1-10
-    {NOTE_G6, NOTE_B6, NOTE_C7, NOTE_B6, NOTE_G6}};
+    // Tune 12: Health 35
+    {NOTE_D6, NOTE_FS6, NOTE_A6, NOTE_FS6, NOTE_D6},
+    // Tune 13: Health 30
+    {NOTE_E6, NOTE_GS6, NOTE_B6, NOTE_GS6, NOTE_E6},
+    // Tune 14: Health 25
+    {NOTE_F6, NOTE_A6, NOTE_C7, NOTE_A6, NOTE_F6},
+    // Tune 15: Health 20
+    {NOTE_G6, NOTE_B6, NOTE_D7, NOTE_B6, NOTE_G6},
+    // Tune 16: Health 15
+    {NOTE_A6, NOTE_C7, NOTE_E6, NOTE_C7, NOTE_A6},
+    // Tune 17: Health 10
+    {NOTE_REST, NOTE_B6, NOTE_D7, NOTE_FS6, NOTE_D7},
+    // Tune 18: Health 5 (Adjusted)
+    {NOTE_REST, NOTE_C7, NOTE_E6, NOTE_F6, NOTE_E6},
+};
 
 void playHealthDecrementTune(int16_t health);
 void playStartupTune();
 void playDeathTune();
 void healthSynchronisation(); // TODO: Integrate with internal comms
-void handleRespawn();         // TODO: Integrate with internal comms
+void handleRespawn();
+void playCriticalHealthTune(); // TODO: Integrate with internal comms
 
 void setup()
 {
@@ -80,7 +102,7 @@ void loop()
         if (noteQueue.itemCount() > 0)
         {
             uint16_t note = noteQueue.dequeue();
-            melody.play(note, 150); // Play note for 100ms
+            melody.play(note, 150); // Play note for 200ms
         }
         else if (noteQueue.itemCount() == 0)
         {
@@ -119,11 +141,33 @@ void loop()
             digitalWrite(LED_BUILTIN, HIGH);
             curr_healthValue -= BULLET_DAMAGE;
             isFullHealthplayed = false;
-            playHealthDecrementTune(curr_healthValue);
+            if (curr_healthValue > 0)
+            {
+                playHealthDecrementTune(curr_healthValue);
+            }
+            // Update critical health status
+            if (curr_healthValue <= 10 && !isCriticalHealth && curr_healthValue > 0)
+            {
+                isCriticalHealth = true;
+                lastCriticalTuneTime = millis();
+            }
+            else if ((curr_healthValue > 10 && isCriticalHealth) || (curr_healthValue <= 0 && isCriticalHealth))
+            {
+                isCriticalHealth = false;
+            }
             Serial.print(F("Player 1 shot! Health: "));
             Serial.println(curr_healthValue);
         }
         IrReceiver.resume(); // Receive the next value
+    }
+
+    if (isCriticalHealth)
+    {
+        if (millis() - lastCriticalTuneTime >= 750)
+        {
+            playCriticalHealthTune();
+            lastCriticalTuneTime = millis();
+        }
     }
 
     // Play death tune if health is 0 or less
@@ -139,25 +183,21 @@ void loop()
 
 void playHealthDecrementTune(int16_t health)
 {
-    if (health >= 100 || health <= 0)
-    {
-        return; // they have their own tunes
-    }
-    int8_t index = (100 - health) / 10;
+    int8_t index = (95 - health) / 5;
 
     if (index < 0)
     {
         index = 0;
     }
-    if (index > 9)
+    if (index > 18)
     {
-        index = 9;
+        index = 18;
     }
-    noteQueue.enqueue(healthNotes[index][0]);
-    noteQueue.enqueue(healthNotes[index][1]);
-    noteQueue.enqueue(healthNotes[index][2]);
-    noteQueue.enqueue(healthNotes[index][3]);
-    noteQueue.enqueue(healthNotes[index][4]);
+
+    for (int i = 0; i < 5; i++)
+    {
+        noteQueue.enqueue(healthNotes[index][i]);
+    }
 }
 
 void playStartupTune()
@@ -182,6 +222,13 @@ void playDeathTune()
     noteQueue.enqueue(NOTE_C4);
 }
 
+void playCriticalHealthTune()
+{
+    noteQueue.enqueue(NOTE_D6);
+    noteQueue.enqueue(NOTE_A5);
+    noteQueue.enqueue(NOTE_REST);
+}
+
 /*
 Game engine handles health calculation for non-bullet damage.
 This function will handle the health agreement between the game engine and the hardware.
@@ -202,6 +249,7 @@ void handleRespawn()
     if (isRespawn)
     {
         curr_healthValue = 100; // reset health to 100
+        playStartupTune();
         Serial.print(F("Player 1 respawned! Health: "));
         Serial.println(curr_healthValue);
         isRespawn = false;
