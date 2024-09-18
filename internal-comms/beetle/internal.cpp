@@ -346,6 +346,7 @@ void communicate() {
       // > relay wants to re-estab connections. handshake.
       if (rcv.packet_type == PACKET_HELLO) {
         await_handshake(true);
+        return;
       }
 
       // case 4: ACKn
