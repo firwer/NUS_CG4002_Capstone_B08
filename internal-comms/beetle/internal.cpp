@@ -102,7 +102,7 @@ void await_handshake(bool helloReceived) {
     while (!helloReceived) {
       packet_general_t hello_packet = { 0 };
       // Wait forever for a HELLO to arrive.
-      while (await_packet(&hello_packet, 500)) {}
+      while (await_packet(&hello_packet, 1000)) {}
       // Check if its a HELLO packet
       if (hello_packet.packet_type == PACKET_HELLO && verifyChecksum(&hello_packet)) {
         relay_seq_num = hello_packet.seq_num;
@@ -120,7 +120,7 @@ void await_handshake(bool helloReceived) {
     while (1) {  // keep retransmitting SYN-ACK
       write_serial((packet_general_t*)&syn_ack_packet);
       // Stage 3 -- ACK
-      if (!await_packet(&ack_packet, 500)) {  // ack timeout, retransmit
+      if (!await_packet(&ack_packet, 1000)) {  // ack timeout, retransmit
         continue;
       }
       if (!verifyChecksum(&ack_packet))  // checksum failed, retransmit
