@@ -102,9 +102,10 @@ void await_handshake(bool helloReceived) {
     while (!helloReceived) {
       packet_general_t hello_packet = { 0 };
       // Wait forever for a HELLO to arrive.
-      while(await_packet(&hello_packet, TIMEOUT_MS)){}
+      while (await_packet(&hello_packet, 1000)) {}
       // Check if its a HELLO packet
       if (hello_packet.packet_type == PACKET_HELLO && verifyChecksum(&hello_packet)) {
+        relay_seq_num = hello_packet.seq_num;
         break;
       }
     }
@@ -119,13 +120,14 @@ void await_handshake(bool helloReceived) {
     while (1) {  // keep retransmitting SYN-ACK
       write_serial((packet_general_t*)&syn_ack_packet);
       // Stage 3 -- ACK
-      if (!await_packet(&ack_packet, 500)) {  // ack timeout, retransmit
+      if (!await_packet(&ack_packet, 1000)) {  // ack timeout, retransmit
         continue;
       }
       if (!verifyChecksum(&ack_packet))  // checksum failed, retransmit
         continue;
       if (ack_packet.packet_type == PACKET_CONN_ESTAB) {
         isConnected = true;
+        relay_seq_num = ack_packet.seq_num;  // we expect the next SN to be +1
         break;
       }
     }
@@ -168,8 +170,6 @@ void flip_bits_with_probability(packet_general_t* pkt, float probability) {
   }
 }
 
-void nuke_packet(float probability);  // simulate packet losses
-
 // Test how resilient unreliable throughput is
 void test_throughput_unreliable(int rate_ms) {
   packet_imu_t pkt = { 0 };
@@ -195,51 +195,49 @@ void test_throughput_unreliable(int rate_ms) {
 
 // Test single stop-and-wait
 void test_throughput_reliable(int rate_ms) {
-  uint8_t exp_beetle_seq_num = beetle_seq_num; // this tracks the reliable seq_num
+  uint8_t exp_beetle_seq_num = beetle_seq_num;  // this tracks the reliable seq_num
   bool canSendReliable = true;
   uint8_t test_health_number = 22;
-  uint8_t prev_rcv_ack = 0; // track the previously received ack number
+  uint8_t prev_rcv_ack = 0;  // track the previously received ack number
   long reliableTimeStart = 0;
-  uint8_t timeout_ms = max(rate_ms+100, 500);
-  packet_general_t cached_packet = {0};
+  uint8_t timeout_ms = max(rate_ms + 100, 500);
+  packet_general_t cached_packet = { 0 };
   uint8_t to_send = 10;
   // simulate event driver
   while (1) {
     auto rate_start = millis();
 
     // bool resendReliable = false;
-    packet_general_t rcv = {0};
+    packet_general_t rcv = { 0 };
     if (await_packet((packet_general_t*)&rcv, 50)) {
       // case 1: checksum error
       // > ignore
-      if(!verifyChecksum(&rcv)){
-        // oops!
-      }
-      // case 2: hello
-      // > relay wants to re-estab connections. handshake.
-      if(rcv.packet_type == PACKET_HELLO){
-        await_handshake(true);
-      }
-      // case 3: conn_estab
-      // > ignore this duplicate
-      if(rcv.packet_type == PACKET_CONN_ESTAB){
-      
-      }
-      // case 4: ACKn
-      if(rcv.packet_type == PACKET_ACK){
-        if(rcv.seq_num == exp_beetle_seq_num){
-          // > flag that we need not resend
-          canSendReliable = true;
+      if (verifyChecksum(&rcv)) {
+        // case 2: hello
+        // > relay wants to re-estab connections. handshake.
+        if (rcv.packet_type == PACKET_HELLO) {
+          await_handshake(true);
+        }
+        // case 3: conn_estab
+        // > ignore this duplicate
+        if (rcv.packet_type == PACKET_CONN_ESTAB) {
+        }
+        // case 4: ACKn
+        if (rcv.packet_type == PACKET_ACK) {
+          if (rcv.seq_num == exp_beetle_seq_num) {
+            // > flag that we need not resend
+            canSendReliable = true;
+          }
         }
       }
     }
 
     // if ACKn received AND there is something to send, send it!
-    if(canSendReliable){
+    if (canSendReliable) {
       delay(rate_ms);
-        
+
       canSendReliable = false;
-      packet_health_t pkt = {0};
+      packet_health_t pkt = { 0 };
       pkt.health_count = test_health_number--;
       pkt.packet_type = PACKET_DATA_HEALTH;
       pkt.seq_num = beetle_seq_num;
@@ -249,17 +247,185 @@ void test_throughput_reliable(int rate_ms) {
       write_serial_with_fuzz((packet_general_t*)&pkt, 1);
       memcpy(&cached_packet, &pkt, 20);
       reliableTimeStart = millis();
-      
 
-    }else if(millis() - reliableTimeStart > 1000){ // constant here must be big
+
+    } else if (millis() - reliableTimeStart > 1000) {  // constant here must be big
       // else we handle reliable packet timeout;
       digitalWrite(13, 1);
       reliableTimeStart = millis();
       write_serial_with_fuzz(&cached_packet, 1);
-      digitalWrite(13, 0);     
+      digitalWrite(13, 0);
     }
 
     // then, do unreliable sending (omitted)
-
   }
+}
+
+void test_receive_reliable() {
+  while (1) {
+    packet_general_t rcv = { 0 };
+
+    bool shouldAck = false;
+    if (await_packet((packet_general_t*)&rcv, 50)) {
+      if (verifyChecksum(&rcv)) {
+        // case 2: hello
+        // > relay wants to re-estab connections. handshake.
+        if (rcv.packet_type == PACKET_HELLO) {
+          await_handshake(true);
+        }
+        // handle receives
+        if (rcv.packet_type == PACKET_DATA_GAMESTATE) {
+          // check if relay sequence number is correct
+          shouldAck = true;
+          if (relay_seq_num == rcv.seq_num) {
+            // correct sequence number.
+            relay_seq_num = (relay_seq_num + 1) % 256;
+            // TODO: handle the packet!
+          }
+          // incorrect serial number, ignore
+        }
+      }
+    }
+
+    if (shouldAck) {
+      packet_ack_t ack = { 0 };
+      ack.packet_type = PACKET_ACK;
+      ack.seq_num = relay_seq_num;
+      setChecksum((packet_general_t*)&ack);
+      write_serial((packet_general_t*)&ack);
+    }
+  }
+}
+
+// Test code to get dummy data
+
+void getRandomReliablePacket(packet_general_t* pkt) {
+    int packet_choice = rand() % 3;
+    if (packet_choice == 0) {
+        pkt->packet_type = PACKET_DATA_BULLET;
+        packet_bullet_t* tmp = (packet_bullet_t*) pkt;
+        tmp->bullet_count = rand() % 256; // choose between 0-255
+    } else if (packet_choice == 1) {
+        pkt->packet_type = PACKET_DATA_HEALTH;
+        packet_health_t* tmp = (packet_health_t*) pkt;
+        tmp->health_count = rand() % 256; // choose between 0-255
+    } else {
+        pkt->packet_type = PACKET_DATA_KICK;
+        packet_kick_t* tmp = (packet_kick_t*) pkt;
+    }
+}
+
+
+// ----- Two-way TX/RX -----
+bool reliableBufferFilled = true; // CONFIG: simulate buffer full (has something to send reliably)
+bool unreliableBufferFilled = true; // CONFIG: simulate udp buffer full (has something to send unreliably)
+uint8_t rel_tx_rate = 0; // CONFIG: Tuning of reliable transfer rate in ms
+uint8_t unrel_tx_rate = 0; // CONFIG: Tuning of unreliable transfer rate in ms 
+long unreliableStartRateTime = 0; // TESTING: rate limit for unreliable sending
+long reliableStartRateTime = 0;  // TESTING: rate limit for reliable sending
+
+bool canSendReliable = true; // flag to allow tx
+long reliableTimeStart = 0; // timeout
+uint8_t exp_beetle_seq_num = beetle_seq_num;  // this tracks the reliable seq_num
+
+uint8_t test_health_number = 22;
+uint8_t prev_rcv_ack = 0;  // track the previously received ack number
+packet_general_t cached_packet = { 0 };
+
+
+void communicate() {
+  auto rate_start = millis();
+
+  // ---- RECEIVING LOGIC ----
+  packet_general_t rcv = { 0 };
+  bool shouldAck = false;
+  if (await_packet((packet_general_t*)&rcv, 100)) {
+    // case 1: checksum error (continue)
+    if (verifyChecksum(&rcv)) {
+      // case 2: hello
+      // > relay wants to re-estab connections. handshake.
+      if (rcv.packet_type == PACKET_HELLO) {
+        await_handshake(true);
+        return;
+      }
+
+      // case 4: ACKn
+      if (rcv.packet_type == PACKET_ACK) {
+        if (rcv.seq_num == exp_beetle_seq_num) {
+          // > flag that we need not resend
+          canSendReliable = true;
+        }
+      }
+      // case 5: Receive a gamestate
+      if (rcv.packet_type == PACKET_DATA_GAMESTATE) {
+        // check if relay sequence number is correct
+        shouldAck = true;
+        if (relay_seq_num == rcv.seq_num) {
+          // we have found the correct sequence number.
+          relay_seq_num = (relay_seq_num + 1) % 256;
+          // TODO: actually handle the packet for hardware integration
+        }
+        // incorrect serial number, ignore
+      }
+
+      // For all other packet types from relay, we ignore them
+    }
+  }
+
+  // ---- TRANSMISSION LOGIC ----
+
+  // TRANSMIT UNRELIABLE DATA
+  if(unreliableBufferFilled && millis() - unreliableStartRateTime > unrel_tx_rate) {
+    unreliableStartRateTime = millis();
+    packet_imu_t pkt = {0};
+    pkt.packet_type = PACKET_DATA_IMU;
+    pkt.accX = rand() % 512;
+    pkt.accY = rand() % 512;
+    pkt.accZ = rand() % 512;
+    pkt.gyrX = rand() % 512;
+    pkt.gyrY = rand() % 512;
+    pkt.gyrZ = rand() % 512;
+    pkt.adc = rand() % 256;
+
+    pkt.seq_num = beetle_seq_num;
+    ++beetle_seq_num;
+    setChecksum((packet_general_t*)&pkt);
+    write_serial((packet_general_t*)&pkt);
+  }
+
+  // SEND RELIABLE DATA
+  // if ACKn received AND there is something to send, send it!
+  if (canSendReliable) {
+    if(reliableBufferFilled && millis() - reliableStartRateTime > rel_tx_rate){ // simulate checking of reliableBuffer to send
+      reliableStartRateTime = millis();
+      canSendReliable = false;
+      packet_general_t pkt = {0};
+      getRandomReliablePacket(&pkt); // randomy choose a packet
+      pkt.seq_num = beetle_seq_num;
+      ++beetle_seq_num;
+      exp_beetle_seq_num = beetle_seq_num;
+      setChecksum((packet_general_t*)&pkt);
+      write_serial((packet_general_t*)&pkt);
+      memcpy(&cached_packet, &pkt, 20);
+      reliableTimeStart = millis();
+    }
+    // reliable buffer not filled, contnue
+  } else if (millis() - reliableTimeStart > 1000) {  // constant here must be big
+    // else we handle reliable packet timeout;
+    digitalWrite(13, 1);
+    reliableTimeStart = millis();
+    write_serial(&cached_packet);
+    digitalWrite(13, 0);
+  }
+
+  
+  // TRANSMIT ACK 
+  if (shouldAck) {
+    packet_ack_t ack = { 0 };
+    ack.packet_type = PACKET_ACK;
+    ack.seq_num = relay_seq_num;
+    setChecksum((packet_general_t*)&ack);
+    write_serial((packet_general_t*)&ack);
+  }
+
 }
