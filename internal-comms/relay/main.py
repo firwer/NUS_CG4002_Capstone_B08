@@ -190,7 +190,7 @@ class Beetle:
                 # Is unreliable send
                 if pkt.packet_type == PACKET_DATA_IMU:
                     # do work
-                    print(f"{self.COLOR}RX PKT b{pkt.seq_num} (beetle stream)")
+                    print(f"{self.COLOR}RX PKT b{pkt.seq_num} <IMU> (beetle stream)")
                     continue
 
                 # Is reliable packet
