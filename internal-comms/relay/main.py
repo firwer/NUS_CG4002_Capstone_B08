@@ -172,9 +172,10 @@ class Beetle:
 
                 # verify the checksum - if fail, process the next packet
                 if not verify_checksum(data):
-                    print(f"{self.COLOR}Error: checksum failed for this PKT {data.hex()}")
+                    # print(f"{self.COLOR}Error: checksum failed for this PKT {data.hex()}")
+                    print(f"{self.COLOR}Error: checksum failed! Moving to next packet in buffer...")
                     self.errors += 1
-                    print(f"{self.COLOR}Moving to next packet in buffer...")
+                    # print(f"{self.COLOR}Moving to next packet in buffer...")
                     continue
 
                 pkt = get_packet(data)
