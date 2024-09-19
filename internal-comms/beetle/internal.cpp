@@ -379,6 +379,14 @@ void communicate() {
     unreliableStartRateTime = millis();
     packet_imu_t pkt = {0};
     pkt.packet_type = PACKET_DATA_IMU;
+    pkt.accX = rand() % 512;
+    pkt.accY = rand() % 512;
+    pkt.accZ = rand() % 512;
+    pkt.gyrX = rand() % 512;
+    pkt.gyrY = rand() % 512;
+    pkt.gyrZ = rand() % 512;
+    pkt.adc = rand() % 256;
+
     pkt.seq_num = beetle_seq_num;
     ++beetle_seq_num;
     setChecksum((packet_general_t*)&pkt);
