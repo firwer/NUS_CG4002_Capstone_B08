@@ -357,10 +357,10 @@ class Beetle:
         # Create a PacketGamestate instance
         pkt = PacketGamestate()
         pkt.seq_num = self.relay_seq_num
-        pkt.bullet = max(0, min(255, self.bullets))  # Clamp between 0 and 255
-        pkt.health = max(0, min(255, self.health))   # Clamp between 0 and 255
-        self.bullets = max(0, self.bullets - 1)
-        self.health = max(0, self.health - 1)
+        pkt.bullet = random.randint(0, 255)
+        pkt.health = random.randint(0, 255)
+        self.bullets = pkt.bullet
+        self.health = pkt.health
         pkt.crc8 = get_checksum(pkt.to_bytearray())
         return pkt
 
