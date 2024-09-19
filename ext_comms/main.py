@@ -13,9 +13,6 @@ def parse_args():
 
 
 async def main(eval_server_port):
-    # eval_server_port = ""
-    # while len(eval_server_port) == 0:
-    #     eval_server_port = input("Please Provide Evaluation Server Port: ")
     print(f"Eval Server on port {eval_server_port}")
     ge = GameEngine(int(eval_server_port))
     print("Starting Game Engine")

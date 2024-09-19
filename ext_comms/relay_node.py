@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import sys
 
@@ -17,8 +18,15 @@ async def user_input(send_queue: asyncio.Queue, receive_queue: asyncio.Queue):
         await send_queue.put(message)
         print(f"Waiting for message")
         msg = await receive_queue.get()
-        print(f"Received message: {msg}")
+        root = json.loads(msg)
+        player1 = json.loads(root['p1'])
+        player2 = json.loads(root['p2'])
 
+        p1Data = f"Action: {player1['action']}\nHealth: {player1['game_state']['hp']}\nBullets: {player1['game_state']['bullets']}\nBombs: {player1['game_state']['bombs']}\nShield HP: {player1['game_state']['shield_hp']}\nDeaths: {player1['game_state']['deaths']}\nShields: {player1['game_state']['shields']}\n"
+
+        p2Data = f"Action: {player2['action']}\nHealth: {player2['game_state']['hp']}\nBullets: {player2['game_state']['bullets']}\nBombs: {player2['game_state']['bombs']}\nShield HP: {player2['game_state']['shield_hp']}\nDeaths: {player2['game_state']['deaths']}\nShields: {player2['game_state']['shields']}\n"
+
+        print(f"Game State Update: \nPLAYER 1:\n{p1Data}\nPLAYER 2:\n{p2Data}")
 
 async def msg_receiver(wsController: TCPC_Controller, receive_queue: asyncio.Queue):
     """

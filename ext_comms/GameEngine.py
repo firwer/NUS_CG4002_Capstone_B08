@@ -59,8 +59,9 @@ class GameData:
             'shields': 3
         })
 
-    def to_json(self):
+    def to_json(self, player_id):
         return json.dumps({
+            'player_id': player_id, # This is to identify which player the data came from so that the FOV can be sent to the correct player
             'p1': self.p1.to_json(),
             'p2': self.p2.to_json()
         })
@@ -198,8 +199,7 @@ class GameEngine:
             visualizer_receive_queue = self.visualizer_to_engine_queue_p2
 
         while True:
-            # Check for predicted action
-
+            # Verify FOV with visualizer and update game state
             await game_state_manager(currGameData=self.currGameData, attacker_id=player_id,
                                      pred_output_queue=pred_output_queue,
                                      visualizer_receive_queue=visualizer_receive_queue,
@@ -211,6 +211,6 @@ class GameEngine:
                                         eval_input_queue=self.engine_to_evaluation_server_queue,
                                         eval_output_queue=self.evaluation_server_to_engine_queue)
 
-            print(f"SENDING TO RELAY: {self.currGameData.to_json()}")
+            print(f"SENDING TO RELAY: {self.currGameData.to_json(player_id)}")
             # Send validated/verified game state to relay node
-            await relay_node_input_queue.put(f"{self.currGameData.to_json()}")
+            await relay_node_input_queue.put(f"{self.currGameData.to_json(player_id)}")
