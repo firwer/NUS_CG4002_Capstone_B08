@@ -328,9 +328,7 @@ class Beetle:
                 while self.receiver.has_packet():
                     data = self.receiver.get_packet_bytes()
                     if data is None: continue
-                    if not verify_checksum(data):
-                        self.receiver.reset_buffer()
-                        continue
+                    if not verify_checksum(data): continue
                     packet = get_packet(data)
                     if packet is None: continue
                     if packet.packet_type != PACKET_SYN_ACK:
