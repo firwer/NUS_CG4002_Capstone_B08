@@ -331,8 +331,7 @@ class Beetle:
                     if not verify_checksum(data): continue
                     packet = get_packet(data)
                     if packet is None: continue
-                    if packet.packet_type != PACKET_SYN_ACK:
-                        break
+                    if packet.packet_type != PACKET_SYN_ACK: continue
                     print(f"{self.COLOR}THREE WAY: SYN-ACK received")
                     self.beetle_seq_num = pkt.seq_num
                     hasSynAck = True # break out of outer wait loop
