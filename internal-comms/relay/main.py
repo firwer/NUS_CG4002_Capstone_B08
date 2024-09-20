@@ -249,7 +249,6 @@ class Beetle:
                         sendPkt = self.getDataToSend()
                         if sendPkt is not None:
                             self.cachedPacket = sendPkt
-                            # sendPkt = self.corrupt_packet(sendPkt) # WARN: should be removed in prod
                             self.sendReliableStart = millis()
                             print(f"{self.COLOR}TX PKT r{sendPkt.seq_num}, curr r{self.relay_seq_num} (relay reliable)")
                             self.write_packet(sendPkt)
@@ -260,7 +259,6 @@ class Beetle:
                     self.reliableRetransmissions += 1
                     print(f"{self.COLOR}TX PKT r{self.cachedPacket.seq_num}, curr {self.relay_seq_num}, (relay reliable, timeout)")
                     sendPkt = self.cachedPacket
-                    # sendPkt = self.corrupt_packet(sendPkt) # WARN: should be removed in prod
                     self.receiver.relayTxNumber += 1
                     self.write_packet(sendPkt)
                     canSendReliable = False
