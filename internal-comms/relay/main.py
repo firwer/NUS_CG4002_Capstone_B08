@@ -127,6 +127,7 @@ class Beetle:
         self.testRelayReliable = True
         self.corruptProbability = 0.0
         self.killThread = False
+        self.hasSentReliable = False
 
     def run(self):
         canSendReliable = True
@@ -254,7 +255,8 @@ class Beetle:
                             self.write_packet(sendPkt)
                             self.receiver.relayTxNumber += 1
                             canSendReliable = False
-                elif millis() - self.sendReliableStart > self.reliableTimeout:  # 1000 ms = 1 second
+                            self.hasSentReliable = True
+                elif self.hasSentReliable and millis() - self.sendReliableStart > self.reliableTimeout:  # 1000 ms = 1 second
                     self.sendReliableStart = millis()
                     self.reliableRetransmissions += 1
                     print(f"{self.COLOR}TX PKT r{self.cachedPacket.seq_num}, curr {self.relay_seq_num}, (relay reliable, timeout)")
