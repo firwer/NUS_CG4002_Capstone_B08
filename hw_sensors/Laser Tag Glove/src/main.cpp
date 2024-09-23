@@ -120,7 +120,7 @@ void setup()
   mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_250);
 
   mpu.setDHPFMode(MPU6050_DHPF_1P25);
-  mpu.setDLPFMode(MPU6050_DLPF_BW_20);
+  mpu.setDLPFMode(MPU6050_DLPF_BW_10);
   mpu.setMotionDetectionThreshold(60);
   mpu.setMotionDetectionDuration(5);
 
