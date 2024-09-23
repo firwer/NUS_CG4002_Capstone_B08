@@ -11,8 +11,8 @@
 #define BUTTON_PIN 4
 #define BUZZER_PIN 3
 #define FLEX_SENSOR_PIN A0
-#define FLEX_THRESHOLD 450
-#define NOTE_DELAY 50
+#define FLEX_THRESHOLD 500
+#define NOTE_DELAY 100
 #define DEBOUNCE_DELAY 50
 #define MPU_SAMPLING_RATE 20
 
@@ -107,7 +107,7 @@ void setup()
   calibrationData.ygoffset = -32;
   calibrationData.zgoffset = 27;
 
-  // EEPROM.put(0, calibrationData);
+  // EEPROM.put(0, calibrationData); //TODO: Store in EEPROM
 
   mpu.setXAccelOffset(calibrationData.xoffset);
   mpu.setYAccelOffset(calibrationData.yoffset);
@@ -116,12 +116,12 @@ void setup()
   mpu.setYGyroOffset(calibrationData.ygoffset);
   mpu.setZGyroOffset(calibrationData.zgoffset);
 
-  mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_4); // can change to FS_2
+  mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_4);
   mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_250);
 
-  mpu.setDHPFMode(MPU6050_DHPF_0P63);
-  mpu.setDLPFMode(MPU6050_DLPF_BW_42);
-  mpu.setMotionDetectionThreshold(60); // seems good for now
+  mpu.setDHPFMode(MPU6050_DHPF_1P25);
+  mpu.setDLPFMode(MPU6050_DLPF_BW_10);
+  mpu.setMotionDetectionThreshold(60);
   mpu.setMotionDetectionDuration(5);
 
   mpu.setIntMotionEnabled(true);
@@ -163,7 +163,7 @@ void loop()
     if (soundQueue.itemCount() > 0)
     {
       uint16_t note = soundQueue.dequeue();
-      shotFired.play(note, 50); // Play note for 50ms
+      shotFired.play(note, 100); // Play note for 50ms
     }
     lastSoundTime = millis();
   }
