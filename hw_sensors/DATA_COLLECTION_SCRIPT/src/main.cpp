@@ -90,13 +90,12 @@ void setup()
     while (1)
       ;
   }
-
-  calibrationData.xoffset = -1060;
-  calibrationData.yoffset = -872;
-  calibrationData.zoffset = 1611;
-  calibrationData.xgoffset = -7;
-  calibrationData.ygoffset = -32;
-  calibrationData.zgoffset = 27;
+  calibrationData.xoffset = -1021;
+  calibrationData.yoffset = -898;
+  calibrationData.zoffset = 1591;
+  calibrationData.xgoffset = 6;
+  calibrationData.ygoffset = -38;
+  calibrationData.zgoffset = 31;
 
   // EEPROM.put(0, calibrationData); //TODO: Store in EEPROM
 
