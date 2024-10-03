@@ -136,169 +136,6 @@ void await_handshake(bool helloReceived) {
   digitalWrite(13, 0);
 }
 
-// --------------- TESTING CODE --------------
-
-// Sets the checksum and writes the packet. Adds some fuzzing to incur checksum fails
-void write_serial_with_fuzz(packet_general_t* packet, bool fuzz) {
-  setChecksum(packet);
-  if (fuzz) {
-    flip_bits_with_probability(packet, 0.05);  // fuzzing purposes
-  }
-  Serial.write(reinterpret_cast<uint8_t*>(packet), sizeof(packet_general_t));
-}
-
-// if pr(prob) is passed, pkt will be corrupted.
-void flip_bits_with_probability(packet_general_t* pkt, float probability) {
-  uint8_t* packetBytes = (uint8_t*)pkt;       // Cast the packet to a byte array for easy manipulation
-  int packetSize = sizeof(packet_general_t);  // Determine the size of the packet
-
-  // Generate a random number between 0 and 1 (1000 to be more accurate)
-  float randomValue = random(0, 1000) / 1000.0;
-
-  // If the random value is less than the specified probability, flip the 18th bit
-  if (randomValue < probability) {
-    // Calculate the byte and bit position for the 18th bit
-    int bitPosition = 18;             // 0-based index
-    int byteIndex = bitPosition / 8;  // Integer division to find byte index
-    int bitIndex = bitPosition % 8;   // Modulo to find bit index within the byte
-
-    // Ensure the byte index is within bounds
-    if (byteIndex < packetSize) {
-      // Flip the 18th bit in the byte
-      packetBytes[byteIndex] ^= (1 << bitIndex);
-    }
-  }
-}
-
-// Test how resilient unreliable throughput is
-void test_throughput_unreliable(int rate_ms) {
-  packet_imu_t pkt = { 0 };
-  packet_general_t rcv = { 0 };
-  int await_delay = 50;
-  pkt.packet_type = PACKET_DATA_IMU;
-  while (1) {
-    pkt.seq_num = beetle_seq_num;
-    ++beetle_seq_num;
-    write_serial_with_fuzz((packet_general_t*)&pkt, true);
-    if (await_packet((packet_general_t*)&rcv, await_delay)) {
-      if (rcv.packet_type == PACKET_HELLO) {  // this is the trigger for reconnx
-        await_handshake(true);
-      }
-      if (rcv.packet_type == PACKET_CONN_ESTAB) {
-        // duplicate, continue;
-      }
-      continue;
-    }
-    delay(rate_ms - await_delay);
-  }
-}
-
-// Test single stop-and-wait
-void test_throughput_reliable(int rate_ms) {
-  uint8_t exp_beetle_seq_num = beetle_seq_num;  // this tracks the reliable seq_num
-  bool canSendReliable = true;
-  uint8_t test_health_number = 22;
-  uint8_t prev_rcv_ack = 0;  // track the previously received ack number
-  long reliableTimeStart = 0;
-  uint8_t timeout_ms = max(rate_ms + 100, 500);
-  packet_general_t cached_packet = { 0 };
-  uint8_t to_send = 10;
-  // simulate event driver
-  while (1) {
-    auto rate_start = millis();
-
-    // bool resendReliable = false;
-    packet_general_t rcv = { 0 };
-    if (await_packet((packet_general_t*)&rcv, 50)) {
-      // case 1: checksum error
-      // > ignore
-      if (verifyChecksum(&rcv)) {
-        // case 2: hello
-        // > relay wants to re-estab connections. handshake.
-        if (rcv.packet_type == PACKET_HELLO) {
-          await_handshake(true);
-        }
-        // case 3: conn_estab
-        // > ignore this duplicate
-        if (rcv.packet_type == PACKET_CONN_ESTAB) {
-        }
-        // case 4: ACKn
-        if (rcv.packet_type == PACKET_ACK) {
-          if (rcv.seq_num == exp_beetle_seq_num) {
-            // > flag that we need not resend
-            canSendReliable = true;
-          }
-        }
-      }
-    }
-
-    // if ACKn received AND there is something to send, send it!
-    if (canSendReliable) {
-      delay(rate_ms);
-
-      canSendReliable = false;
-      packet_health_t pkt = { 0 };
-      pkt.health_count = test_health_number--;
-      pkt.packet_type = PACKET_DATA_HEALTH;
-      pkt.seq_num = beetle_seq_num;
-      ++beetle_seq_num;
-      exp_beetle_seq_num = beetle_seq_num;
-      setChecksum((packet_general_t*)&pkt);
-      write_serial_with_fuzz((packet_general_t*)&pkt, 1);
-      memcpy(&cached_packet, &pkt, 20);
-      reliableTimeStart = millis();
-
-
-    } else if (millis() - reliableTimeStart > 1000) {  // constant here must be big
-      // else we handle reliable packet timeout;
-      digitalWrite(13, 1);
-      reliableTimeStart = millis();
-      write_serial_with_fuzz(&cached_packet, 1);
-      digitalWrite(13, 0);
-    }
-
-    // then, do unreliable sending (omitted)
-  }
-}
-
-void test_receive_reliable() {
-  while (1) {
-    packet_general_t rcv = { 0 };
-
-    bool shouldAck = false;
-    if (await_packet((packet_general_t*)&rcv, 50)) {
-      if (verifyChecksum(&rcv)) {
-        // case 2: hello
-        // > relay wants to re-estab connections. handshake.
-        if (rcv.packet_type == PACKET_HELLO) {
-          await_handshake(true);
-        }
-        // handle receives
-        if (rcv.packet_type == PACKET_DATA_GAMESTATE) {
-          // check if relay sequence number is correct
-          shouldAck = true;
-          if (relay_seq_num == rcv.seq_num) {
-            // correct sequence number.
-            relay_seq_num = (relay_seq_num + 1) % 256;
-            // TODO: handle the packet!
-          }
-          // incorrect serial number, ignore
-        }
-      }
-    }
-
-    if (shouldAck) {
-      packet_ack_t ack = { 0 };
-      ack.packet_type = PACKET_ACK;
-      ack.seq_num = relay_seq_num;
-      setChecksum((packet_general_t*)&ack);
-      write_serial((packet_general_t*)&ack);
-    }
-  }
-}
-
-// Test code to get dummy data
-
 void getRandomReliablePacket(packet_general_t* pkt) {
     int packet_choice = rand() % 3;
     if (packet_choice == 0) {
@@ -325,6 +162,8 @@ long unreliableStartRateTime = 0; // TESTING: rate limit for unreliable sending
 long reliableStartRateTime = 0;  // TESTING: rate limit for reliable sending
 
 bool canSendReliable = true; // flag to allow tx
+bool reliableSent = false;
+
 long reliableTimeStart = 0; // timeout
 uint8_t exp_beetle_seq_num = beetle_seq_num;  // this tracks the reliable seq_num
 
@@ -399,6 +238,8 @@ void communicate() {
     if(reliableBufferFilled && millis() - reliableStartRateTime > rel_tx_rate){ // simulate checking of reliableBuffer to send
       reliableStartRateTime = millis();
       canSendReliable = false;
+      reliableSent = true;
+
       packet_general_t pkt = {0};
       getRandomReliablePacket(&pkt); // randomy choose a packet
       pkt.seq_num = beetle_seq_num;
@@ -410,7 +251,7 @@ void communicate() {
       reliableTimeStart = millis();
     }
     // reliable buffer not filled, contnue
-  } else if (millis() - reliableTimeStart > 1000) {  // constant here must be big
+  } else if (reliableSent && millis() - reliableTimeStart > 1000) {  // constant here must be big
     // else we handle reliable packet timeout;
     digitalWrite(13, 1);
     reliableTimeStart = millis();
