@@ -15,7 +15,7 @@ TCP_SERVER_PORT = 65001
 TCP_SECRET_KEY = "ethgoingmoonsoon"
 
 # Ultra96 SSH Credentials
-ssh_host = "172.26.190.125"
+ssh_host = "makerslab-fpga-29.d2.comp.nus.edu.sg"
 ssh_user = "xilinx"
 ssh_password = "leonardo"  # pushing password up to git, excellent swe practice
 

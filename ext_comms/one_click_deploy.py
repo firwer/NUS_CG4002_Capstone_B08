@@ -65,7 +65,7 @@ async def run_game_server_on_ultra96(conn, remote_port):
         # Run the game server remotely on the Ultra96
         await conn.run('fuser -KILL -k -n tcp 65001')
         result = await conn.run(f'source /usr/local/share/pynq-venv/bin/activate && python '
-                                f'/home/cg4002/ext_comms/main.py {remote_port}', check=True)
+                                f'/home/xilinx/ext_comms/main.py {remote_port}', check=True)
         # Print standard output and error
         print("Game server output:")
         print(result.stdout)
