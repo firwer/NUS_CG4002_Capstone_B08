@@ -78,7 +78,8 @@ async def game_state_manager(currGameData, attacker_id: int,
 
     print("Updating Visualizer..")
     # Send game state to visualizer (Attributes not yet adjusted, Visualizer will do on its own)
-    await visualizer_send_queue.put(currGameData.to_json(attacker_id))
+    await visualizer_send_queue.put("action_" + str(
+        attacker_id) + "_" + prediction_action)  # Add action_ prefix to indicate game state msg type to the visualizer
     targetInFOV = False
     if prediction_action in {"basket", "soccer", "volley", "bowl", "bomb"}:
         try:
@@ -115,3 +116,6 @@ async def game_state_manager(currGameData, attacker_id: int,
         pass
     else:
         pass
+    # Send updated game state to visualizer
+    await visualizer_send_queue.put("gs_" + currGameData.to_json(attacker_id))  # Add gs_ prefix to indicate game
+    # state msg type to the visualizer
