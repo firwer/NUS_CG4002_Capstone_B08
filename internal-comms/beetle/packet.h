@@ -3,9 +3,6 @@
 
 #include <stdint.h>
 
-#define PACKET_INVALID 0xE
-#define PACKET_HELLO 0xF
-#define PACKET_CONN_ESTAB 0xD
 #define PACKET_ACK 0x1
 #define PACKET_SYN_ACK 0x2
 #define PACKET_DATA_IMU 0x3
@@ -13,6 +10,9 @@
 #define PACKET_DATA_BULLET 0x5
 #define PACKET_DATA_HEALTH 0x6
 #define PACKET_DATA_GAMESTATE 0x7
+#define PACKET_CONN_ESTAB 0xD
+#define PACKET_INVALID 0xE
+#define PACKET_HELLO 0xF
 
 #define PACKET_SIZE 20
 #define TIMEOUT_MS 1000
