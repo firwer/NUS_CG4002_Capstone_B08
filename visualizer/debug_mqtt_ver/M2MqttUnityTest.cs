@@ -31,6 +31,8 @@ using uPLibrary.Networking.M2Mqtt;
 using uPLibrary.Networking.M2Mqtt.Messages;
 using Newtonsoft.Json;
 using M2MqttUnity;
+using Newtonsoft.Json.Bson;
+using GameDataNameSpace;
 
 /// <summary>
 /// Examples for the M2MQTT library (https://github.com/eclipse/paho.mqtt.m2mqtt),
@@ -43,49 +45,43 @@ namespace M2MqttUnity.Examples
     public class M2MqttUnityTest : M2MqttUnityClient
     {
 
+        public MsgHandler msgHandlerGameObject;
+        public UIHandler uiHandlerGameObject;
+		//public class GameState
+  //      {
+  //          public int hp { get; set; }
+  //          public int bullets { get; set; }
+  //          public int bombs { get; set; }
+  //          public int shield_hp { get; set; }
+  //          public int deaths { get; set; }
+  //          public int shields { get; set; }
+  //      }
 
-        public class GameState
-        {
-            public int hp { get; set; }
-            public int bullets { get; set; }
-            public int bombs { get; set; }
-            public int shield_hp { get; set; }
-            public int deaths { get; set; }
-            public int shields { get; set; }
-        }
+  //      public static class GameConfig
+  //      {
+  //          public const int GAME_MAX_HP = 100;
+  //          public const int GAME_MAX_BULLETS = 6;
+  //          public const int GAME_MAX_BOMBS = 2;
+  //          public const int GAME_MAX_SHIELD_HEALTH = 30;
+  //          public const int GAME_MAX_SHIELDS = 3;
+  //          public const int GAME_BULLET_DMG = 5;
+  //          public const int GAME_AI_DMG = 10;
+  //          public const int GAME_BOMB_DMG = 5;
+  //      }
 
-        public static class GameConfig
-        {
-            public const int GAME_MAX_HP = 100;
-            public const int GAME_MAX_BULLETS = 6;
-            public const int GAME_MAX_BOMBS = 2;
-            public const int GAME_MAX_SHIELD_HEALTH = 30;
-            public const int GAME_MAX_SHIELDS = 3;
-            public const int GAME_BULLET_DMG = 5;
-            public const int GAME_AI_DMG = 10;
-            public const int GAME_BOMB_DMG = 5;
-        }
-
-        public class PlayerData
-        {
-            public int player_id { get; set; }
-            public string action { get; set; }
-            public GameState game_state { get; set; }
-        }
+  //      public class PlayerData
+  //      {
+  //          public int player_id { get; set; }
+  //          public string action { get; set; }
+  //          public GameState game_state { get; set; }
+  //      }
         [Tooltip("Set this to true to perform a testing cycle automatically on startup")]
         public bool autoTest = false;
         [Header("User Interface")]
-        public InputField consoleInputField;
-        public Toggle encryptedToggle;
-        public InputField addressInputField;
-        public InputField portInputField;
         public Button connectButton;
         public Button disconnectButton;
-        public Button testPublishButton;
-        public Button clearButton;
 
         private List<string> eventMessages = new List<string>();
-        private bool updateUI = false;
 
         public void PublishFOVState(int player_id, string msg)
         {
@@ -99,58 +95,47 @@ namespace M2MqttUnity.Examples
             //AddUiMessage($"{messageToPublish} published.");
         }
 
-        public void SetBrokerAddress(string brokerAddress)
-        {
-            if (addressInputField && !updateUI)
-            {
-                this.brokerAddress = brokerAddress;
-            }
-        }
-
-        public void SetBrokerPort(string brokerPort)
-        {
-            if (portInputField && !updateUI)
-            {
-                int.TryParse(brokerPort, out this.brokerPort);
-            }
-        }
-
         public void SetPlayerMode(bool isP1)
         {
             Debug.Log($"setting player mode isP1 to {isP1}");
             this.isP1 = isP1;
         }
 
-
-        public void SetUiMessage(string msg)
+        public void GetPlayerNumber(int playerNum)
         {
-            if (consoleInputField != null)
-            {
-                consoleInputField.text = msg;
-                updateUI = true;
-            }
-        }
+            string playerMsg;
 
-        public void AddUiMessage(string msg)
-        {
-            if (consoleInputField != null)
+			if (playerNum == 1)
             {
-                consoleInputField.text = msg + "\n";
-                updateUI = true;
-            }
-        }
+                this.isP1 = true;
+				playerMsg = "Setting player mode to Player 1";
+			}
+            else
+            {
+                this.isP1 = false;
+				playerMsg = "Setting player mode to Player 2";
+				
+			}
+            Debug.Log(playerMsg);
+			uiHandlerGameObject.UpdateSettingsDescription(playerMsg);
+			
+		}
 
         protected override void OnConnecting()
         {
             base.OnConnecting();
-            SetUiMessage("Connecting to broker on " + brokerAddress + ":" + brokerPort.ToString() + "...\n");
+			string connectingDescription = "Connecting to broker on " + brokerAddress + ":" + brokerPort.ToString() + "...\n";
+			uiHandlerGameObject.UpdateSettingsDescription(connectingDescription);
+			Debug.Log(connectingDescription);
         }
 
         protected override void OnConnected()
         {
             base.OnConnected();
             string playerView = this.isP1 ? "Player 1 VIEW" : "Player 2 VIEW";
-            SetUiMessage("Connected to broker on " + brokerAddress + "\n" + " Currently " + playerView + "\n");
+            string connectedDescription = "Connected to broker on " + brokerAddress + "\n" + " Currently " + playerView + "\n";
+			uiHandlerGameObject.UpdateSettingsDescription(connectedDescription);
+			Debug.Log(connectedDescription);
 
             if (autoTest)
             {
@@ -170,56 +155,58 @@ namespace M2MqttUnity.Examples
 
         protected override void OnConnectionFailed(string errorMessage)
         {
-            AddUiMessage("CONNECTION FAILED! " + errorMessage);
+            Debug.Log("CONNECTION FAILED! " + errorMessage);
         }
 
         protected override void OnDisconnected()
         {
-            AddUiMessage("Disconnected.");
+            string disconnectedMsg = "Disconnected";
+			uiHandlerGameObject.UpdateSettingsDescription(disconnectedMsg);
+			Debug.Log(disconnectedMsg);
         }
 
         protected override void OnConnectionLost()
         {
-            AddUiMessage("CONNECTION LOST!");
+			Debug.Log("CONNECTION LOST!");
         }
         
-        public void ReduceHealth(GameState targetGameState, int hpReduction)
+        public void ReduceHealth(PlayerData targetPlayer, int hpReduction)
         {
             // Use the shield to protect the player
-            if (targetGameState.shield_hp > 0)
+            if (targetPlayer.game_state.shield_hp > 0)
             {
-                int newShieldHp = Mathf.Max(0, targetGameState.shield_hp - hpReduction);
-                hpReduction = Mathf.Max(0, hpReduction - targetGameState.shield_hp);
+                int newShieldHp = Mathf.Max(0, targetPlayer.game_state.shield_hp - hpReduction);
+                hpReduction = Mathf.Max(0, hpReduction - targetPlayer.game_state.shield_hp);
                 // Update the shield HP
-                targetGameState.shield_hp = newShieldHp;
+                targetPlayer.game_state.shield_hp = newShieldHp;
             }
 
             // Reduce the player HP
-            targetGameState.hp = Mathf.Max(0, targetGameState.hp - hpReduction);
-
-            if (targetGameState.hp == 0)
+            targetPlayer.game_state.hp = Mathf.Max(0, targetPlayer.game_state.hp - hpReduction);
+            msgHandlerGameObject.HandleReduceHealth(targetPlayer);
+            if (targetPlayer.game_state.hp == 0)
             {
                 // If the player dies, increment deaths and reset stats
-                targetGameState.deaths += 1;
-
-                // Reset player stats
-                targetGameState.hp = GameConfig.GAME_MAX_HP;
-                targetGameState.bullets = GameConfig.GAME_MAX_BULLETS;
-                targetGameState.bombs = GameConfig.GAME_MAX_BOMBS;
-                targetGameState.shield_hp = 0;
-                targetGameState.shields = GameConfig.GAME_MAX_SHIELDS;
+                targetPlayer.game_state.deaths += 1;
+                msgHandlerGameObject.HandleDeath(targetPlayer);
+				// Reset player stats
+				targetPlayer.game_state.hp = GameConfig.GAME_MAX_HP;
+                targetPlayer.game_state.bullets = GameConfig.GAME_MAX_BULLETS;
+                targetPlayer.game_state.bombs = GameConfig.GAME_MAX_BOMBS;
+                targetPlayer.game_state.shield_hp = 0;
+                targetPlayer.game_state.shields = GameConfig.GAME_MAX_SHIELDS;
             }
         }
 
-        public void GunShoot(GameState playerState, GameState opponentState)
+        public void GunShoot(PlayerData player, PlayerData opponent)
         {
-            if (playerState.bullets <= 0)
+            if (player.game_state.bullets <= 0)
             {
                 return;
             }
 
-            playerState.bullets -= 1;
-            ReduceHealth(opponentState, GameConfig.GAME_BULLET_DMG);
+			player.game_state.bullets -= 1;
+            ReduceHealth(opponent, GameConfig.GAME_BULLET_DMG);
         }
 
         public void ActivateShield(GameState playerState)
@@ -242,7 +229,7 @@ namespace M2MqttUnity.Examples
             }
         }
 
-        public void BombAttack(GameState attackerState, GameState opponentState)
+        public void BombAttack(GameState attackerState, PlayerData opponent)
         {
             if (attackerState.bombs <= 0)
             {
@@ -250,7 +237,7 @@ namespace M2MqttUnity.Examples
             }
 
             attackerState.bombs -= 1;
-            ReduceHealth(opponentState, GameConfig.GAME_BOMB_DMG); // Adjust damage as needed
+            ReduceHealth(opponent, GameConfig.GAME_BOMB_DMG); // Adjust damage as needed
         }
 
         public void LogoutPlayer(PlayerData player)
@@ -279,25 +266,29 @@ namespace M2MqttUnity.Examples
                 }
             }
 
-            switch (action)
+			switch (action)
             {
-                case "gun":
-                    GunShoot(attackerState, opponentState);
-                    break;
+				case "gun":
+                    GunShoot(attacker, opponent);
+					msgHandlerGameObject.HandleAIAction(action, attacker, opponent);
+					break;
 
                 case "shield":
                     ActivateShield(attackerState);
-                    break;
+					msgHandlerGameObject.HandleAIAction(action, attacker, opponent);
+					break;
 
                 case "reload":
                     Reload(attackerState);
-                    break;
+					msgHandlerGameObject.HandleAIAction(action, attacker, opponent);
+					break;
 
                 case "bomb":
                     if (targetInFOV)
                     {
-                        BombAttack(attackerState, opponentState);
-                    }
+                        BombAttack(attackerState, opponent);
+						msgHandlerGameObject.HandleAIAction(action, attacker, opponent);
+					}
                     break;
 
                 case "basket":
@@ -306,8 +297,9 @@ namespace M2MqttUnity.Examples
                 case "bowl":
                     if (targetInFOV)
                     {
-                        ReduceHealth(opponentState, GameConfig.GAME_AI_DMG);
-                    }
+                        ReduceHealth(opponent, GameConfig.GAME_AI_DMG);
+						msgHandlerGameObject.HandleAIAction(action, attacker, opponent);
+					}
                     break;
                 case "logout":
                     // Implement logout action
@@ -319,59 +311,8 @@ namespace M2MqttUnity.Examples
             }
         }
 
-        private void UpdateUI()
-        {
-            if (client == null)
-            {
-                if (connectButton != null)
-                {
-                    connectButton.interactable = true;
-                    disconnectButton.interactable = false;
-                    testPublishButton.interactable = false;
-                }
-            }
-            else
-            {
-                if (testPublishButton != null)
-                {
-                    testPublishButton.interactable = client.IsConnected;
-                }
-                if (disconnectButton != null)
-                {
-                    disconnectButton.interactable = client.IsConnected;
-                }
-                if (connectButton != null)
-                {
-                    connectButton.interactable = !client.IsConnected;
-                }
-            }
-            if (addressInputField != null && connectButton != null)
-            {
-                addressInputField.interactable = connectButton.interactable;
-                addressInputField.text = brokerAddress;
-            }
-            if (portInputField != null && connectButton != null)
-            {
-                portInputField.interactable = connectButton.interactable;
-                portInputField.text = brokerPort.ToString();
-            }
-            if (encryptedToggle != null && connectButton != null)
-            {
-                encryptedToggle.interactable = connectButton.interactable;
-                encryptedToggle.isOn = isP1;
-                
-            }
-            if (clearButton != null && connectButton != null)
-            {
-                clearButton.interactable = connectButton.interactable;
-            }
-            updateUI = false;
-        }
-
         protected override void Start()
         {
-            SetUiMessage("Ready.");
-            updateUI = true;
             base.Start();
         }
 
@@ -407,11 +348,8 @@ namespace M2MqttUnity.Examples
             PlayerData player1 = JsonConvert.DeserializeObject<PlayerData>(rootObject.p1);
             PlayerData player2 = JsonConvert.DeserializeObject<PlayerData>(rootObject.p2);
 
-            // Randomly generate either "in_sight_True" or "in_sight_False"
-            string[] possibleMessages = { "in_sight_True", "in_sight_False" };
-            System.Random random = new System.Random();
-            string in_sight_msg = possibleMessages[random.Next(0, possibleMessages.Length)];
-
+            // Checks if Enemy is in FOV
+			string in_sight_msg = uiHandlerGameObject.GetEnemyFOV();
 
             // Process game state based on who is the attacker
             if (dataOriginPlayerId == "1") {
@@ -421,8 +359,9 @@ namespace M2MqttUnity.Examples
             }
 
             string formattedMsg = FormatPlayerData(player1, player2, in_sight_msg, dataOriginPlayerId);
-            
-            AddUiMessage(formattedMsg);
+
+            Debug.Log(formattedMsg); // PRINTS on console to see if it receives msg properly
+
             if (player1.action == "basket" || player1.action == "soccer" || player1.action == "volley" || player1.action == "bowl" || player1.action == "bomb") {
                 if (this.isP1 && dataOriginPlayerId == "1") {
                     PublishFOVState(1, in_sight_msg);
@@ -484,10 +423,6 @@ namespace M2MqttUnity.Examples
                     ProcessMessage(msg);
                 }
                 eventMessages.Clear();
-            }
-            if (updateUI)
-            {
-                UpdateUI();
             }
         }
 

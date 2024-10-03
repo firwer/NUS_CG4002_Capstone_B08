@@ -28,6 +28,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using uPLibrary.Networking.M2Mqtt;
 using uPLibrary.Networking.M2Mqtt.Messages;
+using GameDataNameSpace;
 
 /// <summary>
 /// Adaptation for Unity of the M2MQTT library (https://github.com/eclipse/paho.mqtt.m2mqtt),
@@ -97,6 +98,7 @@ namespace M2MqttUnity
             if (client == null || !client.IsConnected)
             {
                 StartCoroutine(DoConnect());
+                Debug.Log("Connecting (M2MqttUnityClient.cs)");
             }
         }
 
