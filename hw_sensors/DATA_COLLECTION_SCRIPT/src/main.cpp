@@ -53,12 +53,12 @@ struct MPUData
 // can use this if the AI model can accept floats
 struct MPUData_FLOAT
 {
-  float accelXreal;
-  float accelYreal;
-  float accelZreal;
-  float gyroXreal;
-  float gyroYreal;
-  float gyroZreal;
+  int16_t accelXreal;
+  int16_t accelYreal;
+  int16_t accelZreal;
+  int16_t gyroXreal;
+  int16_t gyroYreal;
+  int16_t gyroZreal;
 } MPUData_FLOAT;
 
 struct CalibrationData
@@ -156,42 +156,43 @@ void loop()
       mpu.getMotion6(&MPUData.ax, &MPUData.ay, &MPUData.az, &MPUData.gx, &MPUData.gy, &MPUData.gz);
       // Take the raw 16bit data, divide by 32767 to get the ratio, multiply by 4g to get the real value,
       // then multiply by 9.81 to get m/s^2
-      MPUData_FLOAT.accelXreal = ((MPUData.ax) / 32767.0) * 4.0 * 9.81;
-      MPUData_FLOAT.accelYreal = ((MPUData.ay) / 32767.0) * 4.0 * 9.81;
-      MPUData_FLOAT.accelZreal = ((MPUData.az) / 32767.0) * 4.0 * 9.81;
+      // multiply by 100 to get integers
+      MPUData_FLOAT.accelXreal = (((MPUData.ax) / 32767.0) * 4.0 * 9.81) * 100;
+      MPUData_FLOAT.accelYreal = (((MPUData.ay) / 32767.0) * 4.0 * 9.81) * 100;
+      MPUData_FLOAT.accelZreal = (((MPUData.az) / 32767.0) * 4.0 * 9.81) * 100;
       // same for gyroscope scaling
-      MPUData_FLOAT.gyroXreal = ((MPUData.gx) / 32767.0) * 250.0;
-      MPUData_FLOAT.gyroYreal = ((MPUData.gy) / 32767.0) * 250.0;
-      MPUData_FLOAT.gyroZreal = ((MPUData.gz) / 32767.0) * 250.0;
+      MPUData_FLOAT.gyroXreal = (((MPUData.gx) / 32767.0) * 250.0) * 100;
+      MPUData_FLOAT.gyroYreal = (((MPUData.gy) / 32767.0) * 250.0) * 100;
+      MPUData_FLOAT.gyroZreal = (((MPUData.gz) / 32767.0) * 250.0) * 100;
 
       // REMOVE THESE IF NOT NEEDED
 
-      // Serial.print("RAW Accel & Gyro:\t");
+      Serial.print("RAW Accel & Gyro:\t");
 
-      // Serial.print(MPUData.ax);
-      // Serial.print("\t");
-      // Serial.print(MPUData.ay);
-      // Serial.print("\t");
-      // Serial.print(MPUData.az);
-      // Serial.print("\t");
-      // Serial.print(MPUData.gx);
-      // Serial.print("\t");
-      // Serial.print(MPUData.gy);
-      // Serial.print("\t");
-      // Serial.println(MPUData.gz);
+      Serial.print(MPUData.ax);
+      Serial.print("\t");
+      Serial.print(MPUData.ay);
+      Serial.print("\t");
+      Serial.print(MPUData.az);
+      Serial.print("\t");
+      Serial.print(MPUData.gx);
+      Serial.print("\t");
+      Serial.print(MPUData.gy);
+      Serial.print("\t");
+      Serial.println(MPUData.gz);
 
-      // Serial.print("Real Accel & Gyro:\t");
-      // Serial.print(MPUData_FLOAT.accelXreal);
-      // Serial.print("\t");
-      // Serial.print(MPUData_FLOAT.accelYreal);
-      // Serial.print("\t");
-      // Serial.print(MPUData_FLOAT.accelZreal);
-      // Serial.print("\t");
-      // Serial.print(MPUData_FLOAT.gyroXreal);
-      // Serial.print("\t");
-      // Serial.print(MPUData_FLOAT.gyroYreal);
-      // Serial.print("\t");
-      // Serial.println(MPUData_FLOAT.gyroZreal);
+      Serial.print("Real Accel & Gyro:\t");
+      Serial.print(MPUData_FLOAT.accelXreal);
+      Serial.print("\t");
+      Serial.print(MPUData_FLOAT.accelYreal);
+      Serial.print("\t");
+      Serial.print(MPUData_FLOAT.accelZreal);
+      Serial.print("\t");
+      Serial.print(MPUData_FLOAT.gyroXreal);
+      Serial.print("\t");
+      Serial.print(MPUData_FLOAT.gyroYreal);
+      Serial.print("\t");
+      Serial.println(MPUData_FLOAT.gyroZreal);
 
       lastSampleTime = millis();
       recordedPoints++;
@@ -237,45 +238,3 @@ void playMotionEndFeedback()
   soundQueue.enqueue(NOTE_D6);
   soundQueue.enqueue(NOTE_CS6);
 }
-
-// Uncomment for debugging if needed
-//  void printArray(int16_t data[40][3], uint8_t index)
-//  {
-//    Serial.print('"');
-//    Serial.print("[");
-//    for (uint8_t i = 0; i < 40; i++)
-//    {
-//      Serial.print(data[i][index]);
-//      if (i < 39)
-//        Serial.print(",");
-//    }
-//    Serial.print("]");
-//    Serial.print('"');
-//  }
-
-// void printResults()
-// {
-//   printArray(recordedAccel, 0);
-//   Serial.print(",");
-//   printArray(recordedAccel, 1);
-//   Serial.print(",");
-//   printArray(recordedAccel, 2);
-//   Serial.print(",");
-//   printArray(recordedGyro, 0);
-//   Serial.print(",");
-//   printArray(recordedGyro, 1);
-//   Serial.print(",");
-//   printArray(recordedGyro, 2);
-//   Serial.print("\n");
-
-//   recordedPoints = 0;
-//   for (uint8_t i = 0; i < 40; i++)
-//   {
-//     recordedAccel[i][0] = 0;
-//     recordedAccel[i][1] = 0;
-//     recordedAccel[i][2] = 0;
-//     recordedGyro[i][0] = 0;
-//     recordedGyro[i][1] = 0;
-//     recordedGyro[i][2] = 0;
-//   }
-// }
