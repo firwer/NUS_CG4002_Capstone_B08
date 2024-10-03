@@ -32,7 +32,7 @@ class NotifyDelegate(btle.DefaultDelegate):
         self.bitsReceived = 0
         self.COLOR = color 
         # TODO: Remove the testing flags
-        self.dropProbability = 0.1
+        self.dropProbability = 0.0
         # TODO: Remove the throughput flags
         # we take throughput readings every 10 notifications
         self.notificationsRcv = 0
@@ -69,10 +69,10 @@ class NotifyDelegate(btle.DefaultDelegate):
         relay_kbps = ((self.relayTxNumber * 8 * 20) / 1000)/elapsed_time_seconds
 
         print(f"{self.COLOR}{'=' * 15} Beetle Tx Rate: {kbps:>3.3f} kbps     {'=' * 15}")
-        print(f"{self.COLOR}{'=' * 15} Min Tx Rate: {self.lowestThroughput:>3.3f} kbps    {'=' * 15}")
-        print(f"{self.COLOR}{'=' * 15} Max Tx Rate: {self.highestThroughput:>3.3f} kbps    {'=' * 15}")
-        print(f"{self.COLOR}{'=' * 15} Fragmented Pkts: {self.fragmented_packets:>3}    {'=' * 15}")
-        print(f"{self.COLOR}{'=' * 15} Relay Tx Rate: {relay_kbps:>3.3f}kbps     {'=' * 15}")
+        print(f"{self.COLOR}{'=' * 15} Min Tx Rate: {self.lowestThroughput:>3.3f} kbps        {'=' * 15}")
+        print(f"{self.COLOR}{'=' * 15} Max Tx Rate: {self.highestThroughput:>3.3f} kbps        {'=' * 15}")
+        print(f"{self.COLOR}{'=' * 15} Fragmented Pkts: {self.fragmented_packets:>3}           {'=' * 15}")
+        print(f"{self.COLOR}{'=' * 15} Relay Tx Rate: {relay_kbps:>3.3f}kbps       {'=' * 15}")
         self.relayTxNumber = 0
         self.throughputStartTime = millis()
         self.bitsReceived = 0
@@ -125,17 +125,18 @@ class Beetle:
 
         # CONFIG TEST: subcomponent test flags
         self.testRelayReliable = True
-        self.corruptProbability = 0.1
+        self.corruptProbability = 0.0
         self.killThread = False
+        self.hasSentReliable = False
 
     def run(self):
         canSendReliable = True
         while not self.killThread:
             shouldAck = False
             # STEP 1. Handle reconnections if applicable
-            if not self.connected or self.errors > 2 or self.reliableRetransmissions > 2:
+            if not self.connected or self.errors > 10 or self.reliableRetransmissions > 5:
                 print(f"{self.COLOR}Restarting connection: isConnected={self.connected}, errors={self.errors}, retx={self.reliableRetransmissions}")
-                self.receiver.reset_buffer() # should prevent bitshift fragmentations
+                self.receiver.reset_buffer()
                 self.connect_to_beetle()
                 self.errors = 0
                 self.reliableRetransmissions = 0
@@ -212,7 +213,8 @@ class Beetle:
                 # Is an ACK
                 if pkt.packet_type == PACKET_ACK:
                     # is the ACK what we expected?
-                    print(f"{self.COLOR}RX PKT r{pkt.seq_num}, Relay SN: r{self.relay_seq_num} (relay reliable)")
+                    # print(f"{sendPkt.to_bytearray().hex()}")
+                    print(f"{self.COLOR}RX ACK r{pkt.seq_num}, Relay SN: r{self.relay_seq_num} (relay reliable)")
                     if pkt.seq_num == (self.relay_seq_num + 1) % 256:
                         # We got the ack we wanted!
                         # canSendReliable implies that no more unacked pkt is in-flight
@@ -248,18 +250,17 @@ class Beetle:
                         sendPkt = self.getDataToSend()
                         if sendPkt is not None:
                             self.cachedPacket = sendPkt
-                            # sendPkt = self.corrupt_packet(sendPkt) # WARN: should be removed in prod
                             self.sendReliableStart = millis()
                             print(f"{self.COLOR}TX PKT r{sendPkt.seq_num}, curr r{self.relay_seq_num} (relay reliable)")
                             self.write_packet(sendPkt)
                             self.receiver.relayTxNumber += 1
                             canSendReliable = False
-                elif millis() - self.sendReliableStart > self.reliableTimeout:  # 1000 ms = 1 second
+                            self.hasSentReliable = True
+                elif self.hasSentReliable and millis() - self.sendReliableStart > self.reliableTimeout:  # 1000 ms = 1 second
                     self.sendReliableStart = millis()
                     self.reliableRetransmissions += 1
                     print(f"{self.COLOR}TX PKT r{self.cachedPacket.seq_num}, curr {self.relay_seq_num}, (relay reliable, timeout)")
                     sendPkt = self.cachedPacket
-                    # sendPkt = self.corrupt_packet(sendPkt) # WARN: should be removed in prod
                     self.receiver.relayTxNumber += 1
                     self.write_packet(sendPkt)
                     canSendReliable = False
@@ -327,19 +328,16 @@ class Beetle:
                 while self.receiver.has_packet():
                     data = self.receiver.get_packet_bytes()
                     if data is None: continue
-                    if not verify_checksum(data):
-                        self.receiver.reset_buffer()
-                        continue
+                    if not verify_checksum(data): continue
                     packet = get_packet(data)
                     if packet is None: continue
-                    if packet.packet_type != PACKET_SYN_ACK:
-                        break
+                    if packet.packet_type != PACKET_SYN_ACK: continue
                     print(f"{self.COLOR}THREE WAY: SYN-ACK received")
                     self.beetle_seq_num = pkt.seq_num
                     hasSynAck = True # break out of outer wait loop
                     break
             if not hasSynAck:
-                print(f"{self.COLOR}Timeout: SYNACK not received. Resending hello...")
+                print(f"{self.COLOR}SYNACK not received. Resending hello...")
                 continue # resend hello
 
             # STAGE 3: CONN_ESTAB
