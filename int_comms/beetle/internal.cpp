@@ -311,8 +311,8 @@ void communicate() {
   // TRANSMIT UNRELIABLE DATA
   if (unreliableBufferFilled && millis() - unreliableStartRateTime > unrel_tx_rate) {
     unreliableStartRateTime = millis();
-
-    packet_general_t pkt = unreliable_buffer;
+    
+    packet_imu_t& pkt = unreliable_buffer;
 
     // YAGNI, but left here for testing 
     // packet_imu_t pkt = { 0 };
