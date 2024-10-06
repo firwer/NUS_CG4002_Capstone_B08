@@ -10,6 +10,7 @@ void setup() {
     pinMode(ledPin, OUTPUT); // Set the LED pin as an output
 }
 
+// This driver code is to simulate usage of the internal comms API
 void loop() {
     // Wait until the handshake is completed
     while(!isConnected) {
