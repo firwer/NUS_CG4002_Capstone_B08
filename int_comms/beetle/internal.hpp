@@ -3,7 +3,7 @@
 
 #define TRANSMISSION_FAIL_LIMIT 3
 #define PACKET_SIZE 20
-#define TIMEOUT_MS 1000
+#define TIMEOUT_MS 500
 
 // Packet types
 #define PACKET_INVALID 0
@@ -64,5 +64,20 @@ const uint8_t crc8_lut[256] = {
     0xDE, 0xD9, 0xD0, 0xD7, 0xC2, 0xC5, 0xCC, 0xCB, 0xE6, 0xE1, 0xE8, 0xEF, 
     0xFA, 0xFD, 0xF4, 0xF3
 };
+
+#ifndef MPU_DATA_DEFINED
+#define MPU_DATA_DEFINED
+
+typedef struct MPUData
+{
+  int16_t ax;
+  int16_t ay;
+  int16_t az;
+  int16_t gx;
+  int16_t gy;
+  int16_t gz;
+} MPUData;
+
+#endif // MPU_DATA_DEFINED
 
 #endif INTERNAL_HPP
