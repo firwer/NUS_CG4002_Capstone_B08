@@ -294,6 +294,7 @@ void communicate() {
           // we have found the correct sequence number.
           relay_seq_num = (relay_seq_num + 1) % 256;
           // Actually handle the packet for hardware integration
+          // WARN: if multiple gamestate comes in, this will OVERWRITE.
           receive_buffer_filled = true;
           packet_gamestate_t* tmp = (packet_gamestate_t*) &rcv;
           receive_buffer.bullet_num = tmp->bullet_num;
