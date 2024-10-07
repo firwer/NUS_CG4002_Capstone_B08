@@ -360,10 +360,8 @@ void communicate() {
     // reliable buffer not filled, contnue
   } else if (reliableSent && millis() - reliableTimeStart > 1000) {  // constant here must be big
     // else we handle reliable packet timeout;
-    digitalWrite(13, 1);
     reliableTimeStart = millis();
     write_serial(&cached_packet);
-    digitalWrite(13, 0);
   }
 
   
