@@ -15,6 +15,21 @@
 #include <Arduino.h>
 #include "packet.h"
 
+#ifndef MPU_DATA_DEFINED
+#define MPU_DATA_DEFINED
+
+typedef struct MPUData
+{
+  int16_t ax;
+  int16_t ay;
+  int16_t az;
+  int16_t gx;
+  int16_t gy;
+  int16_t gz;
+} MPUData;
+
+#endif // MPU_DATA_DEFINED
+
 // Function declarations
 bool validateChecksum(struct packet_general_t *packet);
 uint8_t getPacketType(struct packet_general_t *packet);
@@ -25,12 +40,20 @@ struct packet_general_t reliable_receive();
 bool await_packet(struct packet_general_t *packet_buffer);
 void await_handshake(bool helloReceived);
 
+// hw-ic integration declarations
+bool ic_connect();
+bool ic_push_imu(MPUData data);
+bool ic_push_bullet(uint8_t bullets);
+bool ic_push_health(uint8_t health);
+bool ic_push_kick();
+packet_gamestate_t ic_get_state();
+void communicate();
+
 // Testing function declarations
 void flip_bits_with_probability(packet_general_t* pkt, float probability);
 void test_throughput_unreliable(int rate_ms);
 void test_throughput_reliable(int rate_ms);
 void test_receive_reliable();
-void communicate();
 
 // External variable declarations
 // extern uint8_t beetle_seq_num;
@@ -64,20 +87,5 @@ const uint8_t crc8_lut[256] = {
     0xDE, 0xD9, 0xD0, 0xD7, 0xC2, 0xC5, 0xCC, 0xCB, 0xE6, 0xE1, 0xE8, 0xEF, 
     0xFA, 0xFD, 0xF4, 0xF3
 };
-
-#ifndef MPU_DATA_DEFINED
-#define MPU_DATA_DEFINED
-
-typedef struct MPUData
-{
-  int16_t ax;
-  int16_t ay;
-  int16_t az;
-  int16_t gx;
-  int16_t gy;
-  int16_t gz;
-} MPUData;
-
-#endif // MPU_DATA_DEFINED
 
 #endif INTERNAL_HPP
