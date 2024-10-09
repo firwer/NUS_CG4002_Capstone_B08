@@ -5,11 +5,10 @@ import sys
 
 from sshtunnel import SSHTunnelForwarder
 
-import config
-from comms.TCPC_Controller import TCPC_Controller
+from ...ext_comms import config
+from ...ext_comms.comms import TCPC_Controller
 
 
-# To be deprecated. For testing purposes only
 async def user_input(send_queue: asyncio.Queue, receive_queue: asyncio.Queue):
     while True:
         message = input("Input message: ")
@@ -29,8 +28,6 @@ async def user_input(send_queue: asyncio.Queue, receive_queue: asyncio.Queue):
 
         print(f"Game State Update: \nPLAYER 1:\n{p1Data}\nPLAYER 2:\n{p2Data}")
 
-
-# Constantly receives data from TCP Server and places it in the queue. Will be replaced/superseded by MQTT
 async def msg_receiver(wsController: TCPC_Controller, receive_queue: asyncio.Queue):
     """
     Continuously receive messages from the TCP server and place them in the queue.
@@ -45,7 +42,6 @@ async def msg_receiver(wsController: TCPC_Controller, receive_queue: asyncio.Que
             continue  # After reconnection, continue receiving
 
 
-# Constantly listens and sends off any data in the send_queue
 async def msg_sender(wsController: TCPC_Controller, send_queue: asyncio.Queue):
     """
     Send messages from the relay node to the TCP server.
@@ -55,7 +51,6 @@ async def msg_sender(wsController: TCPC_Controller, send_queue: asyncio.Queue):
         await wsController.send(message)
 
 
-# Async Task Manager for TCP Communication and data transfer
 async def run_tcp_client(send_queue: asyncio.Queue, receive_queue: asyncio.Queue, port: int):
     """
     Establish a connection to the TCP server and handle reconnections.
@@ -74,7 +69,7 @@ async def run_tcp_client(send_queue: asyncio.Queue, receive_queue: asyncio.Queue
     await asyncio.gather(*tasks)  # Ensure both sender and receiver tasks run concurrently
 
 
-async def main():
+async def ext_main():
     send_queue = asyncio.Queue()
     receive_queue = asyncio.Queue()
     if config.RELAY_NODE_LOCAL_TEST:
@@ -107,4 +102,4 @@ if sys.platform.lower() == "win32" or os.name.lower() == "nt":
     set_event_loop_policy(WindowsSelectorEventLoopPolicy())
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(ext_main())

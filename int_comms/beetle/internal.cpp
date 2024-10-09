@@ -137,34 +137,34 @@ void await_handshake(bool helloReceived) {
 }
 
 void getRandomReliablePacket(packet_general_t* pkt) {
-    int packet_choice = rand() % 3;
-    if (packet_choice == 0) {
-        pkt->packet_type = PACKET_DATA_BULLET;
-        packet_bullet_t* tmp = (packet_bullet_t*) pkt;
-        tmp->bullet_count = rand() % 256; // choose between 0-255
-    } else if (packet_choice == 1) {
-        pkt->packet_type = PACKET_DATA_HEALTH;
-        packet_health_t* tmp = (packet_health_t*) pkt;
-        tmp->health_count = rand() % 256; // choose between 0-255
-    } else {
-        pkt->packet_type = PACKET_DATA_KICK;
-        packet_kick_t* tmp = (packet_kick_t*) pkt;
-    }
+  int packet_choice = rand() % 3;
+  if (packet_choice == 0) {
+    pkt->packet_type = PACKET_DATA_BULLET;
+    packet_bullet_t* tmp = (packet_bullet_t*)pkt;
+    tmp->bullet_count = rand() % 256;  // choose between 0-255
+  } else if (packet_choice == 1) {
+    pkt->packet_type = PACKET_DATA_HEALTH;
+    packet_health_t* tmp = (packet_health_t*)pkt;
+    tmp->health_count = rand() % 256;  // choose between 0-255
+  } else {
+    pkt->packet_type = PACKET_DATA_KICK;
+    packet_kick_t* tmp = (packet_kick_t*)pkt;
+  }
 }
 
 
 // ----- Two-way TX/RX -----
-bool reliableBufferFilled = true; // CONFIG: simulate buffer full (has something to send reliably)
-bool unreliableBufferFilled = true; // CONFIG: simulate udp buffer full (has something to send unreliably)
-uint8_t rel_tx_rate = 0; // CONFIG: Tuning of reliable transfer rate in ms
-uint8_t unrel_tx_rate = 0; // CONFIG: Tuning of unreliable transfer rate in ms 
-long unreliableStartRateTime = 0; // TESTING: rate limit for unreliable sending
-long reliableStartRateTime = 0;  // TESTING: rate limit for reliable sending
+bool reliableBufferFilled = true;    // CONFIG: simulate buffer full (has something to send reliably)
+bool unreliableBufferFilled = true;  // CONFIG: simulate udp buffer full (has something to send unreliably)
+uint8_t rel_tx_rate = 0;             // CONFIG: Tuning of reliable transfer rate in ms
+uint8_t unrel_tx_rate = 0;           // CONFIG: Tuning of unreliable transfer rate in ms
+long unreliableStartRateTime = 0;    // TESTING: rate limit for unreliable sending
+long reliableStartRateTime = 0;      // TESTING: rate limit for reliable sending
 
-bool canSendReliable = true; // flag to allow tx
+bool canSendReliable = true;  // flag to allow tx
 bool reliableSent = false;
 
-long reliableTimeStart = 0; // timeout
+long reliableTimeStart = 0;                   // timeout
 uint8_t exp_beetle_seq_num = beetle_seq_num;  // this tracks the reliable seq_num
 
 uint8_t test_health_number = 22;
@@ -172,6 +172,97 @@ uint8_t prev_rcv_ack = 0;  // track the previously received ack number
 packet_general_t cached_packet = { 0 };
 
 
+// ------ EXPOSED API FOR HARDWARE SUBCOMPONENT ------
+// Usage:
+//
+// It is the responsibility of the internal comms 'black box' to:
+//      > calculate CRC8
+//      > handle seq numbering
+//
+// For each beetle node, we typically expect to only call ONE
+//  of the push_XYZ
+
+// Connect to the relay node.
+// Returns true if connection is established, else false.
+// This is a blocking function
+
+// buffers for processing
+bool unreliable_buffer_filled = false;
+packet_imu_t unreliable_buffer;  // unreliable packet buffer
+
+bool reliable_buffer_filled = false;
+packet_general_t reliable_buffer;
+
+bool receive_buffer_filled = false;
+packet_gamestate_t receive_buffer;
+
+bool ic_connect() {
+  await_handshake(false);
+  return isConnected;
+}
+
+// Queue the data to be sent when communicate() is called.
+// Returns true if data has been successfully put into the todo buffer
+// else, returns false. You should re-send this.
+bool ic_push_imu(MPUData data) {
+  if (unreliable_buffer_filled) return false;
+  unreliable_buffer.packet_type = PACKET_DATA_IMU;
+  unreliable_buffer.accX = data.ax;
+  unreliable_buffer.accY = data.ay;
+  unreliable_buffer.accZ = data.ax;
+  unreliable_buffer.gyrX = data.gx;
+  unreliable_buffer.gyrY = data.gy;
+  unreliable_buffer.gyrZ = data.gz;
+  unreliable_buffer_filled = true;
+  return true;
+}
+
+// Queue the bullet data to be sent when communicate() is called.
+// Returns true if data has been successfully put into the todo buffer
+bool ic_push_bullet(uint8_t bullets) {
+  if (reliable_buffer_filled) return false;
+  reliable_buffer.packet_type = PACKET_DATA_BULLET;
+  packet_bullet_t* pkt = (packet_bullet_t*)&reliable_buffer;
+  pkt->bullet_count = bullets;
+  reliable_buffer_filled = true;
+  return true;
+}
+
+// Queue the health data to be sent when communicate() is called
+// Returns true if data has been successfully put in the todo bufer
+bool ic_push_health(uint8_t health) {
+  if (reliable_buffer_filled) return false;
+  reliable_buffer.packet_type = PACKET_DATA_HEALTH;
+  packet_health_t* pkt = (packet_health_t*)&reliable_buffer;
+  pkt->health_count = health;
+  reliable_buffer_filled = true;
+  return true;
+}
+
+bool ic_push_kick() {
+  if (reliable_buffer_filled) return false;
+  reliable_buffer.packet_type = PACKET_DATA_KICK;
+  reliable_buffer_filled = true;
+  return true;
+}
+
+// Get the gamestate, if any.
+// WARNING: returns an empty packet with TYPE_INVALID if there is nothing.
+//          You MUST handle this properly.
+packet_gamestate_t ic_get_state() {
+  if (!receive_buffer_filled) {
+    packet_gamestate_t invalid;
+    invalid.packet_type = PACKET_INVALID;
+    return (packet_gamestate_t) invalid;
+  }
+  receive_buffer_filled = false;
+  packet_gamestate_t my_buf = receive_buffer;
+  return my_buf;  // return a copy
+}
+
+// ----- COMMUNICATION LOGIC -----
+
+// Send all reliable & unreliable data in the buffer and receive gamestate data where applicable
 void communicate() {
   auto rate_start = millis();
 
@@ -202,7 +293,12 @@ void communicate() {
         if (relay_seq_num == rcv.seq_num) {
           // we have found the correct sequence number.
           relay_seq_num = (relay_seq_num + 1) % 256;
-          // TODO: actually handle the packet for hardware integration
+          // Actually handle the packet for hardware integration
+          // WARN: if multiple gamestate comes in, this will OVERWRITE.
+          receive_buffer_filled = true;
+          packet_gamestate_t* tmp = (packet_gamestate_t*) &rcv;
+          receive_buffer.bullet_num = tmp->bullet_num;
+          receive_buffer.health_num = tmp->health_num;
         }
         // incorrect serial number, ignore
       }
@@ -214,34 +310,45 @@ void communicate() {
   // ---- TRANSMISSION LOGIC ----
 
   // TRANSMIT UNRELIABLE DATA
-  if(unreliableBufferFilled && millis() - unreliableStartRateTime > unrel_tx_rate) {
+  if (unreliableBufferFilled && millis() - unreliableStartRateTime > unrel_tx_rate) {
     unreliableStartRateTime = millis();
-    packet_imu_t pkt = {0};
-    pkt.packet_type = PACKET_DATA_IMU;
-    pkt.accX = rand() % 512;
-    pkt.accY = rand() % 512;
-    pkt.accZ = rand() % 512;
-    pkt.gyrX = rand() % 512;
-    pkt.gyrY = rand() % 512;
-    pkt.gyrZ = rand() % 512;
-    pkt.adc = rand() % 256;
+    
+    packet_imu_t& pkt = unreliable_buffer;
+
+    // YAGNI, but left here for testing 
+    // packet_imu_t pkt = { 0 };
+    // pkt.packet_type = PACKET_DATA_IMU;
+    // pkt.accX = rand() % 512;
+    // pkt.accY = rand() % 512;
+    // pkt.accZ = rand() % 512;
+    // pkt.gyrX = rand() % 512;
+    // pkt.gyrY = rand() % 512;
+    // pkt.gyrZ = rand() % 512;
+    // pkt.adc = rand() % 256;
 
     pkt.seq_num = beetle_seq_num;
     ++beetle_seq_num;
     setChecksum((packet_general_t*)&pkt);
     write_serial((packet_general_t*)&pkt);
+
+    unreliableBufferFilled = false;
   }
 
   // SEND RELIABLE DATA
   // if ACKn received AND there is something to send, send it!
   if (canSendReliable) {
-    if(reliableBufferFilled && millis() - reliableStartRateTime > rel_tx_rate){ // simulate checking of reliableBuffer to send
+    if (reliableBufferFilled && millis() - reliableStartRateTime > rel_tx_rate) {  // simulate checking of reliableBuffer to send
       reliableStartRateTime = millis();
       canSendReliable = false;
       reliableSent = true;
 
-      packet_general_t pkt = {0};
-      getRandomReliablePacket(&pkt); // randomy choose a packet
+      packet_general_t pkt = reliable_buffer;
+      reliable_buffer_filled = false;
+
+      // YAGNI, but left for testing purposes
+      // packet_general_t pkt = {0};
+      // getRandomReliablePacket(&pkt); // randomly choose a packet
+
       pkt.seq_num = beetle_seq_num;
       ++beetle_seq_num;
       exp_beetle_seq_num = beetle_seq_num;
@@ -253,14 +360,12 @@ void communicate() {
     // reliable buffer not filled, contnue
   } else if (reliableSent && millis() - reliableTimeStart > 1000) {  // constant here must be big
     // else we handle reliable packet timeout;
-    digitalWrite(13, 1);
     reliableTimeStart = millis();
     write_serial(&cached_packet);
-    digitalWrite(13, 0);
   }
 
   
-  // TRANSMIT ACK 
+  // TRANSMIT ACK
   if (shouldAck) {
     packet_ack_t ack = { 0 };
     ack.packet_type = PACKET_ACK;

@@ -1,11 +1,11 @@
 import asyncio
+import logging
 
 import config
 
 
 async def reduce_health(targetGameState: dict, hp_reduction: int):
     # use the shield to protect the player
-
     if targetGameState["shield_hp"] > 0:
         new_hp_shield = max(0, targetGameState["shield_hp"] - hp_reduction)
         hp_reduction = max(0, hp_reduction - targetGameState["shield_hp"])
@@ -52,12 +52,14 @@ async def reload(targetGameState: dict):
         targetGameState["bullets"] = config.GAME_MAX_BULLETS
 
 
-async def bomb_player(targetGameState: dict, opponentGameState: dict):
+async def bomb_player(targetGameState: dict, opponentGameState: dict, can_see: bool):
     """Throw a bomb at opponent"""
     if targetGameState["bombs"] <= 0:
         return
+
     targetGameState["bombs"] -= 1
-    await reduce_health(opponentGameState, config.GAME_BOMB_DMG)
+    if can_see:
+        await reduce_health(opponentGameState, config.GAME_BOMB_DMG)
 
 
 async def game_state_manager(currGameData, attacker_id: int,
@@ -81,16 +83,28 @@ async def game_state_manager(currGameData, attacker_id: int,
     await visualizer_send_queue.put("action_" + str(
         attacker_id) + "_" + prediction_action)  # Add action_ prefix to indicate game state msg type to the visualizer
     targetInFOV = False
+    targetInRain = False
     if prediction_action in {"basket", "soccer", "volley", "bowl", "bomb"}:
         try:
             msg = await asyncio.wait_for(visualizer_receive_queue.get(),
                                          config.VISUALIZER_RESPONSE_TIMEOUT)  # Wait for visualizer response
             msgStr = msg.decode()
-            if msgStr.startswith('in_sight_'):
-                if msgStr[9:] == "True":
+            print(f"Received message from Visualizer: {msgStr}")
+            if msgStr.startswith('vstate_fov_'):
+                print("Received Message from Visualizer")
+                parts = msgStr.split('_')
+                inbomb_bool = parts[4]
+                if inbomb_bool == "True":
+                    print("Target is in bomb range")
+                    targetInRain = True
+                elif inbomb_bool == "False":
+                    print("Target is not in bomb range")
+                    targetInRain = False
+                fov_bool = parts[2]
+                if fov_bool == "True":
                     print("Target is in FOV, Valid attack")
                     targetInFOV = True
-                else:
+                elif fov_bool == "False":
                     print("Target is not in FOV, Invalid attack")
                     targetInFOV = False
         except asyncio.TimeoutError:
@@ -98,16 +112,18 @@ async def game_state_manager(currGameData, attacker_id: int,
             targetInFOV = True
     else:
         targetInFOV = True
+    print(f"Performing action {prediction_action}")
+    if targetInRain:
+        await reduce_health(targetPlayerData, config.GAME_RAIN_DMG)
 
-    if prediction_action == "gun":
+    if prediction_action == "gun": # For gun action, this will rely on gun packet + health packet. If the code enters here, means the gun shot the opponent
         await gun_shoot(targetPlayerData, OpponentPlayerData)
     elif prediction_action == "shield":
         await shield(targetPlayerData)
     elif prediction_action == "reload":
         await reload(targetPlayerData)
     elif prediction_action == "bomb":
-        if targetInFOV:
-            await bomb_player(targetPlayerData, OpponentPlayerData)
+        await bomb_player(targetPlayerData, OpponentPlayerData, targetInFOV)
     elif prediction_action in {"basket", "soccer", "volley", "bowl"}:
         if targetInFOV:
             await reduce_health(OpponentPlayerData, config.GAME_AI_DMG)
