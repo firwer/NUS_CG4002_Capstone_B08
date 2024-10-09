@@ -5,13 +5,13 @@
 #include <stdio.h>
 
 typedef ap_axis<32, 2, 5, 6> axis_t;
-
+typedef ap_fixed<32,16> fixed_point;
 int main()
 {
 	axis_t read_output;
 	hls::stream<axis_t> input_stream;
 	hls::stream<axis_t> output_stream;
-	float input[784] = {
+	fixed_point input[784] = {
 		    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,

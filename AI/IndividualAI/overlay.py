@@ -1,19 +1,26 @@
 from pynq import Overlay, allocate
 import numpy as np
 
-overlay = Overlay("/home/xilinx/IP/vitis2.bit")
+overlay = Overlay("/home/xilinx/IP/design_1.bit")
 
 # DMA objects
 dma = overlay.axi_dma_0
 dma_send = dma.sendchannel
 dma_recv = dma.recvchannel
 
+hls = overlay.predict_0
+CONTROL_REGISTER = 0x0
+hls.write(CONTROL_REGISTER, 0x81) # 0x81 will set bit 0
+
+register_map = hls.register_map
+print(register_map)
+
 # Allocate input and output buffers
-datasize = 10
+datasize = 784
 input_buffer = allocate(shape=(datasize,), dtype=np.uint32)
 output_buffer = allocate(shape=(1,), dtype=np.uint32)
-input_data = {
-		    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+
+input = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -38,9 +45,10 @@ input_data = {
 		    253, 230, 70, 0, 0, 17, 175, 229, 253, 253, 0, 0, 0, 0, 0, 0, 0, 0, 158, 253, 253, 253, 253, 253,
 		    253, 253, 253, 205, 106, 65, 0, 0, 0, 0, 0, 62, 244, 157, 0, 0, 0, 0, 0, 0, 0, 6, 26, 179, 179,
 		    179, 179, 179, 30, 15, 10, 0, 0, 0, 0, 0, 0, 0, 0, 14, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-		}
+		    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
+for i in range(len(input)):
+    input_buffer[i] = input[i]
 # Send data from input_buffer using DMA send
 dma_send.transfer(input_buffer)
 # Receive data into output_buffer using DMA receive (memory-to-memory transfer)
@@ -51,3 +59,6 @@ dma_recv.wait()
 # Check buffers and print result
 print("Input Buffer (Sent Data):", input_buffer)
 print("Output Buffer (Received Data):", output_buffer)
+
+input_buffer.close()
+output_buffer.close()
