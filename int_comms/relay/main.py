@@ -13,8 +13,8 @@ import threading
 # BLUNO2_MAC_ADDRESS = "F4:B8:5E:42:6D:1E"
 
 BLUNO_P1_GLOVE_MAC = "F4:B8:5E:42:6D:49"
-BLUNO_P1_LEG_MAC = "F4:B8:5E:42:6D:42"
-BLUNO_P1_CHEST_MAC = "F4:B8:5E:42:46:E5"
+# BLUNO_P1_LEG_MAC = "F4:B8:5E:42:6D:42"
+# BLUNO_P1_CHEST_MAC = "F4:B8:5E:42:46:E5"
 
 CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"
 
@@ -46,12 +46,7 @@ class NotifyDelegate(btle.DefaultDelegate):
         self.relayTxNumber = 0
 
     def handleNotification(self, cHandle, data: bytes):
-        if len(data) < 20: # data is fragmented
-            # print(f"Fragmentation: {len(data)}: {data.hex()}")
-            self.fragmented_packets += 1
-        elif random.random() <= self.dropProbability:
-            print(f"{self.COLOR}Dropping packet: {data.hex()}")
-            return 
+        self.buffer += data
 
     def has_packet(self) -> bool:
         return len(self.buffer) >= 20 and len(self.buffer) % 20 == 0
@@ -361,7 +356,7 @@ def main():
         return
 
     # Create Beetle instances
-    beetle0 = Beetle(BLUNO_P1_LEG_MAC, 0)
+    beetle0 = Beetle(BLUNO_P1_GLOVE_MAC, 0)
     # beetle0 = Beetle(BLUNO0_MAC_ADDRESS, 0)
     # beetle1 = Beetle(BLUNO1_MAC_ADDRESS, 1)
     # beetle2 = Beetle(BLUNO2_MAC_ADDRESS, 2)
