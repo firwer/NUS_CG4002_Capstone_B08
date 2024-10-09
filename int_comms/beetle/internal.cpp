@@ -11,6 +11,13 @@ unsigned int buffer_writer = 0;  // write
 unsigned int buffer_reader = 0;  // read
 unsigned int buffer_fills = 0;   // |Bytes| the buffer has
 
+// hard reset the buffer when things get gnarly for some reason
+void reset_buffer() { 
+  buffer_fills = 0;
+  buffer_writer = 0;
+  buffer_reader = 0;
+}
+
 // fill the serial buffer
 void fill_buffer() {
   unsigned int start = millis();
@@ -96,7 +103,6 @@ uint8_t checkPacketValidity(packet_general_t* packet) {
 // The three-way handshake MUST be stop-and-wait.
 void await_handshake(bool helloReceived) {
   isConnected = false;  // TODO check if this should be removed
-  digitalWrite(13, 1);
   while (!isConnected) {
     // Stage 1 -- HELLO
     while (!helloReceived) {
@@ -120,11 +126,17 @@ void await_handshake(bool helloReceived) {
     while (1) {  // keep retransmitting SYN-ACK
       write_serial((packet_general_t*)&syn_ack_packet);
       // Stage 3 -- ACK
-      if (!await_packet(&ack_packet, 1000)) {  // ack timeout, retransmit
+      if (!await_packet(&ack_packetdata, 500)) {  // ack timeout, retransmit
         continue;
       }
-      if (!verifyChecksum(&ack_packet))  // checksum failed, retransmit
+      // checksum failed, retransmit
+      if (!verifyChecksum(&ack_packet)){
+        reset_buffer();
         continue;
+      }
+      if(ack_packet.packet_type == 0x0)
+        digitalWrite(13,1);
+
       if (ack_packet.packet_type == PACKET_CONN_ESTAB) {
         isConnected = true;
         relay_seq_num = ack_packet.seq_num;  // we expect the next SN to be +1
