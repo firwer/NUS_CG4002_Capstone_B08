@@ -6,9 +6,6 @@
 #define TIMEOUT_MS 500
 
 // Packet types
-#define PACKET_INVALID 0
-#define PACKET_HELLO 1
-#define PACKET_ACK 2
 #define PACKET_SIZE 20
 #define BUFFER_SZ 20*10;
 
