@@ -8,9 +8,13 @@ from packet import *
 from checksum import *
 import threading
 
-BLUNO0_MAC_ADDRESS = "F4:B8:5E:42:4C:BB"
-BLUNO1_MAC_ADDRESS = "F4:B8:5E:42:61:6A"
-BLUNO2_MAC_ADDRESS = "F4:B8:5E:42:6D:1E"
+# BLUNO0_MAC_ADDRESS = "F4:B8:5E:42:4C:BB"
+# BLUNO1_MAC_ADDRESS = "F4:B8:5E:42:61:6A"
+# BLUNO2_MAC_ADDRESS = "F4:B8:5E:42:6D:1E"
+
+BLUNO_P1_GLOVE_MAC = "F4:B8:5E:42:6D:49"
+BLUNO_P1_LEG_MAC = "F4:B8:5E:42:6D:42"
+BLUNO_P1_CHEST_MAC = "F4:B8:5E:42:46:E5"
 
 CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"
 
@@ -48,35 +52,6 @@ class NotifyDelegate(btle.DefaultDelegate):
         elif random.random() <= self.dropProbability:
             print(f"{self.COLOR}Dropping packet: {data.hex()}")
             return 
-        self.notificationsRcv += 1
-        self.bitsReceived += len(data) * 8
-        self.buffer += bytearray(data)
-        if self.notificationsRcv >= self.notificationMod:
-            self.notificationsRcv = 0
-            self.print_statistics()
-
-    def print_statistics(self):
-        print(f"{self.COLOR}=============== TRANSMISSION STATISTICS ===============")
-        self.get_throughput()
-
-    def get_throughput(self):
-        """return the throughput in kbps (kilobits) from the last time this function was called"""
-        elapsed_time_seconds = (millis() - self.throughputStartTime) / 1000  # Time in seconds
-        kbps = (self.bitsReceived / 1000) / elapsed_time_seconds  # Convert bits to kilobits
-        self.highestThroughput = max(kbps, self.highestThroughput)
-        self.lowestThroughput = min(kbps, self.lowestThroughput)
-
-        relay_kbps = ((self.relayTxNumber * 8 * 20) / 1000)/elapsed_time_seconds
-
-        print(f"{self.COLOR}{'=' * 15} Beetle Tx Rate: {kbps:>3.3f} kbps     {'=' * 15}")
-        print(f"{self.COLOR}{'=' * 15} Min Tx Rate: {self.lowestThroughput:>3.3f} kbps        {'=' * 15}")
-        print(f"{self.COLOR}{'=' * 15} Max Tx Rate: {self.highestThroughput:>3.3f} kbps        {'=' * 15}")
-        print(f"{self.COLOR}{'=' * 15} Fragmented Pkts: {self.fragmented_packets:>3}           {'=' * 15}")
-        print(f"{self.COLOR}{'=' * 15} Relay Tx Rate: {relay_kbps:>3.3f}kbps       {'=' * 15}")
-        self.relayTxNumber = 0
-        self.throughputStartTime = millis()
-        self.bitsReceived = 0
-        return kbps
 
     def has_packet(self) -> bool:
         return len(self.buffer) >= 20 and len(self.buffer) % 20 == 0
@@ -120,8 +95,8 @@ class Beetle:
         self.sendReliableStart = 0
         self.cachedPacket = None
         self.reliableRetransmissions = 0
-        self.reliableTxRate = 0 # ms
-        self.reliableTimeout = 1000 # ms
+        self.reliableTxRate = 50 # ms
+        self.reliableTimeout = 100 # ms
 
         # CONFIG TEST: subcomponent test flags
         self.testRelayReliable = True
@@ -163,14 +138,6 @@ class Beetle:
                     print(f"{self.COLOR}No packet received (dropped?), continuing to read buffer...")
                     continue
 
-                # TODO: REMOVE ME -- SUBCOMPONENT TESTING LOGIC
-                # TEST: corrupt packet with probability of 10%
-                if random.random() <= self.corruptProbability:
-                    # print("Corrupting RX packet...")
-                    byte_to_corrupt = random.randint(0, len(data) - 1)
-                    bit_to_flip = 1 << random.randint(0, 7) 
-                    data[byte_to_corrupt] ^= bit_to_flip
-
                 # verify the checksum - if fail, process the next packet
                 if not verify_checksum(data):
                     # print(f"{self.COLOR}Error: checksum failed for this PKT {data.hex()}")
@@ -191,7 +158,7 @@ class Beetle:
 
                 # Is unreliable send
                 if pkt.packet_type == PACKET_DATA_IMU:
-                    # do work
+                    # TODO do work
                     print(f"{self.COLOR}RX PKT b{pkt.seq_num} <IMU> (beetle stream)")
                     continue
 
@@ -204,10 +171,13 @@ class Beetle:
                     self.beetle_seq_num = max(self.beetle_seq_num, pkt.seq_num + 1)
                     ackNum = pkt.seq_num
                     if pkt.packet_type == PACKET_DATA_HEALTH: 
+                        # TODO: do work
                         print(f"{self.COLOR}RX PKT b{latestPacket.seq_num} <{get_packettype_string(pkt.packet_type)}> Health={pkt.health} (beetle reliable)")
                     elif pkt.packet_type == PACKET_DATA_BULLET:    
+                        # TODO: do work
                         print(f"{self.COLOR}RX PKT b{latestPacket.seq_num} <{get_packettype_string(pkt.packet_type)}> Bullet={pkt.bullet} (beetle reliable)")
                     else:
+                        # TODO: do work
                         print(f"{self.COLOR}RX PKT b{latestPacket.seq_num} <{get_packettype_string(pkt.packet_type)}> (beetle reliable)")
 
                 # Is an ACK
@@ -353,6 +323,7 @@ class Beetle:
     def getDataToSend(self):
         """Check if there is data to send to the beetle. Returns a packet if so, else None"""
         # Create a PacketGamestate instance
+        # TODO: integrate with backend
         pkt = PacketGamestate()
         pkt.seq_num = self.relay_seq_num
         pkt.bullet = random.randint(0, 255)
@@ -375,6 +346,7 @@ class Beetle:
         return pkt
 
 def main():
+    
     # Set up argument parser
     parser = argparse.ArgumentParser(description="Run a Beetle instance with a specific ID.")
     parser.add_argument("beetle_id", type=int, help="ID of the Beetle instance to run (0, 1, or 2)")
@@ -389,15 +361,18 @@ def main():
         return
 
     # Create Beetle instances
-    beetle0 = Beetle(BLUNO0_MAC_ADDRESS, 0)
-    beetle1 = Beetle(BLUNO1_MAC_ADDRESS, 1)
-    beetle2 = Beetle(BLUNO2_MAC_ADDRESS, 2)
+    beetle0 = Beetle(BLUNO_P1_LEG_MAC, 0)
+    # beetle0 = Beetle(BLUNO0_MAC_ADDRESS, 0)
+    # beetle1 = Beetle(BLUNO1_MAC_ADDRESS, 1)
+    # beetle2 = Beetle(BLUNO2_MAC_ADDRESS, 2)
 
     # Dictionary to map beetle_id to Beetle instance
-    beetles = {0: beetle0, 1: beetle1, 2: beetle2}
+    # beetles = {0: beetle0, 1: beetle1, 2: beetle2}
 
     # Run the selected Beetle instance
-    beetles[beetle_id].run()
+    # beetles[beetle_id].run()
+    # beetles[beetle0].run()
+    beetle0.run()
 
 if __name__ == "__main__":
     main()
