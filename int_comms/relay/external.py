@@ -1,12 +1,7 @@
 import asyncio
-import os
-import sys
-import time
 
-from comms.AsyncMQTTController import AsyncMQTTController
 from ...ext_comms import config
 from ...ext_comms.comms import TCPC_Controller
-from ...ext_comms.comms import AsyncMQTTController as async_mqtt
 
 from queue import Queue
 from threading import Thread
