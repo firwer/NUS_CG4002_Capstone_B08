@@ -126,7 +126,7 @@ void await_handshake(bool helloReceived) {
     while (1) {  // keep retransmitting SYN-ACK
       write_serial((packet_general_t*)&syn_ack_packet);
       // Stage 3 -- ACK
-      if (!await_packet(&ack_packetdata, 500)) {  // ack timeout, retransmit
+      if (!await_packet(&ack_packet, 500)) {  // ack timeout, retransmit
         continue;
       }
       // checksum failed, retransmit
