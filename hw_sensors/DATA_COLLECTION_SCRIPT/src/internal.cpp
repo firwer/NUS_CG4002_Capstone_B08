@@ -219,7 +219,7 @@ bool ic_push_imu(MPUData data) {
   unreliable_buffer.packet_type = PACKET_DATA_IMU;
   unreliable_buffer.accX = data.ax;
   unreliable_buffer.accY = data.ay;
-  unreliable_buffer.accZ = data.ax;
+  unreliable_buffer.accZ = data.az;
   unreliable_buffer.gyrX = data.gx;
   unreliable_buffer.gyrY = data.gy;
   unreliable_buffer.gyrZ = data.gz;
@@ -274,12 +274,11 @@ packet_gamestate_t ic_get_state() {
 
 // Send all reliable & unreliable data in the buffer and receive gamestate data where applicable
 void communicate() {
-  auto rate_start = millis();
 
   // ---- RECEIVING LOGIC ----
   packet_general_t rcv = { 0 };
   bool shouldAck = false;
-  if (await_packet((packet_general_t*)&rcv, 100)) {
+  if (await_packet((packet_general_t*)&rcv, 10)) {
     // case 1: checksum error (continue)
     if (verifyChecksum(&rcv)) {
       // case 2: hello
