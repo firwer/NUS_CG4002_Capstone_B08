@@ -7,10 +7,12 @@
 
 // Packet types
 #define PACKET_SIZE 20
-#define BUFFER_SZ 20*10
 
 #include <Arduino.h>
 #include "packet.h"
+
+#ifndef MPU_DATA_DEFINED
+#define MPU_DATA_DEFINED
 
 typedef struct MPUData
 {
@@ -21,6 +23,8 @@ typedef struct MPUData
   int16_t gy;
   int16_t gz;
 } MPUData;
+
+#endif // MPU_DATA_DEFINED
 
 // Function declarations
 bool validateChecksum(struct packet_general_t *packet);

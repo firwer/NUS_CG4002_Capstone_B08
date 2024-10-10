@@ -5,6 +5,7 @@ volatile uint8_t relay_seq_num = 0;   // data FROM relay
 
 volatile bool isConnected = false;
 
+#define BUFFER_SZ 200
 uint8_t buffer[BUFFER_SZ];
 unsigned int buffer_writer = 0;  // write
 unsigned int buffer_reader = 0;  // read
@@ -72,7 +73,7 @@ bool verifyChecksum(struct packet_general_t* packet) {
   for (uint8_t i = 0; i < 19; ++i) {
     crc = crc8_lut[crc ^ packetBytes[i]];
   }
-  return crc == packetBytes[19];
+  return crc == packet->crc8;
 }
 
 // Sets the checksum and writes the packet
@@ -109,7 +110,7 @@ void await_handshake(bool helloReceived) {
       // Wait forever for a HELLO to arrive.
       while (await_packet(&hello_packet, 1000));
       // Check if its a HELLO packet
-      if (hello_packet.packet_type == PACKET_HELLO){// && verifyChecksum(&hello_packet)) {
+      if (hello_packet.packet_type == PACKET_HELLO && verifyChecksum(&hello_packet)) {
         relay_seq_num = hello_packet.seq_num;
         break;
       }
@@ -128,11 +129,11 @@ void await_handshake(bool helloReceived) {
       if (!await_packet((packet_general_t*) &ack_packet, 1000)) {  // ack timeout, retransmit
         continue;
       }
-      // if (!verifyChecksum(&ack_packet)){
-      //   // write_serial((packet_general_t*) &ack_packet);
-      //   reset_buffer(); // THIS MUST BE DONE.
-      //   continue;
-      // }
+      if (!verifyChecksum(&ack_packet)){
+        write_serial((packet_general_t*) &ack_packet);
+        reset_buffer(); // THIS MUST BE DONE.
+        continue;
+      }
       if (ack_packet.packet_type == PACKET_CONN_ESTAB) {
         isConnected = true;
         helloReceived = true;
