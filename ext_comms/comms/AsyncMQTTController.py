@@ -20,6 +20,7 @@ class AsyncMQTTController:
         self.send_data_queue = send_queue or asyncio.Queue()
         self.connected = False
 
+    # Async Task Manager
     async def run_tasks(self, receive_topic_p1: str, receive_topic_p2: str, send_topic: str):
         try:
             async with (aiomqtt.Client(hostname=config.MQTT_BROKER_HOST, port=self.mqtt_port,
@@ -35,6 +36,7 @@ class AsyncMQTTController:
             self.connected = False
             raise e  # This will break and allow to reconnect
 
+    # Initialisation code for MQTT - Entry Point
     async def start(self, receive_topic_p1: str, receive_topic_p2: str, send_topic: str):
         attempt = 0
         delay = 1  # Start with 1-second delay
@@ -55,7 +57,8 @@ class AsyncMQTTController:
         print("Max retries reached. Could not connect to MQTT broker.")
         raise ConnectionError("Failed to connect to MQTT broker after retries")
 
-    async def listen(self, topic_receive_p1: str, topic_receive_p2 : str):
+    # Async task - Constantly listen to new MQTT messages and sort them into the corresponding player's queue
+    async def listen(self, topic_receive_p1: str, topic_receive_p2: str):
         print(f"Subscribing to topic: {topic_receive_p1}")
         print(f"Subscribing to topic: {topic_receive_p2}")
         await self.mqttc.subscribe(topic_receive_p1)
@@ -68,6 +71,7 @@ class AsyncMQTTController:
             elif message.topic.matches(topic_receive_p2):
                 await self.receive_data_queue_p2.put(message.payload)
 
+    # Async Task - Constantly listen to new messages in send queue to send to topic_send
     async def publish_loop(self, topic_send: str):
         while self.connected:
             try:

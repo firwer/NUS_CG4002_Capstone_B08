@@ -30,7 +30,7 @@ async def user_input(send_queue: asyncio.Queue, receive_queue: asyncio.Queue):
         print(f"Game State Update: \nPLAYER 1:\n{p1Data}\nPLAYER 2:\n{p2Data}")
 
 
-# Receives data from TCP Server and places it in the queue. Will be replaced/superseded by MQTT
+# Constantly receives data from TCP Server and places it in the queue. Will be replaced/superseded by MQTT
 async def msg_receiver(wsController: TCPC_Controller, receive_queue: asyncio.Queue):
     """
     Continuously receive messages from the TCP server and place them in the queue.
@@ -45,6 +45,7 @@ async def msg_receiver(wsController: TCPC_Controller, receive_queue: asyncio.Que
             continue  # After reconnection, continue receiving
 
 
+# Constantly listens and sends off any data in the send_queue
 async def msg_sender(wsController: TCPC_Controller, send_queue: asyncio.Queue):
     """
     Send messages from the relay node to the TCP server.
@@ -54,6 +55,7 @@ async def msg_sender(wsController: TCPC_Controller, send_queue: asyncio.Queue):
         await wsController.send(message)
 
 
+# Async Task Manager for TCP Communication and data transfer
 async def run_tcp_client(send_queue: asyncio.Queue, receive_queue: asyncio.Queue, port: int):
     """
     Establish a connection to the TCP server and handle reconnections.
