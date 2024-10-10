@@ -70,9 +70,7 @@ async def send_queue_handler(wsController: TCPC_Controller, send_queue: Queue):
     """
     while True:
         message = await send_queue.get()
-
-        message.decodd
-
+        message = message.decode()
         await wsController.send(message)
 
 
