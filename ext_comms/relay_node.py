@@ -77,28 +77,7 @@ async def run_tcp_client(send_queue: asyncio.Queue, receive_queue: asyncio.Queue
 async def main():
     send_queue = asyncio.Queue()
     receive_queue = asyncio.Queue()
-    if config.RELAY_NODE_LOCAL_TEST:
-        print("DEV: LOCAL RELAY NODE TEST RUN")
-        print("DEV: Starting TCP Client")
-        print(f"DEV: Connecting to {config.TCP_SERVER_HOST}:{config.TCP_SERVER_PORT}")
-        local_port = config.TCP_SERVER_PORT
-    else:
-        print("PROD: PRODUCTION RUN")
-        print("PROD: SSH Tunneling to Ultra96")
-        server = SSHTunnelForwarder(
-            ssh_host=config.ssh_host,
-            ssh_username=config.ssh_user,
-            ssh_password=config.ssh_password,
-            remote_bind_address=(config.TCP_SERVER_HOST, config.TCP_SERVER_PORT)
-        )
-        server.start()
-
-        print(f"PROD: Forwarding port {server.local_bind_port} to ULTRA96 TCP Server port {config.TCP_SERVER_PORT}")
-        print("PROD: Starting TCP Client")
-        local_port = server.local_bind_port
-
-    await run_tcp_client(send_queue, receive_queue, local_port)
-    server.stop()
+    await run_tcp_client(send_queue, receive_queue, config.TCP_SERVER_PORT)
 
 
 if sys.platform.lower() == "win32" or os.name.lower() == "nt":
