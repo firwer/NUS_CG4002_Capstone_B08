@@ -9,6 +9,7 @@ import config
 from comms.TCPC_Controller import TCPC_Controller
 
 
+# To be deprecated. For testing purposes only
 async def user_input(send_queue: asyncio.Queue, receive_queue: asyncio.Queue):
     while True:
         message = input("Input message: ")
@@ -28,6 +29,8 @@ async def user_input(send_queue: asyncio.Queue, receive_queue: asyncio.Queue):
 
         print(f"Game State Update: \nPLAYER 1:\n{p1Data}\nPLAYER 2:\n{p2Data}")
 
+
+# Receives data from TCP Server and places it in the queue. Will be replaced/superseded by MQTT
 async def msg_receiver(wsController: TCPC_Controller, receive_queue: asyncio.Queue):
     """
     Continuously receive messages from the TCP server and place them in the queue.

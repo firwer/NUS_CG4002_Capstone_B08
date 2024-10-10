@@ -61,7 +61,8 @@ class GameData:
 
     def to_json(self, player_id):
         return json.dumps({
-            'player_id': player_id, # This is to identify which player the data came from so that the FOV can be sent to the correct player
+            'player_id': player_id,  # This is to identify which player the data came from so that the FOV can be sent
+            # to the correct player
             'p1': self.p1.to_json(),
             'p2': self.p2.to_json()
         })
@@ -122,6 +123,11 @@ async def start_relay_node_data_sorter(src_input_queue: asyncio.Queue,
             await output_sensor_data_p2.put(data[3:])
         else:
             print("Unknown player origin data received from Relay Node.")
+
+    # Packet IMU - Standard AI Dmg except soccer
+    # Packet Bullet - Send straight for game state update (deduct attacker bullet)
+    # Packet Health - Send straight for game state update (deduct opponent health)
+    # Packet Kick - Send straight for game state update (deduct opponent health)
 
 
 class GameEngine:
