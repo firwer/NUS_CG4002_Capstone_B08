@@ -10,7 +10,7 @@ EVAL_SERVER_HOST = '127.0.0.1'
 EVAL_SECRET_KEY = "bitcoingoingmoon"
 
 # Ultra96 TCP Server Configuration
-TCP_SERVER_HOST = "127.0.0.1"
+TCP_SERVER_HOST = "makerslab-fpga-29.d2.comp.nus.edu.sg"
 TCP_SERVER_PORT = 65001
 TCP_SECRET_KEY = "ethgoingmoonsoon"
 
