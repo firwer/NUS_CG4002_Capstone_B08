@@ -12,11 +12,12 @@ class TCPS_Controller:
         All messages to be sent to client will be pushed to the send_queue
     """
 
-    def __init__(self, ip, port, secret_key, receive_queue, send_queue):
+    def __init__(self, ip, port, secret_key, receive_queue_p1, receive_queue_p2, send_queue):
         self.secret_key = secret_key
         self.ip = ip
         self.port = port
-        self.receive_queue = receive_queue
+        self.receive_queue_p1 = receive_queue_p1
+        self.receive_queue_p2 = receive_queue_p2
         self.send_queue = send_queue
         self.client_player_map = {}
         self.client_tasks = {}
@@ -70,9 +71,14 @@ class TCPS_Controller:
                 success, message = await self._recv_message(reader)
                 if not success:
                     print(f"Error in data received from {addr}. Sent error response.")
-                    continue
+                    break
                 print(f"Received message from Player {player_number} ({addr}): {message}")
-                await self.receive_queue.put(message)  # Place the received message in the queue
+                if player_number == 1:
+                    await self.receive_queue_p1.put(message)
+                elif player_number == 2:
+                    await self.receive_queue_p2.put(message)
+                else:
+                    print(f"Invalid player number {player_number} received from {addr}.")
         except Exception as e:
             print(f"Exception in receiving messages from {addr}: {e}")
         finally:

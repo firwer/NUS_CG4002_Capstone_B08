@@ -104,25 +104,27 @@ async def start_mqtt_job(receive_topic_p1: str,
     await mqtt_client.start(receive_topic_p1, receive_topic_p2, send_topic)
 
 
-async def start_tcp_job(tcp_port: int, receive_queue: asyncio.Queue, send_queue: asyncio.Queue):
+async def start_tcp_job(tcp_port: int, receive_queue_p1: asyncio.Queue, receive_queue_p2: asyncio.Queue,
+                        send_queue: asyncio.Queue):
     tcp_server = TCPS_Controller(ip=config.TCP_SERVER_HOST, port=tcp_port, secret_key=config.TCP_SECRET_KEY,
-                                 receive_queue=receive_queue,
+                                 receive_queue_p1=receive_queue_p1,
+                                 receive_queue_p2=receive_queue_p2,
                                  send_queue=send_queue)
     await tcp_server.start_server()
 
 
-async def start_relay_node_data_sorter(src_input_queue: asyncio.Queue,
-                                       output_sensor_data_p1: asyncio.Queue,
-                                       output_sensor_data_p2: asyncio.Queue):
-    while True:
-        data = await src_input_queue.get()
-        print(f"Received data from RelayNode: {data}, sorting...")
-        if data.startswith('p1_'):
-            await output_sensor_data_p1.put(data[3:])
-        elif data.startswith('p2_'):
-            await output_sensor_data_p2.put(data[3:])
-        else:
-            print("Unknown player origin data received from Relay Node.")
+async def start_relay_node_data_handler(src_input_queue_p1: asyncio.Queue,
+                                        src_input_queue_p2: asyncio.Queue,
+                                        output_sensor_data_p1: asyncio.Queue,
+                                        output_sensor_data_p2: asyncio.Queue):
+    async def push_to_queue(input_queue, output_queue):
+        msg = await input_queue.get()
+        await output_queue.put(msg)
+
+    push_to_queue_p1 = asyncio.create_task(push_to_queue(src_input_queue_p1, output_sensor_data_p1))
+    push_to_queue_p2 = asyncio.create_task(push_to_queue(src_input_queue_p2, output_sensor_data_p2))
+
+    await asyncio.gather(push_to_queue_p1, push_to_queue_p2)
 
     # Packet IMU - Standard AI Dmg except soccer
     # Packet Bullet - Send straight for game state update (deduct attacker bullet)
@@ -145,8 +147,10 @@ class GameEngine:
         self.engine_to_evaluation_server_queue = asyncio.Queue()
         self.evaluation_server_to_engine_queue = asyncio.Queue()
 
-        self.relay_mqtt_to_engine_queue = asyncio.Queue()  # Pipeline from relay node for P1
-        self.engine_to_relay_mqtt_queue = asyncio.Queue()  # Pipeline to relay node for P1
+        self.relay_node_to_engine_queue_p1 = asyncio.Queue()  # Pipeline from relay node for P1
+        self.relay_node_to_engine_queue_p2 = asyncio.Queue()  # Pipeline from relay node for P2
+
+        self.engine_to_relay_node_queue = asyncio.Queue()  # Pipeline to relay node for both players
 
         self.engine_to_visualizer_queue = asyncio.Queue()
         self.visualizer_to_engine_queue_p1 = asyncio.Queue()
@@ -159,8 +163,9 @@ class GameEngine:
 
             # Start MQTT Broker Connection & TCP Server
             start_tcp_job(tcp_port=config.TCP_SERVER_PORT,
-                          receive_queue=self.relay_mqtt_to_engine_queue,
-                          send_queue=self.engine_to_relay_mqtt_queue),
+                          receive_queue_p1=self.relay_node_to_engine_queue_p1,
+                          receive_queue_p2=self.relay_node_to_engine_queue_p2,
+                          send_queue=self.engine_to_relay_node_queue),
 
             start_mqtt_job(receive_topic_p1=config.MQTT_VISUALIZER_TO_ENG_P1,
                            receive_topic_p2=config.MQTT_VISUALIZER_TO_ENG_P2,
@@ -169,9 +174,10 @@ class GameEngine:
                            receive_queue_p2=self.visualizer_to_engine_queue_p2,
                            send_queue=self.engine_to_visualizer_queue),
 
-            start_relay_node_data_sorter(src_input_queue=self.relay_mqtt_to_engine_queue,
-                                         output_sensor_data_p1=self.prediction_input_queue_p1,
-                                         output_sensor_data_p2=self.prediction_input_queue_p2),
+            start_relay_node_data_handler(src_input_queue_p1=self.relay_node_to_engine_queue_p1,
+                                          src_input_queue_p2=self.relay_node_to_engine_queue_p2,
+                                          output_sensor_data_p1=self.prediction_input_queue_p1,
+                                          output_sensor_data_p2=self.prediction_input_queue_p2),
 
             start_prediction_service_process(predict_input_queue=self.prediction_input_queue_p1,
                                              predict_output_queue=self.prediction_output_queue_p1),
@@ -195,7 +201,7 @@ class GameEngine:
         # Select appropriate queues based on player_id
         visualizer_send_queue = self.engine_to_visualizer_queue
         # Currently all data for relay node sent back to this queue regardless of player
-        relay_node_input_queue = self.engine_to_relay_mqtt_queue
+        relay_node_input_queue = self.engine_to_relay_node_queue
 
         if player_id == 1:
             pred_output_queue = self.prediction_output_queue_p1
