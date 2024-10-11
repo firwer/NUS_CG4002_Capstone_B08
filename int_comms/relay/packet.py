@@ -39,7 +39,7 @@ def get_packet(bytearray: bytearray):
     elif pkt_typ == PACKET_DATA_IMU:
         return PacketImu(bytearray)
     else:
-        print(f"err: unknown packet type: {pkt_typ}, {bytearray.hex()}")
+        # print(f"err: unknown packet type: {pkt_typ}, {bytearray.hex()}")
         return PacketInvalid()
 
 class PacketInvalid():
