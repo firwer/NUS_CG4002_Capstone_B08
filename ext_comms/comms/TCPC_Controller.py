@@ -1,4 +1,6 @@
 import asyncio
+
+import config
 from Utils import encrypt_msg, decrypt_message
 
 
@@ -24,10 +26,9 @@ class TCPC_Controller:
             await self.reconnect()
 
     async def reconnect(self):
-        reconnect_delay = 1
-        max_reconnect_attempts = 5
+        reconnect_delay = config.FIRST_RECONNECT_DELAY
         attempt = 0
-        while attempt < max_reconnect_attempts:
+        while attempt < config.MAX_RECONNECT_COUNT:
             print(f"Reconnecting in {reconnect_delay} seconds...")
             await asyncio.sleep(reconnect_delay)
             try:

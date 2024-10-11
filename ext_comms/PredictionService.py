@@ -1,16 +1,17 @@
 import asyncio
 
 
-async def start_prediction_service_process(relay_mqtt_to_engine_queue, prediction_service_to_engine_queue):
-    ps = PredictionServiceProcess(relay_mqtt_to_engine_queue, prediction_service_to_engine_queue)
+async def start_prediction_service_process(predict_input_queue: asyncio.Queue,
+                                           predict_output_queue: asyncio.Queue):
+    ps = PredictionServiceProcess(predict_input_queue, predict_output_queue)
     while True:
         await ps.predict()
 
 
 class PredictionServiceProcess:
-    def __init__(self, relay_mqtt_to_engine_queue, prediction_service_to_engine_queue):
-        self.relay_mqtt_to_engine_queue = relay_mqtt_to_engine_queue
-        self.prediction_service_to_engine_queue = prediction_service_to_engine_queue
+    def __init__(self, predict_input_queue, predict_output_queue):
+        self.relay_mqtt_to_engine_queue = predict_input_queue
+        self.prediction_service_to_engine_queue = predict_output_queue
 
     async def predict(self):
         # TODO: Need to differentiate between GUN and other actions
