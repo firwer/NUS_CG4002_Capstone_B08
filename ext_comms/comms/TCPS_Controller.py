@@ -19,12 +19,15 @@ class TCPS_Controller:
         self.receive_queue_p1 = receive_queue_p1
         self.receive_queue_p2 = receive_queue_p2
         self.send_queue = send_queue
-        self.client_player_map = {}
-        self.client_tasks = {}
+        self.client_player_map = {}  # Keep track of each client's player number
+        self.client_tasks = {}  # Keep track of each client tasks
+        self.connected_clients = set()  # Keep track of connected clients
 
     async def start_server(self):
         server = await asyncio.start_server(self.handle_client, host=self.ip, port=self.port)
         print(f"Ultra96 Server started on {self.ip}:{self.port}")
+
+        broadcast_task = asyncio.create_task(self._broadcast_task())  # Start the broadcast task
         async with server:
             await server.serve_forever()
 
@@ -32,11 +35,10 @@ class TCPS_Controller:
         addr = writer.get_extra_info('peername')
         print(f"Incoming connection from {addr}. Waiting for identification...")
 
-
         # Receive hello packet containing player number from client
         success, message = await self._recv_message(reader)
         if not success:
-            await self._send_message(writer, "ERROR: Malformed hello data received.")
+            print(f"Error in hello packet received from {addr}. Sent error response.")
             writer.close()
             await writer.wait_closed()
             return
@@ -44,6 +46,7 @@ class TCPS_Controller:
         try:
             player_number = int(message.strip())
             self.client_player_map[writer] = player_number
+            self.connected_clients.add(writer)
             print(f"Player {player_number} connected from {addr}")
         except ValueError:
             print(f"Invalid player number received from {addr}. Closing connection.")
@@ -53,10 +56,8 @@ class TCPS_Controller:
 
         try:
             receive_task = asyncio.create_task(self._receive_task(reader, writer, player_number))
-            send_task = asyncio.create_task(self._send_task(writer, player_number))
-            self.client_tasks[writer] = (receive_task, send_task)
-            # Wait for both tasks to run concurrently
-            await asyncio.gather(receive_task, send_task)
+            self.client_tasks[writer] = (receive_task,)
+            await receive_task
         except Exception as e:
             print(f"Exception occurred: {e}")
         finally:
@@ -84,16 +85,22 @@ class TCPS_Controller:
         finally:
             await self.clean_up_connection(writer)
 
-    async def _send_task(self, writer, player_number):
-        """Continuously send messages from the send_queue to the connected client."""
-        try:
-            while True:
-                # Wait until there's a message to send
-                message = await self.send_queue.get()
-                await self._send_message(writer, message)  # Send the message to the client
-        except Exception as e:
-            print(f"Exception in sending messages to Player {player_number}: {e}")
-            await self.clean_up_connection(writer)
+    async def _broadcast_task(self):
+        print("TCP Server Broadcast task started.")
+        """Continuously read messages from send_queue and broadcast them to all connected clients."""
+        while True:
+            message = await self.send_queue.get()
+            print(f"Broadcasting message: {message}")
+            await self.broadcast_message(message)
+
+    async def broadcast_message(self, message):
+        """Send a message to all connected clients."""
+        for writer in list(self.connected_clients):
+            try:
+                await self._send_message(writer, message)
+            except Exception as e:
+                print(f"Error sending message to client: {e}")
+                await self.clean_up_connection(writer)
 
     async def _send_message(self, writer, message):
         encrypted_message = encrypt_msg(message, self.secret_key)
@@ -122,6 +129,7 @@ class TCPS_Controller:
 
     async def clean_up_connection(self, writer):
         self.client_player_map.pop(writer, None)
+        self.connected_clients.discard(writer)  # Remove client from connected clients
         tasks = self.client_tasks.pop(writer, ())
         for task in tasks:
             task.cancel()

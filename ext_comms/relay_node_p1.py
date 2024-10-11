@@ -8,7 +8,7 @@ from sshtunnel import SSHTunnelForwarder
 import config
 from comms.TCPC_Controller import TCPC_Controller
 
-RELAY_NODE_PLAYER_NUMBER = 2  # Player number for the relay node
+RELAY_NODE_PLAYER_NUMBER = 1  # Player number for the relay node
 
 
 # To be deprecated. For testing purposes only

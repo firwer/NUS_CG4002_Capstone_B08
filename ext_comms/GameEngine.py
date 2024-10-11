@@ -118,8 +118,9 @@ async def start_relay_node_data_handler(src_input_queue_p1: asyncio.Queue,
                                         output_sensor_data_p1: asyncio.Queue,
                                         output_sensor_data_p2: asyncio.Queue):
     async def push_to_queue(input_queue, output_queue):
-        msg = await input_queue.get()
-        await output_queue.put(msg)
+        while True:
+            msg = await input_queue.get()
+            await output_queue.put(msg)
 
     push_to_queue_p1 = asyncio.create_task(push_to_queue(src_input_queue_p1, output_sensor_data_p1))
     push_to_queue_p2 = asyncio.create_task(push_to_queue(src_input_queue_p2, output_sensor_data_p2))
