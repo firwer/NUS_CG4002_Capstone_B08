@@ -14,7 +14,8 @@
 #define FLEX_THRESHOLD 500
 #define NOTE_DELAY 100
 #define DEBOUNCE_DELAY 50
-#define MPU_SAMPLING_RATE 20
+#define MPU_SAMPLING_RATE 40
+#define NUM_RECORDED_POINTS 60
 
 const uint8_t PLAYER_1_ADDRESS = 0x23; // 8-bits, no need for 16-bits
 const uint8_t PLAYER_2_ADDRESS = 0x77;
@@ -66,6 +67,15 @@ struct MPUData
   int16_t gy;
   int16_t gz;
 } MPUData;
+struct MPUData_FLOAT
+{
+  int16_t accelXreal;
+  int16_t accelYreal;
+  int16_t accelZreal;
+  int16_t gyroXreal;
+  int16_t gyroYreal;
+  int16_t gyroZreal;
+} MPUData_FLOAT;
 struct CalibrationData
 {
   int16_t xoffset;
@@ -81,8 +91,6 @@ uint8_t recordedPoints = 0; // Max 40, 8-bits is enough
 
 void motionDetected();
 void sendIMUData();
-void printArray(int16_t data[40][3], uint8_t index);
-void printResults();
 void detectReload();
 void playNoBulletsLeftTone();
 void playFullMagazineTone();
@@ -99,15 +107,24 @@ void setup()
     while (1)
       ;
   }
+  // THIS IS RED GLOVE CALIBRATION DATA
+  calibrationData.xoffset = -1021;
+  calibrationData.yoffset = -898;
+  calibrationData.zoffset = 1591;
+  calibrationData.xgoffset = 6;
+  calibrationData.ygoffset = -38;
+  calibrationData.zgoffset = 31;
+  // THIS IS GREEN GLOVE CALIBRATION DATA the one with the capacitor
+  //  calibrationData.xoffset = -2322 ;
+  //  calibrationData.yoffset = -1300;
+  //  calibrationData.zoffset = 981;
+  //  calibrationData.xgoffset = 103;
+  //  calibrationData.ygoffset = -27;
+  //  calibrationData.zgoffset = 3;
 
-  calibrationData.xoffset = -1060;
-  calibrationData.yoffset = -872;
-  calibrationData.zoffset = 1611;
-  calibrationData.xgoffset = -7;
-  calibrationData.ygoffset = -32;
-  calibrationData.zgoffset = 27;
-
-  // EEPROM.put(0, calibrationData); //TODO: Store in EEPROM
+  // EEPROM.put(0, PLAYER_1_ADDRESS); //TODO: Store in EEPROM
+  // EEPROM.put(0, PLAYER_2_ADDRESS); //TODO: Store in EEPROM
+  // EEPROM.put(1, calibrationData); //TODO: Store in EEPROM
 
   mpu.setXAccelOffset(calibrationData.xoffset);
   mpu.setYAccelOffset(calibrationData.yoffset);
@@ -120,7 +137,7 @@ void setup()
   mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_250);
 
   mpu.setDHPFMode(MPU6050_DHPF_1P25);
-  mpu.setDLPFMode(MPU6050_DLPF_BW_10);
+  mpu.setDLPFMode(MPU6050_DLPF_BW_20);
   mpu.setMotionDetectionThreshold(60);
   mpu.setMotionDetectionDuration(5);
 
@@ -195,32 +212,34 @@ void loop()
   }
 
   //==================== MPU6050 SUBROUTINE====================
+ 
   if (isRecording)
   {
     if (!isMotionTunePlayed)
     {
-      Serial.println("Motion Detected");
+      Serial.println("Motion Detected. Displaying raw then corresponding real readings.");
       playMotionFeedback();
       isMotionTunePlayed = true;
       hasMotionEnded = false;
     }
-    if (millis() - lastSampleTime >= SAMPLING_DELAY && recordedPoints < 40)
+    if (millis() - lastSampleTime >= SAMPLING_DELAY && recordedPoints < NUM_RECORDED_POINTS)
     {
       mpu.getMotion6(&MPUData.ax, &MPUData.ay, &MPUData.az, &MPUData.gx, &MPUData.gy, &MPUData.gz);
       // Take the raw 16bit data, divide by 32767 to get the ratio, multiply by 4g to get the real value,
       // then multiply by 9.81 to get m/s^2
-      float accelXreal = ((MPUData.ax) / 32767.0) * 4.0 * 9.81;
-      float accelYreal = ((MPUData.ay) / 32767.0) * 4.0 * 9.81;
-      float accelZreal = ((MPUData.az) / 32767.0) * 4.0 * 9.81;
+      // multiply by 100 to get integers
+      MPUData_FLOAT.accelXreal = (((MPUData.ax) / 32767.0) * 4.0 * 9.81) * 100;
+      MPUData_FLOAT.accelYreal = (((MPUData.ay) / 32767.0) * 4.0 * 9.81) * 100;
+      MPUData_FLOAT.accelZreal = (((MPUData.az) / 32767.0) * 4.0 * 9.81) * 100;
+      // same for gyroscope scaling
+      MPUData_FLOAT.gyroXreal = (((MPUData.gx) / 32767.0) * 250.0) * 100;
+      MPUData_FLOAT.gyroYreal = (((MPUData.gy) / 32767.0) * 250.0) * 100;
+      MPUData_FLOAT.gyroZreal = (((MPUData.gz) / 32767.0) * 250.0) * 100;
 
-      Serial.print("Real Accel:\t");
-      Serial.print(accelXreal);
-      Serial.print("\t");
-      Serial.print(accelYreal);
-      Serial.print("\t");
-      Serial.println(accelZreal);
+      // REMOVE THESE IF NOT NEEDED
 
-      Serial.print("Accel/Gyra:\t");
+      Serial.print("RAW Accel & Gyro:\t");
+
       Serial.print(MPUData.ax);
       Serial.print("\t");
       Serial.print(MPUData.ay);
@@ -232,12 +251,26 @@ void loop()
       Serial.print(MPUData.gy);
       Serial.print("\t");
       Serial.println(MPUData.gz);
+
+      Serial.print("Real Accel & Gyro:\t");
+      Serial.print(MPUData_FLOAT.accelXreal);
+      Serial.print("\t");
+      Serial.print(MPUData_FLOAT.accelYreal);
+      Serial.print("\t");
+      Serial.print(MPUData_FLOAT.accelZreal);
+      Serial.print("\t");
+      Serial.print(MPUData_FLOAT.gyroXreal);
+      Serial.print("\t");
+      Serial.print(MPUData_FLOAT.gyroYreal);
+      Serial.print("\t");
+      Serial.println(MPUData_FLOAT.gyroZreal);
+
       lastSampleTime = millis();
       recordedPoints++;
 
-      if (recordedPoints >= 40 && !hasMotionEnded)
+      if (recordedPoints >= NUM_RECORDED_POINTS && !hasMotionEnded)
       {
-        // sendIMUData(ax,ay,az,gx,gy,gz);
+        // sendIMUData(ax,ay,az,gx,gy,gz); //modify params if needed
         playMotionEndFeedback();
         isRecording = false;
         recordedPoints = 0;
@@ -296,6 +329,3 @@ void playMotionEndFeedback()
   soundQueue.enqueue(NOTE_D6);
   soundQueue.enqueue(NOTE_CS6);
 }
-// void sendIMUData(){
-//   //FOR INTERNAL COMMS
-// }

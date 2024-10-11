@@ -4,6 +4,7 @@
 #define LED_OUTPUT_PIN 5
 #define IMU_INTERRUPT_PIN 2
 #define MPU_SAMPLE_RATE 20
+#define VIBRATOR_PIN 4
 
 MPU6050 mpu;
 struct MPUData
@@ -16,7 +17,7 @@ struct MPUData
   int16_t gz;
 } MPUData;
 
-const unsigned long SAMPLING_DELAY = 1000 / MPU_SAMPLE_RATE; // Sampling interval, 8-bits is sufficient
+const unsigned long SAMPLING_DELAY = 1000 / MPU_SAMPLE_RATE;
 unsigned long lastSampleTime = 0;
 bool isRecording = false;
 bool isMotionDetected = false;
@@ -26,7 +27,7 @@ uint8_t recordedPoints = 0; // Max 40, 8-bits is enough
 
 void motionDetected();
 unsigned long previousMillis = 0;
-const long interval = 100;
+const long interval = 500;
 bool isLedOn = false;
 
 struct CalibrationData
@@ -41,6 +42,8 @@ struct CalibrationData
 
 CalibrationData calibration;
 
+volatile unsigned long lastInterruptTime = 0;
+
 void setup()
 {
   Serial.begin(115200);
@@ -52,81 +55,20 @@ void setup()
       ;
   }
 
-  CalibrationData storedCalibration;
-  EEPROM.get(0, storedCalibration);
-  Serial.println("Stored calibration data: ");
-  Serial.print("X offset: ");
-  Serial.println(storedCalibration.xoffset);
-  Serial.print("Y offset: ");
-  Serial.println(storedCalibration.yoffset);
-  Serial.print("Z offset: ");
-  Serial.println(storedCalibration.zoffset);
-  Serial.print("XG offset: ");
-  Serial.println(storedCalibration.xgoffset);
-  Serial.print("YG offset: ");
-  Serial.println(storedCalibration.ygoffset);
-  Serial.print("ZG offset: ");
-  Serial.println(storedCalibration.zgoffset);
-
-  mpu.setXAccelOffset(storedCalibration.xoffset);
-  mpu.setYAccelOffset(storedCalibration.yoffset);
-  mpu.setZAccelOffset(storedCalibration.zoffset);
-  mpu.setXGyroOffset(storedCalibration.xgoffset);
-  mpu.setYGyroOffset(storedCalibration.ygoffset);
-  mpu.setZGyroOffset(storedCalibration.zgoffset);
-
-  mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_16);
-  mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_2000);
-
-  mpu.setDHPFMode(MPU6050_DHPF_5);
-  mpu.setDLPFMode(MPU6050_DLPF_BW_10);
-
-  mpu.setMotionDetectionThreshold(135);
-  mpu.setMotionDetectionDuration(2);
-  mpu.setIntMotionEnabled(true);
-
   pinMode(IMU_INTERRUPT_PIN, INPUT);
   attachInterrupt(digitalPinToInterrupt(IMU_INTERRUPT_PIN), motionDetected, RISING);
   pinMode(LED_OUTPUT_PIN, OUTPUT);
+  pinMode(VIBRATOR_PIN, OUTPUT);
 }
 
 void loop()
 {
   unsigned long currentMillis = millis();
 
-  if (isRecording)
-  {
-    if (millis() - lastSampleTime >= SAMPLING_DELAY && recordedPoints < 40)
-    {
-      isKickDetected = true;
-      lastSampleTime = millis();
-      mpu.getMotion6(&MPUData.ax, &MPUData.ay, &MPUData.az, &MPUData.gx, &MPUData.gy, &MPUData.gz);
-      Serial.print("Accel/Gyra:\t");
-      Serial.print(MPUData.ax);
-      Serial.print("\t");
-      Serial.print(MPUData.ay);
-      Serial.print("\t");
-      Serial.print(MPUData.az);
-      Serial.print("\t");
-      Serial.print(MPUData.gx);
-      Serial.print("\t");
-      Serial.print(MPUData.gy);
-      Serial.print("\t");
-      Serial.println(MPUData.gz);
-      lastSampleTime = millis();
-      recordedPoints++;
-
-      if (recordedPoints >= 40)
-      {
-
-        isRecording = false;
-        recordedPoints = 0;
-      }
-    }
-  }
   if (isKickDetected && !isLedOn)
   {
     digitalWrite(LED_OUTPUT_PIN, HIGH);
+    digitalWrite(VIBRATOR_PIN, HIGH);
     previousMillis = currentMillis;
     isLedOn = true;
     isKickDetected = false;
@@ -135,16 +77,39 @@ void loop()
   if (isLedOn && currentMillis - previousMillis >= interval)
   {
     digitalWrite(LED_OUTPUT_PIN, LOW);
+    digitalWrite(VIBRATOR_PIN, LOW);
     isLedOn = false;
+  }
+
+  if (isRecording)
+  {
+    if (millis() - lastSampleTime >= SAMPLING_DELAY && recordedPoints < 40)
+    {
+
+      lastSampleTime = millis();
+      mpu.getMotion6(&MPUData.ax, &MPUData.ay, &MPUData.az, &MPUData.gx, &MPUData.gy, &MPUData.gz);
+      recordedPoints++;
+
+      if (recordedPoints >= 40)
+      {
+        isRecording = false;
+        recordedPoints = 0;
+      }
+    }
   }
 }
 
 void motionDetected()
 {
-  if (!isRecording)
+  unsigned long interruptTime = millis();
+  if (interruptTime - lastInterruptTime > 200) // 200 ms debounce
   {
-    isMotionDetected = true;
-    isRecording = true;
-    isKickDetected = true;
+    if (!isRecording)
+    {
+      isMotionDetected = true;
+      isRecording = true;
+      isKickDetected = true;
+    }
+    lastInterruptTime = interruptTime;
   }
 }

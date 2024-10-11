@@ -9,6 +9,9 @@
 #define BUZZER_PIN 3     // Define the pin for the buzzer (PWM pin)
 #define NOTE_DELAY 75
 #define BULLET_DAMAGE 5
+#define VIBRATION_PIN 5
+#define PULSE_DURATION 500
+#define CRITICAL_VIBRATION_INTERVAL 350 // Interval between critical pulses in ms
 
 const uint16_t PLAYER_1_ADDRESS = 0x23; // Address of player 1
 const uint16_t PLAYER_2_ADDRESS = 0x77; // Address of player 2 <--
@@ -21,6 +24,11 @@ bool isDeathPlayed = false;
 bool isCriticalHealth = false;
 bool isDamaged = false;
 unsigned long lastCriticalTuneTime = 0;
+// Vibration State Variables for Critical Health
+bool criticalVibrationActive = false;
+unsigned long lastCriticalVibrationTime = 0;
+unsigned long lastVibrationTime = 0;
+bool vibrationActive = false; // Tracks if a vibration pulse is currently active
 
 int16_t curr_healthValue = 100;     // HARDWARE-side tracker
 int16_t incoming_healthState = 100; // INCOMING Game Engine health state
@@ -30,7 +38,7 @@ Tone melody;
 ArduinoQueue<uint16_t> noteQueue(20);
 
 // Define the healthNotes array with 5 notes per tune
-int healthNotes[19][5] = {
+const int healthNotes[19][5] = {
     // Tune 0: Health 95
     {NOTE_F4, NOTE_A4, NOTE_C5, NOTE_A4, NOTE_F4},
     // Tune 1: Health 90
@@ -93,22 +101,24 @@ void setup()
     printActiveIRProtocols(&Serial);
     // Set up the built-in LED pin as output
     pinMode(LED_BUILTIN, OUTPUT);
+    pinMode(VIBRATION_PIN, OUTPUT);
 }
 
 void loop()
 {
     //==========================Game Engine SubRoutine =====================
-    healthSynchronisation(curr_healthValue, incoming_healthState);
-    handleRespawn(isRespawn);
+    // healthSynchronisation(curr_healthValue, incoming_healthState);
+    // handleRespawn(isRespawn);
+    // digitalWrite(VIBRATION_PIN, HIGH);
 
-    //==========================Buzzer SubRoutine ==========================
+    //==========================Buzzer and Health Update SubRoutine ==========================
     if (millis() - lastSoundTime > NOTE_DELAY)
     {
         // Serial.println(soundQueue.itemCount());
         if (noteQueue.itemCount() > 0)
         {
             uint16_t note = noteQueue.dequeue();
-            melody.play(note, 150); // Play note for 200ms
+            melody.play(note, 100); // Play note for 200ms
         }
         else if (noteQueue.itemCount() == 0)
         {
@@ -125,6 +135,13 @@ void loop()
     else if (curr_healthValue < 100 && isDamaged)
     {
         playHealthDecrementTune(curr_healthValue);
+        if (isDamaged && !vibrationActive)
+        {
+            digitalWrite(VIBRATION_PIN, HIGH);
+            vibrationActive = true;
+            lastVibrationTime = millis();
+        }
+
         isDamaged = false;
     }
     else if (curr_healthValue <= 10 && !isCriticalHealth && curr_healthValue > 0)
@@ -142,6 +159,19 @@ void loop()
         isDeathPlayed = true;
         Serial.println(F("Player 1 is dead!"));
     }
+    if (isCriticalHealth)
+    {
+        if (millis() - lastCriticalTuneTime >= 750)
+        {
+            playCriticalHealthTune();
+            lastCriticalTuneTime = millis();
+        }
+    }
+    if (vibrationActive && (millis() - lastVibrationTime >= PULSE_DURATION))
+    {
+        digitalWrite(VIBRATION_PIN, LOW);
+        vibrationActive = false;
+    }
 
     if (isCriticalHealth)
     {
@@ -151,7 +181,25 @@ void loop()
             lastCriticalTuneTime = millis();
         }
     }
+    if (isCriticalHealth)
+    {
+        // Start a new critical vibration pulse if interval has passed
+        if (!criticalVibrationActive && (millis() - lastCriticalVibrationTime >= CRITICAL_VIBRATION_INTERVAL))
+        {
+            digitalWrite(VIBRATION_PIN, HIGH);
+            criticalVibrationActive = true;
+            lastCriticalVibrationTime = millis();
+        }
 
+        // End the critical vibration pulse after PULSE_DURATION
+        if (criticalVibrationActive && (millis() - lastCriticalVibrationTime >= PULSE_DURATION))
+        {
+            digitalWrite(VIBRATION_PIN, LOW);
+            criticalVibrationActive = false;
+            // Set up for the next pulse interval
+            lastCriticalVibrationTime = millis();
+        }
+    }
     //==========================IR Receiver SubRoutine ==========================
     if (IrReceiver.decode())
     {
@@ -177,28 +225,12 @@ void loop()
             curr_healthValue -= BULLET_DAMAGE;
             isFullHealthplayed = false;
             isDamaged = true;
-            // Refactor this
-            //  if (curr_healthValue > 0)
-            //  {
-            //      playHealthDecrementTune(curr_healthValue);
-            //  }
-            //  Update critical health status
-            // if (curr_healthValue <= 10 && !isCriticalHealth && curr_healthValue > 0)
-            // {
-            //     isCriticalHealth = true;
-            //     lastCriticalTuneTime = millis();
-            // }
-            // else if ((curr_healthValue > 10 && isCriticalHealth) || (curr_healthValue <= 0 && isCriticalHealth))
-            // {
-            //     isCriticalHealth = false;
-            // }
             Serial.print(F("Player 1 shot! Health: "));
             Serial.println(curr_healthValue);
         }
         IrReceiver.resume(); // Receive the next value
     }
 }
-
 void playHealthDecrementTune(int16_t health)
 {
     int8_t index = (95 - health) / 5;
