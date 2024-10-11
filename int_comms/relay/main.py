@@ -124,7 +124,7 @@ class Beetle:
                 continue
                
             # STEP 3: RECEIVE DATA WHERE APPLICABLE 
-            shouldConnEstab = True
+            shouldConnEstab = False
             ackNum = -1 # track the largest reliable ack num rcv
             latestPacket = None
             while(self.receiver.has_packet()):
@@ -152,11 +152,11 @@ class Beetle:
 
                 # ignore SYN_ACK packets
                 if pkt.packet_type == PACKET_SYN_ACK:
-                    # print("dup synack")
+                    shouldConnEstab = True
                     continue
 
                 # if we get normal data packets, then no need to comm_estab
-                shouldConnEstab = False
+                # shouldConnEstab = False
 
                 # Is unreliable send
                 if pkt.packet_type == PACKET_DATA_IMU:

@@ -5,6 +5,7 @@ from ...ext_comms.comms import TCPC_Controller
 
 from queue import Queue
 from threading import Thread
+import packet
 
 RELAY_NODE_PLAYER = 1
 
@@ -121,3 +122,35 @@ def entry_thread(fromBeetle1: Queue, fromBeetle2: Queue, fromBeetle3: Queue, toB
 
     agg_thread.join()
     async_thread.join()
+
+def sim_get_packet():
+    """Chooses a packet to send to the external comms side. """
+    pass
+
+def sim_beetle(id, toExternal: Queue, fromExternal: Queue=None):
+    packets = []
+    if id == 1: # IMU, Bullet
+        pass
+    elif id == 2:
+        pass
+    elif id == 3:
+        pass
+    else:
+        pass
+
+def simulate():
+    # simulate beetle passing messages
+    fromBeetle1 = Queue()
+    fromBeetle2 = Queue()
+    fromBeetle3 = Queue()
+    toBeetle1 = Queue()
+    toBeetle2 = Queue()
+    thread_entry = Thread(target=entry_thread, args=(1, fromBeetle1, fromBeetle2, fromBeetle3, toBeetle1, toBeetle2,))
+    thread_beetle1 = Thread(target=sim_beetle, args=(2, fromBeetle1, toBeetle1,))
+    thread_beetle2 = Thread(target=sim_beetle, args=(3, fromBeetle2, toBeetle2,))
+    thread_beetle3 =  Thread(target=sim_beetle, args=(fromBeetle3,))
+    # TODO: start the threads
+    thread_entry.start()
+
+if __name__ == "__main__":
+    simulate() 
