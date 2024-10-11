@@ -72,7 +72,7 @@ async def send_queue_handler(wsController: TCPC_Controller, send_queue: Queue):
 async def async_thread_main(fromBlunos: Queue, toBlunos: Queue, sendToGameServerQueue: Queue,
                             receiveFromGameServerQueue: Queue):
     # Establish a connection to the TCP server and handle reconnections.
-    wsController = TCPC_Controller(config.TCP_SERVER_HOST, config.TCP_SERVER_PORT, config.TCP_SECRET_KEY)
+    wsController = TCPC_Controller.TCPC_Controller(config.TCP_SERVER_HOST, config.TCP_SERVER_PORT, config.TCP_SECRET_KEY)
     await wsController.connect()
 
     # Async queues are used for communication between the TCP server and the relay node
