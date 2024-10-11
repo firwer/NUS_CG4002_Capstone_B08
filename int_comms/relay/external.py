@@ -1,11 +1,13 @@
 import asyncio
+import random
+import time
 
 from ...ext_comms import config
 from ...ext_comms.comms import TCPC_Controller
 
 from queue import Queue
 from threading import Thread
-import packet
+from packet import * 
 
 RELAY_NODE_PLAYER = 1
 
@@ -123,20 +125,63 @@ def entry_thread(fromBeetle1: Queue, fromBeetle2: Queue, fromBeetle3: Queue, toB
     agg_thread.join()
     async_thread.join()
 
-def sim_get_packet():
+def sim_get_packet(type):
     """Chooses a packet to send to the external comms side. """
-    pass
+    if type == PACKET_DATA_IMU:
+        pkt = PacketImu()
+        pkt.accelX = random.randrange(0,256)
+        pkt.accelY = random.randrange(0,256)
+        pkt.accelZ = random.randrange(0,256)
+        pkt.gyroX = random.randrange(0,256)
+        pkt.gyroY = random.randrange(0,256)
+        pkt.gyroZ = random.randrange(0,256)
+        return pkt
+    elif type == PACKET_DATA_BULLET:
+        pkt = PacketBullet()
+        pkt.bullet = random.randrange(0,10)
+        return pkt
+    elif type == PACKET_DATA_HEALTH:
+        pkt = PacketHealth()
+        pkt.health = random.randrange(0,100)
+        return pkt
+    elif type == PACKET_DATA_KICK:
+        pkt = PacketKick()
+        return pkt
+    assert(False) # this should never trigger!
 
 def sim_beetle(id, toExternal: Queue, fromExternal: Queue=None):
-    packets = []
     if id == 1: # IMU, Bullet
-        pass
+        packets = []
+        while True:
+            coin_flip = random.randrange(0, 2)
+            if coin_flip == 1:
+                for _ in range(60):
+                    packets.append(get_packet(PACKET_DATA_IMU))                
+                # Send the packets in a period of 0.5s
+                for packet in packets:
+                    toExternal.put(packet)
+                    time.sleep(0.5 / len(packets))  # distribute the packets over 0.5s
+                packets.clear()  # Clear the packet list after sending them
+            else:
+                packet = get_packet(PACKET_DATA_BULLET)
+                toExternal.put(packet)            
+            if not fromExternal.empty():
+                print(f"beetle{id} got: {fromExternal.get_nowait()}")
     elif id == 2:
-        pass
+        task_period_ns = 1000 * 1e6; # ms * ns_offset
+        startTime = time.time_ns()
+        while True:
+            if time.time_ns() - startTime > task_period_ns:
+                packet = get_packet(PACKET_DATA_HEALTH)
+                toExternal.put(packet)
+                startTime = time.time_ns()
+            if not fromExternal.empty():
+                print(f"beetle{id} got: {fromExternal.get_nowait()}")
     elif id == 3:
-        pass
-    else:
-        pass
+        while True:
+            time.sleep(random.randrange(4,11)) 
+            packet = get_packet(PACKET_DATA_KICK)
+            toExternal.put(packet)
 
 def simulate():
     # simulate beetle passing messages
@@ -151,6 +196,13 @@ def simulate():
     thread_beetle3 =  Thread(target=sim_beetle, args=(fromBeetle3,))
     # TODO: start the threads
     thread_entry.start()
+    thread_beetle1.start()
+    thread_beetle2.start()
+    thread_beetle3.start()
+    thread_entry.join()
+    thread_beetle1.join()
+    thread_beetle2.join()
+    thread_beetle3.join()
 
 if __name__ == "__main__":
     simulate() 
