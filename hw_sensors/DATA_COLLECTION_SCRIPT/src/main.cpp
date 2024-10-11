@@ -1,28 +1,18 @@
 #include <Arduino.h>
-#include <IRremote.hpp>
 #include <MPU6050.h>
 #include <Tone.h>
 #include <ArduinoQueue.h>
-#include <EEPROM.h>
 
 // Define I/O pins
 #define IMU_INTERRUPT_PIN 2
-#define IR_SEND_PIN 5
-#define BUTTON_PIN 4
 #define BUZZER_PIN 3
-#define FLEX_SENSOR_PIN A0
-#define FLEX_THRESHOLD 500
 #define NOTE_DELAY 100
-#define DEBOUNCE_DELAY 50
-#define MPU_SAMPLING_RATE 40
-#define NUM_RECORDED_POINTS 60
-
-const uint8_t PLAYER_1_ADDRESS = 0x23; // 8-bits, no need for 16-bits
-const uint8_t PLAYER_2_ADDRESS = 0x77;
+#define MPU_SAMPLING_RATE 40   // Can be changed to 20. idk what AI model wants.
+#define NUM_RECORDED_POINTS 60 // CAN CHANGE TO 40. idk what AI model wants.
 
 // Queue reduced to save memory
 ArduinoQueue<uint16_t> soundQueue(10); // Tones are now stored in 16-bit integers
-
+bool isMotionTunePlayed = false;
 // Updated to uint16_t to support values up to 1000
 uint16_t soundList[10] = {
     NOTE_C5,
@@ -36,28 +26,20 @@ uint16_t soundList[10] = {
     NOTE_D6,
     NOTE_E6};
 
-// For gun shot
-bool isReloaded = false;
-uint8_t curr_bulletsLeft = 6;
-uint8_t bulletState = 6;
-bool isFullMagazineTonePlayed = false;
-uint16_t flexValue = 0;
-bool isButtonPressed = false;
-bool shotBeenFired = false;
-uint8_t buttonState = HIGH;
-unsigned long lastDebounceTime = 0;
 unsigned long lastSoundTime = 0;
 
 Tone shotFired;
+bool isFullMagazineTonePlayed = false;
 
 MPU6050 mpu;
 const unsigned long SAMPLING_DELAY = 1000 / MPU_SAMPLING_RATE;
 unsigned long lastSampleTime = 0;
 bool isRecording = false;
 bool isMotionDetected = false;
-bool isMotionTunePlayed = false;
 bool hasMotionEnded = false;
-
+void playMotionFeedback();
+void playMotionEndFeedback();
+void playFullMagazineTone(); // This is also the startup tune
 struct MPUData
 {
   int16_t ax;
@@ -67,6 +49,8 @@ struct MPUData
   int16_t gy;
   int16_t gz;
 } MPUData;
+
+// can use this if the AI model can accept floats
 struct MPUData_FLOAT
 {
   int16_t accelXreal;
@@ -76,6 +60,7 @@ struct MPUData_FLOAT
   int16_t gyroYreal;
   int16_t gyroZreal;
 } MPUData_FLOAT;
+
 struct CalibrationData
 {
   int16_t xoffset;
@@ -85,17 +70,15 @@ struct CalibrationData
   int16_t ygoffset;
   int16_t zgoffset;
 };
-
 CalibrationData calibrationData;
-uint8_t recordedPoints = 0; // Max 40, 8-bits is enough
+
+// int16_t recordedAccel[60][3];
+// int16_t recordedGyro[60][3];
+uint8_t recordedPoints = 0;
 
 void motionDetected();
-void sendIMUData();
-void detectReload();
-void playNoBulletsLeftTone();
-void playFullMagazineTone();
-void playMotionFeedback();
-void playMotionEndFeedback();
+// void printArray(int16_t data[40][3], uint8_t index);
+// void printResults();
 
 void setup()
 {
@@ -107,24 +90,14 @@ void setup()
     while (1)
       ;
   }
-  // THIS IS RED GLOVE CALIBRATION DATA
   calibrationData.xoffset = -1021;
   calibrationData.yoffset = -898;
   calibrationData.zoffset = 1591;
   calibrationData.xgoffset = 6;
   calibrationData.ygoffset = -38;
   calibrationData.zgoffset = 31;
-  // THIS IS GREEN GLOVE CALIBRATION DATA the one with the capacitor
-  //  calibrationData.xoffset = -2322 ;
-  //  calibrationData.yoffset = -1300;
-  //  calibrationData.zoffset = 981;
-  //  calibrationData.xgoffset = 103;
-  //  calibrationData.ygoffset = -27;
-  //  calibrationData.zgoffset = 3;
 
-  // EEPROM.put(0, PLAYER_1_ADDRESS); //TODO: Store in EEPROM
-  // EEPROM.put(0, PLAYER_2_ADDRESS); //TODO: Store in EEPROM
-  // EEPROM.put(1, calibrationData); //TODO: Store in EEPROM
+  // EEPROM.put(0, calibrationData); //TODO: Store in EEPROM
 
   mpu.setXAccelOffset(calibrationData.xoffset);
   mpu.setYAccelOffset(calibrationData.yoffset);
@@ -146,35 +119,12 @@ void setup()
   pinMode(IMU_INTERRUPT_PIN, INPUT);
   attachInterrupt(digitalPinToInterrupt(IMU_INTERRUPT_PIN), motionDetected, RISING);
   pinMode(BUZZER_PIN, OUTPUT);
-  shotFired.begin(BUZZER_PIN);
-  pinMode(FLEX_SENSOR_PIN, INPUT);
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
-
-  Serial.print(F("Send IR signals at pin "));
-  Serial.println(IR_SEND_PIN);
-  IrSender.begin(IR_SEND_PIN);
+  shotFired.begin(BUZZER_PIN); // DO NOT DELETE
 }
 
 void loop()
 {
-  //==================== GUN SHOT SUBROUTINE ====================
-  // detectReload(); //TODO integrate with game engine
-  flexValue = analogRead(FLEX_SENSOR_PIN);
-  buttonState = digitalRead(BUTTON_PIN);
-  if (millis() - lastDebounceTime > DEBOUNCE_DELAY)
-  {
-    if (buttonState == LOW)
-    {
-      isButtonPressed = true;
-    }
-    else
-    {
-      isButtonPressed = false;
-      shotBeenFired = false;
-    }
-    lastDebounceTime = millis();
-  }
-
+  //==================== BUZZER SUBROUTINE ====================
   if (millis() - lastSoundTime > NOTE_DELAY)
   {
     if (soundQueue.itemCount() > 0)
@@ -184,35 +134,14 @@ void loop()
     }
     lastSoundTime = millis();
   }
-
-  if (curr_bulletsLeft == 6 && !isFullMagazineTonePlayed)
+  // START UP BUZZER ROUTINE
+  if (!isFullMagazineTonePlayed)
   {
     playFullMagazineTone();
     isFullMagazineTonePlayed = true;
   }
 
-  if (isButtonPressed && !shotBeenFired && flexValue >= FLEX_THRESHOLD)
-  {
-    if (curr_bulletsLeft > 0)
-    {
-      IrSender.sendNEC2(PLAYER_1_ADDRESS, 0x23, 0);
-      curr_bulletsLeft--;
-      isFullMagazineTonePlayed = false;
-      soundQueue.enqueue(soundList[curr_bulletsLeft]);
-      Serial.print("Bullets left: ");
-      Serial.println(curr_bulletsLeft);
-      Serial.println("Shot fired");
-    }
-    else
-    {
-      Serial.println("No bullets left");
-      playNoBulletsLeftTone();
-    }
-    shotBeenFired = true;
-  }
-
   //==================== MPU6050 SUBROUTINE====================
- 
   if (isRecording)
   {
     if (!isMotionTunePlayed)
@@ -281,33 +210,6 @@ void loop()
   }
 }
 
-void detectReload()
-{
-  if (curr_bulletsLeft == 0 && bulletState == 6)
-  {
-    isReloaded = true;
-    curr_bulletsLeft = 6;
-  }
-  else
-  {
-    isReloaded = false;
-  }
-}
-
-void playNoBulletsLeftTone()
-{
-  soundQueue.enqueue(NOTE_C6);
-  soundQueue.enqueue(NOTE_A5);
-  soundQueue.enqueue(NOTE_C5);
-}
-
-void playFullMagazineTone()
-{
-  soundQueue.enqueue(NOTE_C5);
-  soundQueue.enqueue(NOTE_A5);
-  soundQueue.enqueue(NOTE_C6);
-}
-
 void motionDetected()
 {
   if (!isRecording)
@@ -315,6 +217,13 @@ void motionDetected()
     isMotionDetected = true;
     isRecording = true;
   }
+}
+
+void playFullMagazineTone()
+{
+  soundQueue.enqueue(NOTE_C5);
+  soundQueue.enqueue(NOTE_A5);
+  soundQueue.enqueue(NOTE_C6);
 }
 
 void playMotionFeedback()
