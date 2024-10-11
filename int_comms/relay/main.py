@@ -1,4 +1,5 @@
 import argparse
+import logging
 import random
 import signal
 import time
@@ -8,15 +9,17 @@ from packet import *
 from checksum import *
 import threading
 
-# BLUNO0_MAC_ADDRESS = "F4:B8:5E:42:4C:BB"
-# BLUNO1_MAC_ADDRESS = "F4:B8:5E:42:61:6A"
-# BLUNO2_MAC_ADDRESS = "F4:B8:5E:42:6D:1E"
+# GREEN == PLAYER 1
+BLUNO_P1_GLOVE_MAC = "F4:B8:5E:42:4C:BB"
+BLUNO_P1_CHEST_MAC = "F4:B8:5E:42:46:E5"
+BLUNO_P1_LEG_MAC   = "F4:B8:5E:42:61:6A"
 
-BLUNO_P1_GLOVE_MAC = "F4:B8:5E:42:6D:49"
 # BLUNO_P1_LEG_MAC = "F4:B8:5E:42:6D:42"
 # BLUNO_P1_CHEST_MAC = "F4:B8:5E:42:46:E5"
 
 CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"
+logging.basicConfig(level=logging.DEBUG, format='\033[0m[%(levelname)s] [%(threadName)s] %(message)s')
+logger = logging.getLogger(__name__)
 
 def millis():
     return time.time_ns() // 1_000_000
@@ -90,8 +93,8 @@ class Beetle:
         self.sendReliableStart = 0
         self.cachedPacket = None
         self.reliableRetransmissions = 0
-        self.reliableTxRate = 50 # ms
-        self.reliableTimeout = 100 # ms
+        self.reliableTxRate = 5000 # ms
+        self.reliableTimeout = 1000 # ms
 
         # CONFIG TEST: subcomponent test flags
         self.testRelayReliable = True
@@ -104,8 +107,8 @@ class Beetle:
         while not self.killThread:
             shouldAck = False
             # STEP 1. Handle reconnections if applicable
-            if not self.connected or self.errors > 10 or self.reliableRetransmissions > 5:
-                print(f"{self.COLOR}Restarting connection: isConnected={self.connected}, errors={self.errors}, retx={self.reliableRetransmissions}")
+            if not self.connected or self.errors > 2 or self.reliableRetransmissions > 3:
+                logger.debug(f"{self.COLOR}Restarting connection: isConnected={self.connected}, errors={self.errors}, retx={self.reliableRetransmissions}")
                 self.receiver.reset_buffer()
                 self.connect_to_beetle()
                 self.errors = 0
@@ -116,7 +119,7 @@ class Beetle:
                 # print("Getting notifications...")
                 self.peripheral.waitForNotifications(1)
             except Exception as e:
-                print(f"{self.COLOR}Error: {(e)}. Re-connecting...")
+                logger.error(f"{self.COLOR}Error: {(e)}. Re-connecting...")
                 self.connected = False
                 continue
                
@@ -130,23 +133,27 @@ class Beetle:
 
                 data = self.receiver.get_packet_bytes()
                 if data is None:
-                    print(f"{self.COLOR}No packet received (dropped?), continuing to read buffer...")
+                    logger.debug(f"{self.COLOR}No packet received (dropped?), continuing to read buffer...")
                     continue
 
                 # verify the checksum - if fail, process the next packet
                 if not verify_checksum(data):
                     # print(f"{self.COLOR}Error: checksum failed for this PKT {data.hex()}")
-                    print(f"{self.COLOR}Error: checksum failed! Moving to next packet in buffer...")
+                    logger.error(f"{self.COLOR}Error: checksum failed! Moving to next packet in buffer...")
                     self.errors += 1
                     # print(f"{self.COLOR}Moving to next packet in buffer...")
                     continue
+                else:
+                    self.errors = 0
 
                 pkt = get_packet(data)
 
                 # Process based on packet type
 
                 # ignore SYN_ACK packets
-                if pkt.packet_type == PACKET_SYN_ACK: continue
+                if pkt.packet_type == PACKET_SYN_ACK:
+                    # print("dup synack")
+                    continue
 
                 # if we get normal data packets, then no need to comm_estab
                 shouldConnEstab = False
@@ -154,7 +161,7 @@ class Beetle:
                 # Is unreliable send
                 if pkt.packet_type == PACKET_DATA_IMU:
                     # TODO do work
-                    print(f"{self.COLOR}RX PKT b{pkt.seq_num} <IMU> (beetle stream)")
+                    logger.info(f"{self.COLOR}RX PKT b{pkt.seq_num} <IMU> (beetle stream)")
                     continue
 
                 # Is reliable packet
@@ -167,19 +174,19 @@ class Beetle:
                     ackNum = pkt.seq_num
                     if pkt.packet_type == PACKET_DATA_HEALTH: 
                         # TODO: do work
-                        print(f"{self.COLOR}RX PKT b{latestPacket.seq_num} <{get_packettype_string(pkt.packet_type)}> Health={pkt.health} (beetle reliable)")
+                        logger.info(f"{self.COLOR}RX PKT b{latestPacket.seq_num} <{get_packettype_string(pkt.packet_type)}> Health={pkt.health} (beetle reliable)")
                     elif pkt.packet_type == PACKET_DATA_BULLET:    
                         # TODO: do work
-                        print(f"{self.COLOR}RX PKT b{latestPacket.seq_num} <{get_packettype_string(pkt.packet_type)}> Bullet={pkt.bullet} (beetle reliable)")
+                        logger.info(f"{self.COLOR}RX PKT b{latestPacket.seq_num} <{get_packettype_string(pkt.packet_type)}> Bullet={pkt.bullet} (beetle reliable)")
                     else:
                         # TODO: do work
-                        print(f"{self.COLOR}RX PKT b{latestPacket.seq_num} <{get_packettype_string(pkt.packet_type)}> (beetle reliable)")
+                        logger.info(f"{self.COLOR}RX PKT b{latestPacket.seq_num} <{get_packettype_string(pkt.packet_type)}> (beetle reliable)")
 
                 # Is an ACK
                 if pkt.packet_type == PACKET_ACK:
                     # is the ACK what we expected?
                     # print(f"{sendPkt.to_bytearray().hex()}")
-                    print(f"{self.COLOR}RX ACK r{pkt.seq_num}, Relay SN: r{self.relay_seq_num} (relay reliable)")
+                    logger.info(f"{self.COLOR}RX ACK r{pkt.seq_num}, Relay SN: r{self.relay_seq_num} (relay reliable)")
                     if pkt.seq_num == (self.relay_seq_num + 1) % 256:
                         # We got the ack we wanted!
                         # canSendReliable implies that no more unacked pkt is in-flight
@@ -203,9 +210,9 @@ class Beetle:
                 self.write_packet(resp)
                 # finally, deal with the packet
                 if latestPacket is not None:
-                    print(f"{self.COLOR}TX ACK b{resp.seq_num}, for RX b{latestPacket.seq_num} (beetle reliable)")
+                    logger.info(f"{self.COLOR}TX ACK b{resp.seq_num}, for RX b{latestPacket.seq_num} (beetle reliable)")
                 else:
-                    print(f"{self.COLOR}RX ACK b{resp.seq_num} (duplicate)")
+                    logger.info(f"{self.COLOR}RX ACK b{resp.seq_num} (duplicate)")
             
             # STEP 6: SEND RELIABLE RELAY DATA 
             # TODO: remove this if wrapper when testing is done
@@ -216,15 +223,16 @@ class Beetle:
                         if sendPkt is not None:
                             self.cachedPacket = sendPkt
                             self.sendReliableStart = millis()
-                            print(f"{self.COLOR}TX PKT r{sendPkt.seq_num}, curr r{self.relay_seq_num} (relay reliable)")
+                            logger.info(f"{self.COLOR}TX PKT r{sendPkt.seq_num}, curr r{self.relay_seq_num} (relay reliable)")
                             self.write_packet(sendPkt)
                             self.receiver.relayTxNumber += 1
                             canSendReliable = False
                             self.hasSentReliable = True
+                            self.reliableRetransmissions = 0
                 elif self.hasSentReliable and millis() - self.sendReliableStart > self.reliableTimeout:  # 1000 ms = 1 second
                     self.sendReliableStart = millis()
                     self.reliableRetransmissions += 1
-                    print(f"{self.COLOR}TX PKT r{self.cachedPacket.seq_num}, curr {self.relay_seq_num}, (relay reliable, timeout)")
+                    logger.info(f"{self.COLOR}TX PKT r{self.cachedPacket.seq_num}, curr {self.relay_seq_num}, (relay reliable, timeout)")
                     sendPkt = self.cachedPacket
                     self.receiver.relayTxNumber += 1
                     self.write_packet(sendPkt)
@@ -238,7 +246,7 @@ class Beetle:
         # print("Received data:", bytearray.hex())
         # TODO: consider if a None would be faster
         if not verify_checksum(bytearray):
-            print(f"{self.COLOR}err: checksum failed")
+            logger.error(f"{self.COLOR}err: checksum failed")
             return PacketInvalid()
         return get_packet(bytearray)
 
@@ -246,14 +254,14 @@ class Beetle:
         try:
             self.chr.write(packet.to_bytearray())
         except Exception as e:
-            print(f"{self.COLOR}Error writing, {e}")
+            logger.error(f"{self.COLOR}Error writing, {e}")
             self.connected = False
 
     def get_notifications(self, timeout=1.5):
         try:
             return self.peripheral.waitForNotifications(timeout)
         except Exception as e:
-            print(f"{self.COLOR}Error getting notif: {e}")
+            logger.error(f"{self.COLOR}Error getting notif: {e}")
             self.connected = False
             return False
 
@@ -270,7 +278,7 @@ class Beetle:
                 self.chr = self.peripheral.getCharacteristics(uuid=CHARACTERISTIC_UUID)[0]
                 break
             except Exception as e: # keep trying
-                print(f"{self.COLOR}Bluepy peripheral fail: {e}")
+                logger.error(f"{self.COLOR}Bluepy peripheral fail: {e}")
                 continue
 
     def connect_to_beetle(self):
@@ -278,16 +286,16 @@ class Beetle:
         while True:
             self.reset_bluepy()
 
-            print(f"{self.COLOR}THREE WAY START")
+            logger.info(f"{self.COLOR}THREE WAY START")
             # STAGE 1: Hello
             pkt = PacketHello()
             pkt.seq_num = self.relay_seq_num
             pkt.crc8 = get_checksum(pkt.to_bytearray())
-            print(f"{self.COLOR}THREE WAY: Sending HELLO r{self.relay_seq_num}")
+            # print(f"{self.COLOR}THREE WAY: Sending HELLO r{self.relay_seq_num}")
             self.write_packet(pkt)
 
             # STAGE 2: SYN-ACK wait
-            print(f"{self.COLOR}THREE WAY: Wait for SYN-ACK")
+            # print(f"{self.COLOR}THREE WAY: Wait for SYN-ACK")
             hasSynAck = False
             if(self.get_notifications(1)):
                 while self.receiver.has_packet():
@@ -297,23 +305,24 @@ class Beetle:
                     packet = get_packet(data)
                     if packet is None: continue
                     if packet.packet_type != PACKET_SYN_ACK: continue
-                    print(f"{self.COLOR}THREE WAY: SYN-ACK received")
+                    # print(f"{self.COLOR}THREE WAY: SYN-ACK received")
                     self.beetle_seq_num = pkt.seq_num
                     hasSynAck = True # break out of outer wait loop
                     break
             if not hasSynAck:
-                print(f"{self.COLOR}SYNACK not received. Resending hello...")
+                # print(f"{self.COLOR}SYNACK not received. Resending hello...")
                 continue # resend hello
 
             # STAGE 3: CONN_ESTAB
             resp = PacketConnEstab()
             resp.seq_num = self.relay_seq_num
             resp.crc8 = get_checksum(resp.to_bytearray())
-            print(f"{self.COLOR}THREE WAY: Sending ACK/CONN_ESTAB")
+            # print(f"{self.COLOR}THREE WAY: Sending ACK/CONN_ESTAB")
+            # print(resp.to_bytearray().hex())
             self.write_packet(resp)
             self.connected = True
             break  # Exit the loop after successful connection
-        print(f"{self.COLOR}---- Connection established. ----")
+        logger.info(f"{self.COLOR}---- Connection established. ----")
         
     def getDataToSend(self):
         """Check if there is data to send to the beetle. Returns a packet if so, else None"""
@@ -340,6 +349,9 @@ class Beetle:
             pkt = PacketGamestate(byte_array)
         return pkt
 
+def run_beetle(beetle: Beetle):
+    beetle.run()
+
 def main():
     
     # Set up argument parser
@@ -357,17 +369,19 @@ def main():
 
     # Create Beetle instances
     beetle0 = Beetle(BLUNO_P1_GLOVE_MAC, 0)
-    # beetle0 = Beetle(BLUNO0_MAC_ADDRESS, 0)
-    # beetle1 = Beetle(BLUNO1_MAC_ADDRESS, 1)
-    # beetle2 = Beetle(BLUNO2_MAC_ADDRESS, 2)
-
-    # Dictionary to map beetle_id to Beetle instance
-    # beetles = {0: beetle0, 1: beetle1, 2: beetle2}
-
-    # Run the selected Beetle instance
-    # beetles[beetle_id].run()
-    # beetles[beetle0].run()
-    beetle0.run()
+    beetle1 = Beetle(BLUNO_P1_CHEST_MAC, 1)
+    beetle2 = Beetle(BLUNO_P1_LEG_MAC, 2)
+    t0 = threading.Thread(target=run_beetle, args=(beetle0,), name="Beetle0")
+    t1 = threading.Thread(target=run_beetle, args=(beetle1,), name=f"Beetle1")
+    t2 = threading.Thread(target=run_beetle, args=(beetle2,), name=f"Beetle2")
+    threads = []
+    threads.extend([t0,t1,t2])
+    t0.start()
+    t1.start()
+    t2.start()
+    t0.join()
+    t1.join()
+    t2.join()
 
 if __name__ == "__main__":
     main()
