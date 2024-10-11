@@ -1,9 +1,12 @@
 import asyncio
+import os
 import random
+import sys
 import time
 
-from ...ext_comms import config
-from ...ext_comms.comms import TCPC_Controller
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+from ext_comms import config
+from ext_comms.comms import TCPC_Controller
 
 from queue import Queue
 from threading import Thread
