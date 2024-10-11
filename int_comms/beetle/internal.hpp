@@ -6,11 +6,7 @@
 #define TIMEOUT_MS 500
 
 // Packet types
-#define PACKET_INVALID 0
-#define PACKET_HELLO 1
-#define PACKET_ACK 2
 #define PACKET_SIZE 20
-#define BUFFER_SZ 20*10;
 
 #include <Arduino.h>
 #include "packet.h"
@@ -88,4 +84,4 @@ const uint8_t crc8_lut[256] = {
     0xFA, 0xFD, 0xF4, 0xF3
 };
 
-#endif INTERNAL_HPP
+#endif // INTERNAL_HPP
