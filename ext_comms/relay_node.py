@@ -8,8 +8,9 @@ from sshtunnel import SSHTunnelForwarder
 import config
 from comms.TCPC_Controller import TCPC_Controller
 
-
 RELAY_NODE_PLAYER_NUMBER = 1  # Player number for the relay node
+
+
 # To be deprecated. For testing purposes only
 async def user_input(send_queue: asyncio.Queue, receive_queue: asyncio.Queue):
     while True:

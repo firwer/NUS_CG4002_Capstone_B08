@@ -19,6 +19,7 @@ class TCPS_Controller:
         self.receive_queue = receive_queue
         self.send_queue = send_queue
         self.client_player_map = {}
+        self.client_tasks = {}
 
     async def start_server(self):
         server = await asyncio.start_server(self.handle_client, host=self.ip, port=self.port)
@@ -50,11 +51,11 @@ class TCPS_Controller:
             return
 
         try:
-            while True:
-                receive_task = asyncio.create_task(self._receive_task(reader, writer, player_number))
-                send_task = asyncio.create_task(self._send_task(writer, player_number))
-                # Wait for both tasks to run concurrently
-                await asyncio.gather(receive_task, send_task)
+            receive_task = asyncio.create_task(self._receive_task(reader, writer, player_number))
+            send_task = asyncio.create_task(self._send_task(writer, player_number))
+            self.client_tasks[writer] = (receive_task, send_task)
+            # Wait for both tasks to run concurrently
+            await asyncio.gather(receive_task, send_task)
         except Exception as e:
             print(f"Exception occurred: {e}")
         finally:
@@ -68,7 +69,6 @@ class TCPS_Controller:
             while True:
                 success, message = await self._recv_message(reader)
                 if not success:
-                    await self._send_message(writer, "ERROR: Malformed data received.")
                     print(f"Error in data received from {addr}. Sent error response.")
                     continue
                 print(f"Received message from Player {player_number} ({addr}): {message}")
@@ -115,6 +115,10 @@ class TCPS_Controller:
             return False, None
 
     async def clean_up_connection(self, writer):
+        self.client_player_map.pop(writer, None)
+        tasks = self.client_tasks.pop(writer, ())
+        for task in tasks:
+            task.cancel()
         if not writer.is_closing():
             writer.close()
             await writer.wait_closed()
