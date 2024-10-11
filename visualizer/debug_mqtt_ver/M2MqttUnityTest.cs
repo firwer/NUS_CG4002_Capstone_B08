@@ -63,9 +63,9 @@ namespace M2MqttUnity.Examples
         private int tempPlayerDeath = 0;
         private int tempEnemyDeath = 0;
 
-        public void PublishFOVState(int player_id, bool FOVmsg, bool inRainMsg)
+        public void PublishState(int player_id, bool FOVmsg, bool inRainMsg, int inRainNumber)
         {
-            string msgToSend = "vstate_fov_" + FOVmsg.ToString() + "_inbomb_" + inRainMsg.ToString();
+            string msgToSend = "vstate_fov_" + FOVmsg.ToString() + "_inbomb_" + inRainMsg.ToString() + "_" + inRainNumber.ToString();
             // Publish the generated message
             if (player_id == 2) {
                 client.Publish("game_state/visualizer_to_engine/p2", System.Text.Encoding.UTF8.GetBytes(msgToSend), MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, false);
@@ -119,7 +119,7 @@ namespace M2MqttUnity.Examples
 
             if (autoTest)
             {
-                PublishFOVState(1, true, true);
+                PublishState(1, true, true, 0);
             }
         }
 
@@ -349,8 +349,6 @@ namespace M2MqttUnity.Examples
         }
         protected override void Update()
         {
-			bool in_rain_msg = collisionHandlerGameObject.GetInRain();
-			Debug.Log("DEBUG IN RAIN: " + in_rain_msg);
 			base.Update(); // call ProcessMqttEvents()
 
             if (eventMessages.Count > 0)
@@ -364,25 +362,26 @@ namespace M2MqttUnity.Examples
 					// Checks if Enemy is in FOV
 					bool in_sight_msg = uiHandlerGameObject.GetEnemyFOV();
 					Debug.Log("DEBUG IN FOV: " + in_sight_msg);
-					//bool in_rain_msg = collisionHandlerGameObject.GetInRain();
-					//Debug.Log("DEBUG IN RAIN: " + in_rain_msg);
-
+                    bool in_rain_msg = collisionHandlerGameObject.IsInRain();
+                    Debug.Log("DEBUG IN RAIN: " + in_rain_msg);
+                    int in_rainbombs_number = collisionHandlerGameObject.GetInRainNumber();
+					Debug.Log("DEBUG IN RAIN NUMBER: " + in_rainbombs_number);
 					// action msg in format: action_<playerID>_<action>
 					if (keyword == "action")
                     {
                         string[] tempArr = parts[1].Split(new char[] { '_' }, 2);
                         string playerID = tempArr[0];
                         string action = tempArr[1];
-						if (new[] { "basket", "soccer", "volley", "bowl", "bomb" }.Contains(action))
+						if (new[] { "basket", "soccer", "volley", "bowl", "bomb", "gun" }.Contains(action))
 						{
 							if (this.isP1 && playerID == "1")
 							{
 								Debug.Log("Publishing");
-								//PublishFOVState(1, in_sight_msg, in_rain_msg);
+								PublishState(1, in_sight_msg, in_rain_msg, in_rainbombs_number);
 							}
 							else if (!this.isP1 && playerID == "2")
 							{
-								//PublishFOVState(2, in_sight_msg, in_rain_msg);
+								PublishState(2, in_sight_msg, in_rain_msg, in_rainbombs_number);
 							}
 						}
 					}

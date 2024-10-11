@@ -26,11 +26,14 @@ async def reduce_health(targetGameState: dict, hp_reduction: int):
         targetGameState["shields"] = config.GAME_MAX_SHIELDS
 
 
-async def gun_shoot(targetGameState: dict, opponentGameState: dict):
+async def gun_shoot(targetGameState: dict, opponentGameState: dict, inRainMultiplier: int):
     if targetGameState["bullets"] <= 0:
         return
     targetGameState["bullets"] -= 1
-    await reduce_health(opponentGameState, config.GAME_BULLET_DMG)
+    if inRainMultiplier > 1:
+        await reduce_health(opponentGameState, config.GAME_BULLET_DMG * inRainMultiplier)
+    else:
+        await reduce_health(opponentGameState, config.GAME_BULLET_DMG)
 
 
 async def shield(targetGameState: dict):
@@ -52,14 +55,17 @@ async def reload(targetGameState: dict):
         targetGameState["bullets"] = config.GAME_MAX_BULLETS
 
 
-async def bomb_player(targetGameState: dict, opponentGameState: dict, can_see: bool):
+async def bomb_player(targetGameState: dict, opponentGameState: dict, can_see: bool, inRainMultiplier: int):
     """Throw a bomb at opponent"""
     if targetGameState["bombs"] <= 0:
         return
 
     targetGameState["bombs"] -= 1
     if can_see:
-        await reduce_health(opponentGameState, config.GAME_BOMB_DMG)
+        if inRainMultiplier > 1:
+            await reduce_health(opponentGameState, config.GAME_BOMB_DMG * inRainMultiplier)
+        else:
+            await reduce_health(opponentGameState, config.GAME_BOMB_DMG)
 
 
 async def game_state_manager(currGameData, attacker_id: int,
@@ -84,6 +90,7 @@ async def game_state_manager(currGameData, attacker_id: int,
         attacker_id) + "_" + prediction_action)  # Add action_ prefix to indicate game state msg type to the visualizer
     targetInFOV = False
     targetInRain = False
+    insideNumOfrain = 0
     if prediction_action in {"basket", "soccer", "volley", "bowl", "bomb"}:
         try:
             msg = await asyncio.wait_for(visualizer_receive_queue.get(),
@@ -94,6 +101,7 @@ async def game_state_manager(currGameData, attacker_id: int,
                 print("Received Message from Visualizer")
                 parts = msgStr.split('_')
                 inbomb_bool = parts[4]
+                insideNumOfrain = int(parts[5])
                 if inbomb_bool == "True":
                     print("Target is in bomb range")
                     targetInRain = True
@@ -117,16 +125,19 @@ async def game_state_manager(currGameData, attacker_id: int,
         await reduce_health(targetPlayerData, config.GAME_RAIN_DMG)
 
     if prediction_action == "gun": # For gun action, this will rely on gun packet + health packet. If the code enters here, means the gun shot the opponent
-        await gun_shoot(targetPlayerData, OpponentPlayerData)
+        await gun_shoot(targetPlayerData, OpponentPlayerData, insideNumOfrain)
     elif prediction_action == "shield":
         await shield(targetPlayerData)
     elif prediction_action == "reload":
         await reload(targetPlayerData)
     elif prediction_action == "bomb":
-        await bomb_player(targetPlayerData, OpponentPlayerData, targetInFOV)
+        await bomb_player(targetPlayerData, OpponentPlayerData, targetInFOV, insideNumOfrain)
     elif prediction_action in {"basket", "soccer", "volley", "bowl"}:
         if targetInFOV:
-            await reduce_health(OpponentPlayerData, config.GAME_AI_DMG)
+            if insideNumOfrain > 0:
+                await reduce_health(OpponentPlayerData, config.GAME_RAIN_DMG * insideNumOfrain)
+            else:
+                await reduce_health(OpponentPlayerData, config.GAME_AI_DMG)
     elif prediction_action == "logout":
         # TODO: Implement logout action
         pass
