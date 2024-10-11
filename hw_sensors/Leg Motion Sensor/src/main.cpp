@@ -48,9 +48,10 @@ void setup()
 {
   Serial.begin(115200);
   mpu.initialize();
+
   if (!mpu.testConnection())
   {
-    Serial.println("MPU6050 connection failed");
+    // Serial.println("MPU6050 connection failed");
     while (1)
       ;
   }
@@ -59,14 +60,18 @@ void setup()
   attachInterrupt(digitalPinToInterrupt(IMU_INTERRUPT_PIN), motionDetected, RISING);
   pinMode(LED_OUTPUT_PIN, OUTPUT);
   pinMode(VIBRATOR_PIN, OUTPUT);
+  // while(!ic_connect()){}
 }
 
 void loop()
 {
+  // communicate();
   unsigned long currentMillis = millis();
 
   if (isKickDetected && !isLedOn)
   {
+    // push boolean kick detected to the server
+    // communicate();
     digitalWrite(LED_OUTPUT_PIN, HIGH);
     digitalWrite(VIBRATOR_PIN, HIGH);
     previousMillis = currentMillis;
@@ -81,22 +86,22 @@ void loop()
     isLedOn = false;
   }
 
-  if (isRecording)
-  {
-    if (millis() - lastSampleTime >= SAMPLING_DELAY && recordedPoints < 40)
-    {
+  // if (isRecording)
+  // {
+  //   if (millis() - lastSampleTime >= SAMPLING_DELAY && recordedPoints < 40)
+  //   {
 
-      lastSampleTime = millis();
-      mpu.getMotion6(&MPUData.ax, &MPUData.ay, &MPUData.az, &MPUData.gx, &MPUData.gy, &MPUData.gz);
-      recordedPoints++;
+  //     lastSampleTime = millis();
+  //     mpu.getMotion6(&MPUData.ax, &MPUData.ay, &MPUData.az, &MPUData.gx, &MPUData.gy, &MPUData.gz);
+  //     recordedPoints++;
 
-      if (recordedPoints >= 40)
-      {
-        isRecording = false;
-        recordedPoints = 0;
-      }
-    }
-  }
+  //     if (recordedPoints >= 40)
+  //     {
+  //       isRecording = false;
+  //       recordedPoints = 0;
+  //     }
+  //   }
+  // }
 }
 
 void motionDetected()
