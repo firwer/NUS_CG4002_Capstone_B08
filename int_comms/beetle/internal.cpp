@@ -5,6 +5,8 @@ volatile uint8_t relay_seq_num = 0;   // data FROM relay
 
 volatile bool isConnected = false;
 
+#define DEBUG_MODE 0
+
 #define BUFFER_SZ 200
 uint8_t buffer[BUFFER_SZ];
 unsigned int buffer_writer = 0;  // write
@@ -12,7 +14,7 @@ unsigned int buffer_reader = 0;  // read
 unsigned int buffer_fills = 0;   // |Bytes| the buffer has
 
 // hard reset the buffer when things get gnarly for some reason
-void reset_buffer() { 
+void reset_buffer() {
   buffer_fills = 0;
   buffer_writer = 0;
   buffer_reader = 0;
@@ -130,12 +132,12 @@ void await_handshake(bool helloReceived) {
         continue;
       }
       // checksum failed, retransmit
-      if (!verifyChecksum(&ack_packet)){
+      if (!verifyChecksum(&ack_packet)) {
         reset_buffer();
         continue;
       }
-      if(ack_packet.packet_type == 0x0)
-        digitalWrite(13,1);
+      if (ack_packet.packet_type == 0x0)
+        digitalWrite(13, 1);
 
       if (ack_packet.packet_type == PACKET_CONN_ESTAB) {
         isConnected = true;
@@ -168,8 +170,8 @@ void getRandomReliablePacket(packet_general_t* pkt) {
 // ----- Two-way TX/RX -----
 bool reliableBufferFilled = true;    // CONFIG: simulate buffer full (has something to send reliably)
 bool unreliableBufferFilled = true;  // CONFIG: simulate udp buffer full (has something to send unreliably)
-uint8_t rel_tx_rate = 0;             // CONFIG: Tuning of reliable transfer rate in ms
-uint8_t unrel_tx_rate = 0;           // CONFIG: Tuning of unreliable transfer rate in ms
+uint8_t rel_tx_rate = 1000;             // CONFIG: Tuning of reliable transfer rate in ms
+uint8_t unrel_tx_rate = 2;           // CONFIG: Tuning of unreliable transfer rate in ms
 long unreliableStartRateTime = 0;    // TESTING: rate limit for unreliable sending
 long reliableStartRateTime = 0;      // TESTING: rate limit for reliable sending
 
@@ -265,7 +267,7 @@ packet_gamestate_t ic_get_state() {
   if (!receive_buffer_filled) {
     packet_gamestate_t invalid;
     invalid.packet_type = PACKET_INVALID;
-    return (packet_gamestate_t) invalid;
+    return (packet_gamestate_t)invalid;
   }
   receive_buffer_filled = false;
   packet_gamestate_t my_buf = receive_buffer;
@@ -275,13 +277,18 @@ packet_gamestate_t ic_get_state() {
 // ----- COMMUNICATION LOGIC -----
 
 // Send all reliable & unreliable data in the buffer and receive gamestate data where applicable
+int numSent = 0;
+long cooldownStart = 0;
+long long cooldown_period = 4000;
+bool cooldown = false;
+
 void communicate() {
   auto rate_start = millis();
 
   // ---- RECEIVING LOGIC ----
   packet_general_t rcv = { 0 };
   bool shouldAck = false;
-  if (await_packet((packet_general_t*)&rcv, 100)) {
+  if (await_packet((packet_general_t*)&rcv, 10)) {
     // case 1: checksum error (continue)
     if (verifyChecksum(&rcv)) {
       // case 2: hello
@@ -308,7 +315,7 @@ void communicate() {
           // Actually handle the packet for hardware integration
           // WARN: if multiple gamestate comes in, this will OVERWRITE.
           receive_buffer_filled = true;
-          packet_gamestate_t* tmp = (packet_gamestate_t*) &rcv;
+          packet_gamestate_t* tmp = (packet_gamestate_t*)&rcv;
           receive_buffer.bullet_num = tmp->bullet_num;
           receive_buffer.health_num = tmp->health_num;
         }
@@ -324,26 +331,47 @@ void communicate() {
   // TRANSMIT UNRELIABLE DATA
   if (unreliableBufferFilled && millis() - unreliableStartRateTime > unrel_tx_rate) {
     unreliableStartRateTime = millis();
-    
     packet_imu_t& pkt = unreliable_buffer;
 
-    // YAGNI, but left here for testing 
-    // packet_imu_t pkt = { 0 };
-    // pkt.packet_type = PACKET_DATA_IMU;
-    // pkt.accX = rand() % 512;
-    // pkt.accY = rand() % 512;
-    // pkt.accZ = rand() % 512;
-    // pkt.gyrX = rand() % 512;
-    // pkt.gyrY = rand() % 512;
-    // pkt.gyrZ = rand() % 512;
-    // pkt.adc = rand() % 256;
-
+  #if DEBUG_MODE
+    if (!cooldown) {
+      // YAGNI, but left here for testing 
+      packet_imu_t pkt = { 0 };
+      pkt.packet_type = PACKET_DATA_IMU;
+      pkt.accX = rand() % 512;
+      pkt.accY = rand() % 512;
+      pkt.accZ = rand() % 512;
+      pkt.gyrX = rand() % 512;
+      pkt.gyrY = rand() % 512;
+      pkt.gyrZ = rand() % 512;
+      pkt.adc = rand() % 256;
+      pkt.seq_num = beetle_seq_num;
+      ++beetle_seq_num;
+      setChecksum((packet_general_t*)&pkt);
+      write_serial((packet_general_t*)&pkt);
+      // YAGNI - Testing logic
+      ++numSent;
+      if (numSent >= 60) {
+      numSent = 0;
+      cooldownStart = millis();
+      cooldown = true;
+      }
+  }
+  #else
     pkt.seq_num = beetle_seq_num;
     ++beetle_seq_num;
     setChecksum((packet_general_t*)&pkt);
     write_serial((packet_general_t*)&pkt);
+  #endif
 
+    #if DEBUG_MODE
+    if(millis() - cooldownStart > cooldown_period){
+      cooldown = false;
+    }
+    unreliable_buffer_filled = true;
+    #else
     unreliableBufferFilled = false;
+    #endif
   }
 
   // SEND RELIABLE DATA
@@ -358,9 +386,11 @@ void communicate() {
       reliable_buffer_filled = false;
 
       // YAGNI, but left for testing purposes
-      // packet_general_t pkt = {0};
-      // getRandomReliablePacket(&pkt); // randomly choose a packet
-
+      #if DEBUG_MODE
+      packet_general_t pkt = {0};
+      getRandomReliablePacket(&pkt); // randomly choose a packet
+      #endif
+      
       pkt.seq_num = beetle_seq_num;
       ++beetle_seq_num;
       exp_beetle_seq_num = beetle_seq_num;
@@ -385,5 +415,4 @@ void communicate() {
     setChecksum((packet_general_t*)&ack);
     write_serial((packet_general_t*)&ack);
   }
-
 }
