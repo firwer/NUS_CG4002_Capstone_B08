@@ -228,14 +228,14 @@ packet_general_t cached_packet = {0};
 // This is a blocking function
 
 // buffers for processing
-bool unreliable_buffer_filled = false;
+volatile bool unreliable_buffer_filled = false;
 packet_imu_t unreliable_buffer; // unreliable packet buffer
 
-bool reliable_buffer_filled = false;
+volatile bool reliable_buffer_filled = false;
 packet_general_t reliable_buffer;
 
-bool receive_buffer_filled = false;
-packet_gamestate_t receive_buffer;
+volatile bool gamestate_buffer_filled = false;
+packet_gamestate_t gamestate_buffer;
 
 bool ic_connect()
 {
@@ -299,16 +299,17 @@ bool ic_push_kick()
 // Get the gamestate, if any.
 // WARNING: returns an empty packet with TYPE_INVALID if there is nothing.
 //          You MUST handle this properly.
+packet_gamestate_t invalid;
 packet_gamestate_t ic_get_state()
 {
-  if (!receive_buffer_filled)
+  if (!gamestate_buffer_filled)
   {
-    packet_gamestate_t invalid;
     invalid.packet_type = PACKET_INVALID;
     return (packet_gamestate_t)invalid;
   }
-  receive_buffer_filled = false;
-  packet_gamestate_t my_buf = receive_buffer;
+  gamestate_buffer_filled = false;
+  packet_gamestate_t my_buf;
+  memcpy(&my_buf, &gamestate_buffer, 20);
   return my_buf; // return a copy
 }
 
@@ -361,10 +362,9 @@ void communicate()
           relay_seq_num = (relay_seq_num + 1) % 256;
           // Actually handle the packet for hardware integration
           // WARN: if multiple gamestate comes in, this will OVERWRITE.
-          receive_buffer_filled = true;
+          gamestate_buffer_filled = true;
           packet_gamestate_t *tmp = (packet_gamestate_t *)&rcv;
-          receive_buffer.bullet_num = tmp->bullet_num;
-          receive_buffer.health_num = tmp->health_num;
+          memcpy(&gamestate_buffer, &rcv, 20);
         }
         // incorrect serial number, ignore
       }
@@ -429,13 +429,13 @@ void communicate()
   // if ACKn received AND there is something to send, send it!
   if (canSendReliable)
   {
-    if (receive_buffer_filled && millis() - reliableStartRateTime > rel_tx_rate)
+    if (reliable_buffer_filled && millis() - reliableStartRateTime > rel_tx_rate)
     { // simulate checking of reliableBuffer to send
       reliableStartRateTime = millis();
       canSendReliable = false;
       reliableSent = true;
 
-      packet_general_t pkt = reliable_buffer;
+      packet_general_t &pkt = reliable_buffer;
       reliable_buffer_filled = false;
 
 // YAGNI, but left for testing purposes
