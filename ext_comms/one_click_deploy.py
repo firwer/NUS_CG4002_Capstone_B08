@@ -11,10 +11,9 @@ for reverse SSH tunneling each time. This script fully automates the process by 
 and binding it to the local evaluation server port. The script then runs the game server on the remote machine using the 
 bound port.
 
-This script consist of 2 main jobs:
+This script consists of 2 main jobs:
 1. Setup Reverse SSH Tunneling based on the port the evaluation server is listening on in your local machine.
 2. Run the game server on U96 using the random available port that was bound to the local evaluation server port.
-
 '''
 
 
@@ -46,9 +45,10 @@ async def reverse_ssh_tunnel(remote_host, remote_user, local_port):
             forwarder = await conn.forward_remote_port('127.0.0.1', remote_port, '127.0.0.1', local_port)
             print(f"Reverse SSH tunnel established: remote {remote_port} -> local {local_port}")
 
-            await run_game_server_on_ultra96(conn, remote_port)
-            # Keep the SSH tunnel alive
-            await forwarder.wait_closed()
+            # Start the game server on Ultra96
+            game_server_task = asyncio.create_task(run_game_server_on_ultra96(conn, remote_port))
+            # Keep the SSH tunnel alive while the game server is running
+            await asyncio.gather(forwarder.wait_closed(), game_server_task)
 
     except (OSError, asyncssh.Error) as exc:
         print(f'Error in SSH tunnel: {str(exc)}')
@@ -61,20 +61,28 @@ async def run_game_server_on_ultra96(conn, remote_port):
 
     try:
         # Kill any existing active relay node TCP port
-        print("Running game server on Ultra96...")
+        print("Killing any existing process on port 65001...")
+        await conn.run('fuser -KILL -k -n tcp 65001', check=False)
+
         # Run the game server remotely on the Ultra96
-        await conn.run('fuser -KILL -k -n tcp 65001')
-        result = await conn.run(f'source /usr/local/share/pynq-venv/bin/activate && python '
-                                f'/home/xilinx/ext_comms/main.py {remote_port}', check=True)
-        # Print standard output and error
-        print("Game server output:")
-        print(result.stdout)
-        print("Game server errors (if any):")
-        print(result.stderr)
+        command = f'source /usr/local/share/pynq-venv/bin/activate && python /home/xilinx/ext_comms/main.py {remote_port}'
+        process = await conn.create_process(command)
+
+        async def read_stdout():
+            async for line in process.stdout:
+                print(f"[REMOTE STDOUT] {line}", end='')
+
+        async def read_stderr():
+            async for line in process.stderr:
+                print(f"[REMOTE STDERR] {line}", end='')
+
+        # Wait for the process to complete while reading stdout and stderr
+        await asyncio.gather(read_stdout(), read_stderr(), process.wait())
 
     except asyncssh.ProcessError as e:
         print(f"Failed to run the game server on Ultra96: {e}")
         print(f"Error details: {e.stderr}")
+
 
 async def main():
     local_port = prompt_user_for_port()
@@ -83,8 +91,7 @@ async def main():
     remote_host = config.ssh_host
     remote_user = config.ssh_user
     try:
-        remote_port = await reverse_ssh_tunnel(remote_host, remote_user, local_port)
-        await run_game_server_on_ultra96(remote_port)
+        await reverse_ssh_tunnel(remote_host, remote_user, local_port)
     except KeyboardInterrupt as e:
         print("Exiting...")
 

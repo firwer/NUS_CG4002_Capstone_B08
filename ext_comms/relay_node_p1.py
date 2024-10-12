@@ -8,14 +8,13 @@ from sshtunnel import SSHTunnelForwarder
 import config
 from comms.TCPC_Controller import TCPC_Controller
 
+RELAY_NODE_PLAYER_NUMBER = 1  # Player number for the relay node
+
 
 # To be deprecated. For testing purposes only
 async def user_input(send_queue: asyncio.Queue, receive_queue: asyncio.Queue):
     while True:
         message = input("Input message: ")
-        if not message.startswith("p1_") and not message.startswith("p2_"):
-            print("Invalid message format. Must start with 'p1_' or 'p2_'")
-            continue
         await send_queue.put(message)
         print(f"Waiting for message")
         msg = await receive_queue.get()
@@ -63,6 +62,7 @@ async def run_tcp_client(send_queue: asyncio.Queue, receive_queue: asyncio.Queue
     wsController = TCPC_Controller(config.TCP_SERVER_HOST, port, config.TCP_SECRET_KEY)
 
     await wsController.connect()
+    await wsController.identify_relay_node(RELAY_NODE_PLAYER_NUMBER)
 
     # Tasks for sending and receiving messages
     tasks = [
