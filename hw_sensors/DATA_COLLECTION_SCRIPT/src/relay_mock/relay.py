@@ -1,4 +1,5 @@
 import argparse
+import os
 import random
 import signal
 import time
@@ -9,8 +10,10 @@ from checksum import *
 import threading
 import pandas as pd
 
-BLUNO_MAC_ADDRESS = "F4:B8:5E:42:6D:49"
-# BLUNO_MAC_ADDRESS = "F4:B8:5E:42:4C:BB"
+# BLUNO_RED_MAC_ADDRESS = "F4:B8:5E:42:6D:49"
+BLUNO_RED_MAC_ADDRESS = "F4:B8:5E:42:4C:BB" #actually green
+
+#FIXME: if we get 59 and then we get 61, ignore the first packet
 CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"
 
 def millis():
@@ -40,10 +43,12 @@ class NotifyDelegate(btle.DefaultDelegate):
         self.lowestThroughput = 1e9        
         self.relayTxNumber = 0
 
+        self.num = 0
+
     def handleNotification(self, cHandle, data: bytes):
         self.buffer += bytearray(data)
         if len(data) < 20: # data is fragmented
-            # print(f"Fragmentation: {len(data)}: {data.hex()}")
+            print(f"Fragmentation: {len(data)}: {data.hex()}")
             self.fragmented_packets += 1
 
     def has_packet(self) -> bool:
@@ -54,7 +59,8 @@ class NotifyDelegate(btle.DefaultDelegate):
         if not self.has_packet():
             return None
         data = self.buffer[:20]
-        print(f"RX Bytes: {data.hex()}")
+        # print(f"RX {self.num} Bytes: {data.hex()}")
+        self.num += 1
         self.buffer = self.buffer[20:]
         return data
     
@@ -63,7 +69,7 @@ class NotifyDelegate(btle.DefaultDelegate):
 
 # A beetle object maintains its own connection and state
 class Beetle:
-    def __init__(self, MAC_ADDRESS, beetle_id=None) -> None:
+    def __init__(self, MAC_ADDRESS, beetle_id=None, filename="") -> None:
         RESET_COLOR = "\033[0m"  # Reset color
         RED_COLOR = "\033[31m"   # Red color
         GREEN_COLOR = "\033[32m"  # Green color
@@ -74,7 +80,9 @@ class Beetle:
         colors = [BLUE_COLOR, GREEN_COLOR, RED_COLOR]
 
         # ----- DATA COLLECTION -----
-        self.my_csv = pd.DataFrame(columns=["ax", "ay", "az", "gx", "gy", "gz"])
+        self.filename = filename
+        # self.my_csv = pd.DataFrame(columns=["gesture", "ax", "ay", "az", "gx", "gy", "gz"])
+        self.my_csv = pd.DataFrame()
         self.ax = []
         self.ay = []
         self.az = []
@@ -83,7 +91,7 @@ class Beetle:
         self.gz = []
         self.EXPECTED_PKTS = 60
         self.CURRENT_PKTS = 0
-        self.ROWS_LEFT= 2 # CONFIGURE ME - THIS CONTROLS HOW MANY ROWS 
+        self.ROWS_LEFT= 1 # CONFIGURE ME - THIS CONTROLS HOW MANY ROWS 
 
         self.COLOR = RESET_COLOR if beetle_id is None else colors[beetle_id]
         self.relay_seq_num = 0
@@ -151,7 +159,7 @@ class Beetle:
                     continue
 
                 pkt = get_packet(data)
-                print(f"pkt {pkt.packet_type}")
+                # print(f"pkt {pkt.packet_type}")
                 # Process based on packet type
 
                 # ignore SYN_ACK packets
@@ -162,6 +170,7 @@ class Beetle:
 
                 if pkt.packet_type == PACKET_DATA_IMU:
                     # TODO do work
+                    print(f"RX {pkt.seq_num}: {pkt.to_bytearray().hex()}")
                     self.CURRENT_PKTS += 1
                     ax = int.from_bytes(pkt.accelX, byteorder='little')  # Convert first 2 bytes to int
                     ay = int.from_bytes(pkt.accelY, byteorder='little')  # Convert next 2 bytes to int
@@ -178,12 +187,15 @@ class Beetle:
                     self.gz.append(gz)
 
                     if self.CURRENT_PKTS == self.EXPECTED_PKTS:
+                        print("row found")
                         self.ROWS_LEFT -= 1
                         # Reset the packet count
                         self.CURRENT_PKTS = 0
 
                         # Create a new row (as a dictionary) for the CSV data
+                        # basket, bowling, reload, volley, rainbomb, shield, logout
                         row = {
+                            "gesture": "logout",
                             "ax": self.ax.copy(),
                             "ay": self.ay.copy(),
                             "az": self.az.copy(),
@@ -209,7 +221,14 @@ class Beetle:
                         if self.ROWS_LEFT == 0:
                             # Save the DataFrame to a CSV file
                             print("done!")
-                            self.my_csv.to_csv(f"my_data.csv", index=False)
+                            file_path = f"{self.filename}_my_data.csv"
+                            # Check if the file exists
+                            if os.path.exists(file_path):
+                                # Append without header if file exists
+                                self.my_csv.to_csv(file_path, mode="a", index=False, header=False)
+                            else:
+                                # Write with header if file does not exist
+                                self.my_csv.to_csv(file_path, mode="a", index=False, header=True)
                             exit(0)
 
 
@@ -399,7 +418,8 @@ class Beetle:
 
 def main():
     # Create Beetle instances
-    beetle0 = Beetle(BLUNO_MAC_ADDRESS, 0)
+    # beetle0 = Beetle(BLUNO_RED_MAC_ADDRESS, 0, "red")
+    beetle0 = Beetle(BLUNO_RED_MAC_ADDRESS, 0, "green_debug")
     beetle0.run()
 
 if __name__ == "__main__":
