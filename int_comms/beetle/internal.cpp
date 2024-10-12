@@ -168,8 +168,6 @@ void getRandomReliablePacket(packet_general_t* pkt) {
 
 
 // ----- Two-way TX/RX -----
-bool reliableBufferFilled = true;    // CONFIG: simulate buffer full (has something to send reliably)
-bool unreliableBufferFilled = true;  // CONFIG: simulate udp buffer full (has something to send unreliably)
 uint8_t rel_tx_rate = 1000;             // CONFIG: Tuning of reliable transfer rate in ms
 uint8_t unrel_tx_rate = 2;           // CONFIG: Tuning of unreliable transfer rate in ms
 long unreliableStartRateTime = 0;    // TESTING: rate limit for unreliable sending
@@ -329,7 +327,7 @@ void communicate() {
   // ---- TRANSMISSION LOGIC ----
 
   // TRANSMIT UNRELIABLE DATA
-  if (unreliableBufferFilled && millis() - unreliableStartRateTime > unrel_tx_rate) {
+  if (unreliable_buffer_filled && millis() - unreliableStartRateTime > unrel_tx_rate) {
     unreliableStartRateTime = millis();
     packet_imu_t& pkt = unreliable_buffer;
 
@@ -370,14 +368,14 @@ void communicate() {
     }
     unreliable_buffer_filled = true;
     #else
-    unreliableBufferFilled = false;
+    unreliable_buffer_filled = false;
     #endif
   }
 
   // SEND RELIABLE DATA
   // if ACKn received AND there is something to send, send it!
   if (canSendReliable) {
-    if (reliableBufferFilled && millis() - reliableStartRateTime > rel_tx_rate) {  // simulate checking of reliableBuffer to send
+    if (receive_buffer_filled && millis() - reliableStartRateTime > rel_tx_rate) {  // simulate checking of reliableBuffer to send
       reliableStartRateTime = millis();
       canSendReliable = false;
       reliableSent = true;
