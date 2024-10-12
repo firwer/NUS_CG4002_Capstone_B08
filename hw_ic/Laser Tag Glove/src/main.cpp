@@ -88,7 +88,7 @@ uint8_t recordedPoints = 0; // Max 40, 8-bits is enough
 
 void motionDetected();
 void sendIMUData();
-void detectReload();
+void detectReloadAndSynchronise(uint8_t incoming_bulletState);
 void playNoBulletsLeftTone();
 void playFullMagazineTone();
 void playMotionFeedback();
