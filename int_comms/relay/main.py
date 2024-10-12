@@ -102,7 +102,7 @@ class Beetle:
         self.reliableTimeout = 1000 # ms
 
         # CONFIG TEST: subcomponent test flags
-        self.testRelayReliable = True
+        self.testRelayReliable = False
         self.corruptProbability = 0.0
         self.killThread = False
         self.hasSentReliable = False

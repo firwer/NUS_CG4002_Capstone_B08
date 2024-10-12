@@ -108,7 +108,7 @@ void setup()
     pinMode(LED_BUILTIN, OUTPUT);
     pinMode(VIBRATION_PIN, OUTPUT);
 
-    while (ic_connect())
+    while (!ic_connect())
         ;
     melody.play(NOTE_A7, 100);
 }

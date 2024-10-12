@@ -43,7 +43,6 @@ uint16_t soundList[10] = {
 // For gun shot
 bool isReloaded = false;
 uint8_t curr_bulletsLeft = 6;
-uint8_t incoming_bulletState = 0;
 bool isFullMagazineTonePlayed = false;
 uint16_t flexValue = 0;
 bool isButtonPressed = false;
@@ -152,7 +151,7 @@ void setup()
   IrSender.begin(IR_SEND_PIN);
 
   // COMMUNICATION @wanlin
-  while (ic_connect())
+  while (!ic_connect())
     ;
   shotFired.play(NOTE_A7, 100);
 }
@@ -166,11 +165,10 @@ void loop()
   pkt = ic_get_state();
   if (pkt.packet_type == PACKET_DATA_GAMESTATE)
   {
-    incoming_bulletState = pkt.bullet_num;
+    detectReloadAndSynchronise(pkt.bullet_num); // TODO integrate with game engine
   }
 
   //==================== GUN SHOT SUBROUTINE ====================
-  detectReloadAndSynchronise(incoming_bulletState); // TODO integrate with game engine
 
   flexValue = analogRead(FLEX_SENSOR_PIN);
   buttonState = digitalRead(BUTTON_PIN);
