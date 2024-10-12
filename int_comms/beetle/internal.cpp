@@ -301,6 +301,7 @@ void communicate() {
         if (rcv.seq_num == exp_beetle_seq_num) {
           // > flag that we need not resend
           canSendReliable = true;
+          reliableSent = false;
         }
       }
       // case 5: Receive a gamestate
