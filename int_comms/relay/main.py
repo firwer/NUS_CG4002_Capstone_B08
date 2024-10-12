@@ -9,10 +9,15 @@ from packet import *
 from checksum import *
 import threading
 
-# GREEN == PLAYER 1
-BLUNO_P1_GLOVE_MAC = "F4:B8:5E:42:4C:BB"
-BLUNO_P1_CHEST_MAC = "F4:B8:5E:42:46:E5"
-BLUNO_P1_LEG_MAC   = "F4:B8:5E:42:61:6A"
+# RED == PLAYER 1
+BLUNO_P1_GLOVE_MAC = "F4:B8:5E:42:6D:49" # TO BE USED FOR EVAL
+#BLUNO_P1_CHEST_MAC = "F4:B8:5E:42:46:E5" 
+#BLUNO_P1_LEG_MAC   = "F4:B8:5E:42:6D:42"
+
+# GREEN == PLAYER 2
+#BLUNO_P2_GLOVE_MAC = "F4:B8:5E:42:4C:BB" 
+BLUNO_P2_CHEST_MAC = "F4:B8:5E:42:6D:1E" #TO BE USED FOR EVAL
+BLUNO_P2_LEG_MAC   = "F4:B8:5E:42:61:6A" #TO BE USED FOR EVAL (TREAT AS PLAYER 1 FOR NOW)
 
 # BLUNO_P1_LEG_MAC = "F4:B8:5E:42:6D:42"
 # BLUNO_P1_CHEST_MAC = "F4:B8:5E:42:46:E5"
@@ -369,8 +374,8 @@ def main():
 
     # Create Beetle instances
     beetle0 = Beetle(BLUNO_P1_GLOVE_MAC, 0)
-    beetle1 = Beetle(BLUNO_P1_CHEST_MAC, 1)
-    beetle2 = Beetle(BLUNO_P1_LEG_MAC, 2)
+    beetle1 = Beetle(BLUNO_P2_CHEST_MAC, 1)
+    beetle2 = Beetle(BLUNO_P2_LEG_MAC, 2)
     t0 = threading.Thread(target=run_beetle, args=(beetle0,), name="Beetle0")
     t1 = threading.Thread(target=run_beetle, args=(beetle1,), name=f"Beetle1")
     t2 = threading.Thread(target=run_beetle, args=(beetle2,), name=f"Beetle2")

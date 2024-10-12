@@ -43,7 +43,7 @@ uint16_t soundList[10] = {
 // For gun shot
 bool isReloaded = false;
 uint8_t curr_bulletsLeft = 6;
-uint8_t bulletState = 6;
+uint8_t incoming_bulletState = 0;
 bool isFullMagazineTonePlayed = false;
 uint16_t flexValue = 0;
 bool isButtonPressed = false;
@@ -88,7 +88,7 @@ uint8_t recordedPoints = 0; // Max 40, 8-bits is enough
 
 void motionDetected();
 void sendIMUData();
-void detectReload();
+void detectReloadAndSynchronise(uint8_t incoming_bulletState);
 void playNoBulletsLeftTone();
 void playFullMagazineTone();
 void playMotionFeedback();
@@ -130,8 +130,8 @@ void setup()
   mpu.setYGyroOffset(calibrationData.ygoffset);
   mpu.setZGyroOffset(calibrationData.zgoffset);
 
-  mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_4);
-  mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_250);
+  mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_8);
+  mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_500);
 
   mpu.setDHPFMode(MPU6050_DHPF_1P25);
   mpu.setDLPFMode(MPU6050_DLPF_BW_20);
@@ -150,9 +150,10 @@ void setup()
   // Serial.print(F("Send IR signals at pin "));
   Serial.println(IR_SEND_PIN);
   IrSender.begin(IR_SEND_PIN);
-  
+
   // COMMUNICATION @wanlin
-  while(ic_connect());
+  while (ic_connect())
+    ;
   shotFired.play(NOTE_A7, 100);
 }
 
@@ -163,13 +164,13 @@ void loop()
   // Synchronize the bullet state
   communicate();
   pkt = ic_get_state();
-  if(pkt.packet_type == PACKET_DATA_GAMESTATE){
-    curr_bulletsLeft = pkt.bullet_num;
+  if (pkt.packet_type == PACKET_DATA_GAMESTATE)
+  {
+    incoming_bulletState = pkt.bullet_num;
   }
-  
-  //==================== GUN SHOT SUBROUTINE ====================
-  detectReload(); //TODO integrate with game engine
 
+  //==================== GUN SHOT SUBROUTINE ====================
+  detectReloadAndSynchronise(incoming_bulletState); // TODO integrate with game engine
 
   flexValue = analogRead(FLEX_SENSOR_PIN);
   buttonState = digitalRead(BUTTON_PIN);
@@ -212,22 +213,19 @@ void loop()
       isFullMagazineTonePlayed = false;
       soundQueue.enqueue(soundList[curr_bulletsLeft]);
       // @wanlin
-      ic_push_bullet(curr_bulletsLeft);
-      communicate();
-      // Serial.print("Bullets left: ");
-      // Serial.println(curr_bulletsLeft);
-      // Serial.println("Shot fired");
     }
     else
     {
-      // Serial.println("No bullets left");
       playNoBulletsLeftTone();
     }
+    // push bullet packet for any gun action attempted, regardless of num bullets
+    ic_push_bullet(curr_bulletsLeft);
+    communicate();
     shotBeenFired = true;
   }
 
   //==================== MPU6050 SUBROUTINE====================
- 
+
   if (isRecording)
   {
     if (!isMotionTunePlayed)
@@ -260,7 +258,7 @@ void loop()
 
       if (recordedPoints >= NUM_RECORDED_POINTS && !hasMotionEnded)
       {
-        // sendIMUData(ax,ay,az,gx,gy,gz); //modify params if needed
+
         playMotionEndFeedback();
         isRecording = false;
         recordedPoints = 0;
@@ -271,12 +269,16 @@ void loop()
   }
 }
 
-void detectReload()
+void detectReloadAndSynchronise(uint8_t incoming_bulletState)
 {
-  if (curr_bulletsLeft == 0 && bulletState == 6)
+  if (curr_bulletsLeft == 0 && incoming_bulletState == 6)
   {
     isReloaded = true;
     curr_bulletsLeft = 6;
+  }
+  else if (curr_bulletsLeft != incoming_bulletState && curr_bulletsLeft != 0)
+  {
+    curr_bulletsLeft = incoming_bulletState;
   }
   else
   {

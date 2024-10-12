@@ -35,8 +35,8 @@ unsigned long lastCriticalVibrationTime = 0;
 unsigned long lastVibrationTime = 0;
 bool vibrationActive = false; // Tracks if a vibration pulse is currently active
 
-int16_t curr_healthValue = 100;     // HARDWARE-side tracker
-int16_t incoming_healthState = 100; // INCOMING Game Engine health state
+int16_t curr_healthValue = 100;   // HARDWARE-side tracker
+int16_t incoming_healthState = 0; // INCOMING Game Engine health state
 
 Tone melody;
 
@@ -108,7 +108,8 @@ void setup()
     pinMode(LED_BUILTIN, OUTPUT);
     pinMode(VIBRATION_PIN, OUTPUT);
 
-    while(ic_connect());
+    while (ic_connect())
+        ;
     melody.play(NOTE_A7, 100);
 }
 
@@ -119,11 +120,11 @@ void loop()
     //@wanlin
     communicate();
     pkt = ic_get_state();
-    if(pkt.health_num != curr_healthValue)
+    incoming_healthState = pkt.health_num;
+    if (incoming_healthState != curr_healthValue)
         healthSynchronisation(curr_healthValue, incoming_healthState);
     handleRespawn(isRespawn);
     digitalWrite(VIBRATION_PIN, HIGH);
-
 
     //==========================Buzzer and Health Update SubRoutine ==========================
     if (millis() - lastSoundTime > NOTE_DELAY)
@@ -231,7 +232,6 @@ void loop()
             // IrReceiver.printIRResultShort(&Serial);
             // IrReceiver.printIRSendUsage(&Serial);
         }
-        // Serial.println();
 
         if (IrReceiver.decodedIRData.address == PLAYER_1_ADDRESS)
         {
@@ -241,7 +241,7 @@ void loop()
             isDamaged = true;
             // Serial.print(F("Player 1 shot! Health: "));
             // Serial.println(curr_healthValue);
-            
+
             // @wanlin
             ic_push_health(curr_healthValue);
             communicate();
