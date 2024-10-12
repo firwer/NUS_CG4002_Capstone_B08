@@ -115,6 +115,7 @@ void await_handshake(bool helloReceived) {
         break;
       }
     }
+    digitalWrite(13, 1);
     // we have gotten a valid checksum. Complete the handshake
     // Send the SYN-ACK. Retransmit a max of 2 times before giving up and going back to waiting
     packet_ack_t syn_ack_packet = { 0 };
