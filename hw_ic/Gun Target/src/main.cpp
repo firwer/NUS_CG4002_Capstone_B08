@@ -123,7 +123,6 @@ void loop()
     if (pkt.health_num != curr_healthValue)
     {
         healthSynchronisation(curr_healthValue, pkt.health_num);
-        handleRespawn(isRespawn);
     }
     // digitalWrite(VIBRATION_PIN, HIGH);
 
@@ -143,7 +142,7 @@ void loop()
         lastSoundTime = millis();
     }
 
-    if (curr_healthValue == 100 && !isFullHealthplayed)
+    if (curr_healthValue == 100 && !isFullHealthplayed || isRespawn && !isFullHealthplayed)
     {
         playStartupTune();
         isFullHealthplayed = true;
@@ -160,7 +159,7 @@ void loop()
 
         isDamaged = false;
     }
-    else if (curr_healthValue <= 10 && !isCriticalHealth && curr_healthValue > 0)
+    else if (curr_healthValue <= 10 && curr_healthValue > 0 && !isCriticalHealth)
     {
         isCriticalHealth = true;
         lastCriticalTuneTime = millis();
@@ -240,6 +239,7 @@ void loop()
         }
         IrReceiver.resume(); // Receive the next value
     }
+    // communicate();
 }
 void playHealthDecrementTune(int16_t health)
 {
@@ -295,29 +295,28 @@ This function will handle the health agreement between the game engine and the h
 */
 void healthSynchronisation(int16_t curr_healthValue, int16_t incoming_healthState)
 {
-    if (curr_healthValue != incoming_healthState && incoming_healthState < curr_healthValue)
+    const int16_t MAX_HEALTH = 100;
+    // CASE 1: Health is decremented
+    if (incoming_healthState < curr_healthValue)
     {
         curr_healthValue = incoming_healthState;
         isDamaged = true;
     }
-    else if (curr_healthValue == 0 && incoming_healthState == 100)
+    // either respawn or revive and damaged (in the case of rain bomb)
+    else if (incoming_healthState > curr_healthValue)
     {
-        curr_healthValue = 100;
-        isRespawn = true;
-    }
-}
-
-/*
-This function will give feedback that the player has respawned.
-*/
-void handleRespawn(bool isRespawn)
-{
-    if (isRespawn)
-    {
-        curr_healthValue = 100; // reset health to 100
-        playStartupTune();
-        // Serial.print(F("Player 1 respawned! Health: "));
-        // Serial.println(curr_healthValue);
-        isRespawn = false;
+        if (incoming_healthState == MAX_HEALTH && curr_healthValue == 0)
+        {
+            // CASE 2 RESPAWN
+            curr_healthValue = incoming_healthState;
+            isRespawn = true;
+        }
+        else
+        {
+            // CASE 3: If health from update is more but its less than max health then play revive + damage
+            curr_healthValue = incoming_healthState;
+            isRespawn = true;
+            isDamaged = true;
+        }
     }
 }
