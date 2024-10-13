@@ -74,7 +74,7 @@ class TCPC_Controller:
         length = len(message)
         self.writer.write(f"{length}_".encode() + message)
         await self.writer.drain()
-        print(f"Sent message: {message}")
+        #print(f"Sent message: {message}")
 
     async def recv(self):
         """
