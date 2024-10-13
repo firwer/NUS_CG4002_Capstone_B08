@@ -125,17 +125,13 @@ async def game_state_manager(currGameData, attacker_id: int,
 
     if prediction_action == "gun":
         # Wait for the action result (hit or miss)
-        try:
-            result = await gun_state_queue.get()
-            if result == "hit":
-                await gun_shoot(targetPlayerData, OpponentPlayerData, insideNumOfrain)
-            elif result == "miss":
-                # Only deduct bullet
-                if targetPlayerData["bullets"] > 0:
-                    targetPlayerData["bullets"] -= 1
-        except asyncio.TimeoutError:
-            print("Gun validation did not respond in time. Defaulting to hit")
+        result = await gun_state_queue.get()
+        if result == "hit":
             await gun_shoot(targetPlayerData, OpponentPlayerData, insideNumOfrain)
+        elif result == "miss":
+            # Only deduct bullet
+            if targetPlayerData["bullets"] > 0:
+                targetPlayerData["bullets"] -= 1
     elif prediction_action == "shield":
         await shield(targetPlayerData)
     elif prediction_action == "reload":
