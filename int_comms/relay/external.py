@@ -12,26 +12,32 @@ from int_comms.relay.packet import PACKET_DATA_IMU, PACKET_DATA_BULLET, PACKET_D
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
-RELAY_NODE_PLAYER = 1
+RELAY_NODE_PLAYER = 0
 
 
-def get_user_input(sendToGameServerQueue):
+def get_user_input(from_beetles_queue1 : Queue, from_beetles_queue2 : Queue, from_beetles_queue3 : Queue):
+    IMU_Bullet_beetle = from_beetles_queue1
+    Health_beetle = from_beetles_queue2
+    Kick_beetle = from_beetles_queue3
     while True:
-        user_input = input("Enter packet type to send: ")
+        user_input = input("\nEnter packet type to send: ")
         # Map user input to packet types
         packet_type = user_input.strip().upper()
         if packet_type == 'IMU':
             packet = sim_get_packet(PACKET_DATA_IMU)
+            IMU_Bullet_beetle.put(packet)
         elif packet_type == 'BULLET':
             packet = sim_get_packet(PACKET_DATA_BULLET)
+            IMU_Bullet_beetle.put(packet)
         elif packet_type == 'HEALTH':
             packet = sim_get_packet(PACKET_DATA_HEALTH)
+            Health_beetle.put(packet)
         elif packet_type == 'KICK':
             packet = sim_get_packet(PACKET_DATA_KICK)
+            Kick_beetle.put(packet)
         else:
             print("Invalid packet type.")
             continue
-        sendToGameServerQueue.put(packet)
 
 
 def receive_queue_handler(tcpController: TCPC_Controller_Sync, receive_queue: Queue):
@@ -41,7 +47,6 @@ def receive_queue_handler(tcpController: TCPC_Controller_Sync, receive_queue: Qu
             receive_queue.put(msg)
         except Exception as e:
             print(f"Error receiving message: {e}")
-            # Handle reconnection if needed
 
 
 def send_queue_handler(tcpController: TCPC_Controller_Sync, send_queue: Queue):
@@ -50,65 +55,23 @@ def send_queue_handler(tcpController: TCPC_Controller_Sync, send_queue: Queue):
         tcpController.send(message.to_bytearray())
 
 
-#async def async_thread_main(fromBlunos: Queue, toBlunos: Queue, sendToGameServerQueue: Queue,
-def thread_main(sendToGameServerQueue: Queue, receiveFromGameServerQueue: Queue):
-    print("Establishing connection to TCP server...")
-    wsController = TCPC_Controller_Sync(
-        config.TCP_SERVER_HOST, config.TCP_SERVER_PORT, config.TCP_SECRET_KEY
-    )
-
-    wsController.connect()
-    wsController.identify_relay_node(RELAY_NODE_PLAYER)
-
-    send_thread = Thread(target=send_queue_handler, args=(wsController, sendToGameServerQueue))
-    receive_thread = Thread(target=receive_queue_handler, args=(wsController, receiveFromGameServerQueue))
-    user_input_thread = Thread(target=get_user_input, args=(sendToGameServerQueue,))
-
-    send_thread.start()
-    receive_thread.start()
-    user_input_thread.start()
-
-    send_thread.join()
-    receive_thread.join()
-    user_input_thread.join()
-
-
-# def aggregator_thread_main(sendToGameServerQueue: Queue, from_beetles_queue, to_beetles_queues,
-#                            receiveFromGameServerQueue: Queue):
-#     """Aggregates the beetles' data"""
-#     while True:
-#         # Use a combined list of queues to wait on
-#         for from_queue in from_beetles_queue:
-#             try:
-#                 data = from_queue.get(timeout=0.1)
-#                 sendToGameServerQueue.put(data)
-#             except Exception as error:
-#                 continue
-#         try:
-#             data = receiveFromGameServerQueue.get(timeout=0.1)
-#             for to_queue in to_beetles_queues:
-#                 to_queue.put(data)
-#         except Exception as error:
-#             continue
-
-
-def entry_thread(fromBeetle1: Queue, fromBeetle2: Queue, fromBeetle3: Queue, toBeetle1: Queue, toBeetle2: Queue):
-    print("Starting entry thread")
-    receiveFromGameServerQueue = Queue()
-    sendToGameServerQueue = Queue()
-    # from_beetles_queues = [fromBeetle1, fromBeetle2, fromBeetle3]
-    # to_beetles_queues = [toBeetle1, toBeetle2]
-    # Start the aggregator thread
-    # agg_thread = Thread(target=aggregator_thread_main, args=(
-    #     sendToGameServerQueue, from_beetles_queues, to_beetles_queues, receiveFromGameServerQueue))
-    # agg_thread.start()
-
-    # Start the async thread
-    async_thread = Thread(target=thread_main, args=(sendToGameServerQueue, receiveFromGameServerQueue))
-    async_thread.start()
-
-    #agg_thread.join()
-    async_thread.join()
+def aggregator_thread_main(sendToGameServerQueue: Queue, from_beetles_queue, to_beetles_queues,
+                           receiveFromGameServerQueue: Queue):
+    """Aggregates the beetles' data"""
+    while True:
+        # Use a combined list of queues to wait on
+        for from_queue in from_beetles_queue:
+            try:
+                data = from_queue.get(timeout=0.1)
+                sendToGameServerQueue.put(data)
+            except Exception as error:
+                continue
+        try:
+            data = receiveFromGameServerQueue.get(timeout=0.1)
+            for to_queue in to_beetles_queues:
+                to_queue.put(data)
+        except Exception as error:
+            continue
 
 
 def sim_get_packet(type):
@@ -181,21 +144,46 @@ def sim_beetle(id, toExternal: Queue, fromExternal: Queue = None):
 def simulate():
     # simulate beetle passing messages
     global RELAY_NODE_PLAYER
-    while RELAY_NODE_PLAYER != 1 and RELAY_NODE_PLAYER != 2:
-        input("Select with player's relay node (1/2):")
-        RELAY_NODE_PLAYER = int(input())
-    print(f"Configured relay node for player {RELAY_NODE_PLAYER}")
     fromBeetle1 = Queue()
     fromBeetle2 = Queue()
     fromBeetle3 = Queue()
     toBeetle1 = Queue()
     toBeetle2 = Queue()
+    receiveFromGameServerQueue = Queue()
+    sendToGameServerQueue = Queue()
 
-    thread_entry = Thread(target=entry_thread, args=(fromBeetle1, fromBeetle2, fromBeetle3, toBeetle1, toBeetle2,))
-    thread_entry.start()
-    thread_entry.join()
+    from_beetles_queues = [fromBeetle1, fromBeetle2, fromBeetle3]
+    to_beetles_queues = [toBeetle1, toBeetle2]
 
-    #thread_entry = Thread(target=entry_thread, args=(fromBeetle1, fromBeetle2, fromBeetle3, toBeetle1, toBeetle2,))
+    print("Establishing connection to TCP server...")
+    wsController = TCPC_Controller_Sync(
+        config.TCP_SERVER_HOST, config.TCP_SERVER_PORT, config.TCP_SECRET_KEY
+    )
+    wsController.connect()
+    wsController.identify_relay_node(RELAY_NODE_PLAYER)
+
+    while RELAY_NODE_PLAYER != 1 and RELAY_NODE_PLAYER != 2:
+        relay_node_id = input("Select Relay Node (1/2): ")
+        RELAY_NODE_PLAYER = int(relay_node_id)
+
+    agg_thread = Thread(target=aggregator_thread_main, args=(
+        sendToGameServerQueue, from_beetles_queues, to_beetles_queues, receiveFromGameServerQueue))
+    send_thread = Thread(target=send_queue_handler, args=(wsController, sendToGameServerQueue))
+    receive_thread = Thread(target=receive_queue_handler, args=(wsController, receiveFromGameServerQueue))
+    # Manual User Input Testing Thread
+    user_input_thread = Thread(target=get_user_input, args=[fromBeetle1, fromBeetle2, fromBeetle3])
+
+    agg_thread.start()
+    send_thread.start()
+    receive_thread.start()
+    user_input_thread.start()
+
+    agg_thread.join()
+    send_thread.join()
+    receive_thread.join()
+    user_input_thread.join()
+
+    # Simulated Input Threads
     #thread_beetle1 = Thread(target=sim_beetle, args=(1, fromBeetle1, toBeetle1,))
     #thread_beetle2 = Thread(target=sim_beetle, args=(2, fromBeetle2, toBeetle2,))
     #thread_beetle3 = Thread(target=sim_beetle, args=(3, fromBeetle3,))
