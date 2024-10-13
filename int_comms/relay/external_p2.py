@@ -12,7 +12,7 @@ from int_comms.relay.packet import PACKET_DATA_IMU, PACKET_DATA_BULLET, PACKET_D
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
-RELAY_NODE_PLAYER = 1
+RELAY_NODE_PLAYER = 2
 
 
 def get_user_input(sendToGameServerQueue):

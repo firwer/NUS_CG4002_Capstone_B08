@@ -1,6 +1,4 @@
 import asyncio
-import logging
-
 import config
 
 
@@ -71,7 +69,8 @@ async def bomb_player(targetGameState: dict, opponentGameState: dict, can_see: b
 async def game_state_manager(currGameData, attacker_id: int,
                              pred_output_queue: asyncio.Queue,
                              visualizer_receive_queue: asyncio.Queue,
-                             visualizer_send_queue: asyncio.Queue):
+                             visualizer_send_queue: asyncio.Queue,
+                             gun_state_queue: asyncio.Queue):
     prediction_action = await pred_output_queue.get()
     print(f"Received prediction from PredictionService: {prediction_action} for player {attacker_id}")
 
@@ -124,8 +123,19 @@ async def game_state_manager(currGameData, attacker_id: int,
     if targetInRain:
         await reduce_health(targetPlayerData, config.GAME_RAIN_DMG)
 
-    if prediction_action == "gun": # For gun action, this will rely on gun packet + health packet. If the code enters here, means the gun shot the opponent
-        await gun_shoot(targetPlayerData, OpponentPlayerData, insideNumOfrain)
+    if prediction_action == "gun":
+        # Wait for the action result (hit or miss)
+        try:
+            result = await gun_state_queue.get()
+            if result == "hit":
+                await gun_shoot(targetPlayerData, OpponentPlayerData, insideNumOfrain)
+            elif result == "miss":
+                # Only deduct bullet
+                if targetPlayerData["bullets"] > 0:
+                    targetPlayerData["bullets"] -= 1
+        except asyncio.TimeoutError:
+            print("Gun validation did not respond in time. Defaulting to hit")
+            await gun_shoot(targetPlayerData, OpponentPlayerData, insideNumOfrain)
     elif prediction_action == "shield":
         await shield(targetPlayerData)
     elif prediction_action == "reload":
@@ -142,7 +152,7 @@ async def game_state_manager(currGameData, attacker_id: int,
         # TODO: Implement logout action
         pass
     else:
+        print("Invalid action received. Doing nothing.")
         pass
     # Send updated game state to visualizer
     await visualizer_send_queue.put("gs_" + currGameData.to_json(attacker_id))  # Add gs_ prefix to indicate game
-    # state msg type to the visualizer

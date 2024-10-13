@@ -1,4 +1,6 @@
 import asyncio
+import traceback
+
 from Utils import encrypt_msg, decrypt_message
 
 
@@ -119,7 +121,7 @@ class TCPS_Controller:
                 data += chunk
             length = int(data[:-1].decode())
             message = await asyncio.wait_for(reader.readexactly(length), timeout)
-            return True, decrypt_message(self.secret_key, message.decode())
+            return True, message
         except (asyncio.TimeoutError, asyncio.IncompleteReadError, ValueError):
             print("Data reception error or invalid format.")
             return False, None
