@@ -35,8 +35,8 @@ unsigned long lastCriticalVibrationTime = 0;
 unsigned long lastVibrationTime = 0;
 bool vibrationActive = false; // Tracks if a vibration pulse is currently active
 
-int16_t curr_healthValue = 100;   // HARDWARE-side tracker
-int16_t incoming_healthState = 0; // INCOMING Game Engine health state
+int16_t curr_healthValue = 100; // HARDWARE-side tracker
+// int16_t incoming_healthState = 0; // INCOMING Game Engine health state
 
 Tone melody;
 
@@ -120,11 +120,12 @@ void loop()
     //@wanlin
     communicate();
     pkt = ic_get_state();
-    incoming_healthState = pkt.health_num;
-    if (incoming_healthState != curr_healthValue)
-        healthSynchronisation(curr_healthValue, incoming_healthState);
-    handleRespawn(isRespawn);
-    digitalWrite(VIBRATION_PIN, HIGH);
+    if (pkt.health_num != curr_healthValue)
+    {
+        healthSynchronisation(curr_healthValue, pkt.health_num);
+        handleRespawn(isRespawn);
+    }
+    // digitalWrite(VIBRATION_PIN, HIGH);
 
     //==========================Buzzer and Health Update SubRoutine ==========================
     if (millis() - lastSoundTime > NOTE_DELAY)
@@ -174,20 +175,14 @@ void loop()
         isDeathPlayed = true;
         // Serial.println(F("Player 1 is dead!"));
     }
-    if (isCriticalHealth)
-    {
-        if (millis() - lastCriticalTuneTime >= 750)
-        {
-            playCriticalHealthTune();
-            lastCriticalTuneTime = millis();
-        }
-    }
+
     if (vibrationActive && (millis() - lastVibrationTime >= PULSE_DURATION))
     {
         digitalWrite(VIBRATION_PIN, LOW);
         vibrationActive = false;
     }
 
+    //==================== CRITICAL HEALTH SUBROUTINE=======================
     if (isCriticalHealth)
     {
         if (millis() - lastCriticalTuneTime >= 750)
@@ -195,9 +190,6 @@ void loop()
             playCriticalHealthTune();
             lastCriticalTuneTime = millis();
         }
-    }
-    if (isCriticalHealth)
-    {
         // Start a new critical vibration pulse if interval has passed
         if (!criticalVibrationActive && (millis() - lastCriticalVibrationTime >= CRITICAL_VIBRATION_INTERVAL))
         {
