@@ -58,9 +58,8 @@ class TCPC_Controller:
         if not self.writer:
             print("Connection not established. Exiting...")
             return
-        data = encrypt_msg(str(player_number), self.secret_key)
-        self.writer.write(f"{len(data)}_".encode())
-        self.writer.write(data)
+        length = len(str(player_number))
+        self.writer.write(f"{length}_".encode() + str(player_number).encode())
         await self.writer.drain()
         print("Successfully identified player relay node with TCP server!")
 
@@ -68,6 +67,12 @@ class TCPC_Controller:
         encrypted_message = encrypt_msg(message, self.secret_key)
         length = len(encrypted_message)
         self.writer.write(f"{length}_".encode() + encrypted_message)
+        await self.writer.drain()
+        print(f"Sent message: {message}")
+
+    async def send_no_encrypt(self, message):
+        length = len(message)
+        self.writer.write(f"{length}_".encode() + message)
         await self.writer.drain()
         print(f"Sent message: {message}")
 

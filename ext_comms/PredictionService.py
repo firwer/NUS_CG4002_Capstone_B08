@@ -1,4 +1,5 @@
 import asyncio
+import random
 
 
 async def start_prediction_service_process(predict_input_queue: asyncio.Queue,
@@ -14,10 +15,11 @@ class PredictionServiceProcess:
         self.prediction_service_to_engine_queue = predict_output_queue
 
     async def predict(self):
-        # TODO: Need to differentiate between GUN and other actions
-
         data = await self.relay_mqtt_to_engine_queue.get()
         print(f"Received data from RelayNode: {data}, predicting...")
+        # Randomly generate a prediction from actions
+        # TODO: Replace with actual prediction model
+        data = random.choice(["basket", "volley", "bowl", "bomb", "logout", "shield", "reload"])
         await asyncio.sleep(0.2)  # Simulating processing time
         print(f"Prediction: {data}")
         await self.prediction_service_to_engine_queue.put(data)
