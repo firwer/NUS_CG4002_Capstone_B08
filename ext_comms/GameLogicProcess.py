@@ -1,7 +1,5 @@
 import asyncio
-
 import config
-
 
 async def reduce_health(targetGameState: dict, hp_reduction: int):
     print(f"Reducing health by {hp_reduction}")
@@ -152,4 +150,3 @@ async def game_state_manager(currGameData, attacker_id: int,
         pass
     # Send updated game state to visualizer
     await visualizer_send_queue.put("gs_" + currGameData.to_json(attacker_id))  # Add gs_ prefix to indicate game
-    # state msg type to the visualizer
