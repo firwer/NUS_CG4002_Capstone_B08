@@ -120,7 +120,7 @@ void loop()
     //@wanlin
     communicate();
     pkt = ic_get_state();
-    if (pkt.health_num != curr_healthValue)
+    if (pkt.packet_type == PACKET_DATA_GAMESTATE && pkt.health_num != curr_healthValue)
     {
         healthSynchronisation(curr_healthValue, pkt.health_num);
     }
