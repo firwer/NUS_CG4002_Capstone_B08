@@ -102,7 +102,7 @@ class Beetle:
         self.reliableTimeout = 1000 # ms
 
         # CONFIG TEST: subcomponent test flags
-        self.testRelayReliable = False
+        self.testRelayReliable = True
         self.corruptProbability = 0.0
         self.killThread = False
         self.hasSentReliable = False
@@ -335,8 +335,8 @@ class Beetle:
         # TODO: integrate with backend
         pkt = PacketGamestate()
         pkt.seq_num = self.relay_seq_num
-        pkt.bullet = random.randint(0, 255)
-        pkt.health = random.randint(0, 255)
+        pkt.bullet = 6
+        pkt.health = 100
         self.bullets = pkt.bullet
         self.health = pkt.health
         pkt.crc8 = get_checksum(pkt.to_bytearray())
