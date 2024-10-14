@@ -98,7 +98,7 @@ class Beetle:
         self.sendReliableStart = 0
         self.cachedPacket = None
         self.reliableRetransmissions = 0
-        self.reliableTxRate = 5000 # ms
+        self.reliableTxRate = 10000 # ms @wanlin CONFIG ME
         self.reliableTimeout = 1000 # ms
 
         # CONFIG TEST: subcomponent test flags
@@ -225,6 +225,8 @@ class Beetle:
                 if canSendReliable:
                     if millis() - self.sendReliableStart > self.reliableTxRate:
                         sendPkt = self.getDataToSend()
+                        if self.MAC == BLUNO_P2_LEG_MAC:
+                            sendPkt = None
                         if sendPkt is not None:
                             self.cachedPacket = sendPkt
                             self.sendReliableStart = millis()
