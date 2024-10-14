@@ -154,6 +154,9 @@ def simulate():
 
     from_beetles_queues = [fromBeetle1, fromBeetle2, fromBeetle3]
     to_beetles_queues = [toBeetle1, toBeetle2]
+    while RELAY_NODE_PLAYER != 1 and RELAY_NODE_PLAYER != 2:
+        relay_node_id = input("Select Relay Node (1/2): ")
+        RELAY_NODE_PLAYER = int(relay_node_id)
 
     print("Establishing connection to TCP server...")
     wsController = TCPC_Controller_Sync(
@@ -161,10 +164,6 @@ def simulate():
     )
     wsController.connect()
     wsController.identify_relay_node(RELAY_NODE_PLAYER)
-
-    while RELAY_NODE_PLAYER != 1 and RELAY_NODE_PLAYER != 2:
-        relay_node_id = input("Select Relay Node (1/2): ")
-        RELAY_NODE_PLAYER = int(relay_node_id)
 
     agg_thread = Thread(target=aggregator_thread_main, args=(
         sendToGameServerQueue, from_beetles_queues, to_beetles_queues, receiveFromGameServerQueue))
