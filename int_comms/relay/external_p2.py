@@ -12,7 +12,7 @@ from int_comms.relay.packet import PACKET_DATA_IMU, PACKET_DATA_BULLET, PACKET_D
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
-RELAY_NODE_PLAYER = -1
+RELAY_NODE_PLAYER = 0
 
 
 def get_user_input(from_beetles_queue1 : Queue, from_beetles_queue2 : Queue, from_beetles_queue3 : Queue):
@@ -154,9 +154,6 @@ def simulate():
 
     from_beetles_queues = [fromBeetle1, fromBeetle2, fromBeetle3]
     to_beetles_queues = [toBeetle1, toBeetle2]
-    while RELAY_NODE_PLAYER != 1 and RELAY_NODE_PLAYER != 2:
-        relay_node_id = input("Select Relay Node (1/2): ")
-        RELAY_NODE_PLAYER = int(relay_node_id)
 
     print("Establishing connection to TCP server...")
     wsController = TCPC_Controller_Sync(
@@ -164,6 +161,10 @@ def simulate():
     )
     wsController.connect()
     wsController.identify_relay_node(RELAY_NODE_PLAYER)
+
+    while RELAY_NODE_PLAYER != 1 and RELAY_NODE_PLAYER != 2:
+        relay_node_id = input("Select Relay Node (1/2): ")
+        RELAY_NODE_PLAYER = int(relay_node_id)
 
     agg_thread = Thread(target=aggregator_thread_main, args=(
         sendToGameServerQueue, from_beetles_queues, to_beetles_queues, receiveFromGameServerQueue))
