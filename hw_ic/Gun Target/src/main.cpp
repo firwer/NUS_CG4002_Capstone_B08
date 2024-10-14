@@ -17,6 +17,7 @@
 #define PULSE_DURATION 500
 #define CRITICAL_VIBRATION_INTERVAL 350 // Interval between critical pulses in ms
 #define NOTE_REST 0
+#define MAX_HEALTH 100
 
 const uint16_t PLAYER_1_ADDRESS = 0x23; // Address of player 1
 const uint16_t PLAYER_2_ADDRESS = 0x77; // Address of player 2 <--
@@ -295,7 +296,6 @@ This function will handle the health agreement between the game engine and the h
 */
 void healthSynchronisation(int16_t curr_healthValue, int16_t incoming_healthState)
 {
-    const int16_t MAX_HEALTH = 100;
     // CASE 1: Health is decremented
     if (incoming_healthState < curr_healthValue)
     {
@@ -305,7 +305,7 @@ void healthSynchronisation(int16_t curr_healthValue, int16_t incoming_healthStat
     // either respawn or revive and damaged (in the case of rain bomb)
     else if (incoming_healthState > curr_healthValue)
     {
-        if (incoming_healthState == MAX_HEALTH && curr_healthValue == 0)
+        if (incoming_healthState == MAX_HEALTH)
         {
             // CASE 2 RESPAWN
             curr_healthValue = incoming_healthState;
