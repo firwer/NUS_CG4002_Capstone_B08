@@ -91,7 +91,7 @@ class Beetle:
         self.gz = []
         self.EXPECTED_PKTS = 60
         self.CURRENT_PKTS = 0
-        self.ROWS_LEFT= 3 # CONFIGURE ME - THIS CONTROLS HOW MANY ROWS 
+        self.ROWS_LEFT= 50 # CONFIGURE ME - THIS CONTROLS HOW MANY ROWS 
 
         self.COLOR = RESET_COLOR if beetle_id is None else colors[beetle_id]
         self.relay_seq_num = 0
@@ -187,7 +187,7 @@ class Beetle:
                     self.gz.append(gz)
 
                     if self.CURRENT_PKTS == self.EXPECTED_PKTS:
-                        print("row found")
+                        print(f"row found, #{51-self.ROWS_LEFT}")
                         self.ROWS_LEFT -= 1
                         # Reset the packet count
                         self.CURRENT_PKTS = 0
@@ -195,7 +195,7 @@ class Beetle:
                         # Create a new row (as a dictionary) for the CSV data
                         # basket, bowling, reload, volley, rainbomb, shield, logout
                         row = {
-                            "gesture": "basket",
+                            "gesture": "logout",
                             "ax": self.ax.copy(),
                             "ay": self.ay.copy(),
                             "az": self.az.copy(),
@@ -419,7 +419,7 @@ class Beetle:
 def main():
     # Create Beetle instances
     # beetle0 = Beetle(BLUNO_RED_MAC_ADDRESS, 0, "red")
-    beetle0 = Beetle(BLUNO_RED_MAC_ADDRESS, 0, "red_debug_1")
+    beetle0 = Beetle(BLUNO_RED_MAC_ADDRESS, 0, "red_nich")
     beetle0.run()
 
 if __name__ == "__main__":
