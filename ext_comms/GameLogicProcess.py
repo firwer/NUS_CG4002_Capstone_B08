@@ -1,5 +1,4 @@
 import asyncio
-import logging
 
 import config
 
@@ -125,17 +124,17 @@ async def game_state_manager(currGameData, attacker_id: int,
             await reduce_health(OpponentPlayerData, config.GAME_RAIN_DMG)
 
     if prediction_action == "gun":
-        try:
+        result = await gun_state_queue.get()
+        # empty out gun_state_queue and get the last item - Prevent accumulation
+        while not gun_state_queue.empty():
             result = await gun_state_queue.get()
-            if result == "hit":
-                await gun_shoot(targetPlayerData, OpponentPlayerData, insideNumOfrain)
-            elif result == "miss":
-                # Only deduct bullet
-                if targetPlayerData["bullets"] > 0:
-                    targetPlayerData["bullets"] -= 1
-        except asyncio.TimeoutError:
-            print("Gun validation did not respond in time. Defaulting to hit")
-            await gun_shoot(targetPlayerData, OpponentPlayerData, insideNumOfrain)
+
+        if result == "hit":
+            await gun_shoot(targetPlayerData, OpponentPlayerData)
+        elif result == "miss":
+            # Only deduct bullet
+            if targetPlayerData["bullets"] > 0:
+                targetPlayerData["bullets"] -= 1
     elif prediction_action == "shield":
         await shield(targetPlayerData)
     elif prediction_action == "reload":
