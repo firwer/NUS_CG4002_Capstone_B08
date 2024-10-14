@@ -50,6 +50,7 @@ class NotifyDelegate(btle.DefaultDelegate):
         if len(data) < 20: # data is fragmented
             print(f"Fragmentation: {len(data)}: {data.hex()}")
             self.fragmented_packets += 1
+            # self.reset_buffer()
 
     def has_packet(self) -> bool:
         return len(self.buffer) >= 20 and len(self.buffer) % 20 == 0
@@ -419,7 +420,7 @@ class Beetle:
 def main():
     # Create Beetle instances
     # beetle0 = Beetle(BLUNO_RED_MAC_ADDRESS, 0, "red")
-    beetle0 = Beetle(BLUNO_RED_MAC_ADDRESS, 0, "red_nich")
+    beetle0 = Beetle(BLUNO_RED_MAC_ADDRESS, 0, "red_darren")
     beetle0.run()
 
 if __name__ == "__main__":
