@@ -24,12 +24,12 @@ typedef struct packet_imu_t {
     uint8_t packet_type;
     uint8_t seq_num;
     uint8_t adc;
-    uint16_t accX;
-    uint16_t accY;
-    uint16_t accZ;
-    uint16_t gyrX;
-    uint16_t gyrY;
-    uint16_t gyrZ;
+    int16_t accX;
+    int16_t accY;
+    int16_t accZ;
+    int16_t gyrX;
+    int16_t gyrY;
+    int16_t gyrZ;
     uint32_t pad;
     uint8_t crc8;
 };

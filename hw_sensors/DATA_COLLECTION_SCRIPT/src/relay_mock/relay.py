@@ -10,8 +10,8 @@ from checksum import *
 import threading
 import pandas as pd
 
-# BLUNO_RED_MAC_ADDRESS = "F4:B8:5E:42:6D:49"
-BLUNO_RED_MAC_ADDRESS = "F4:B8:5E:42:4C:BB" #actually green
+BLUNO_RED_MAC_ADDRESS = "F4:B8:5E:42:6D:49"
+# BLUNO_RED_MAC_ADDRESS = "F4:B8:5E:42:4C:BB" #actually green
 
 #FIXME: if we get 59 and then we get 61, ignore the first packet
 CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"
@@ -91,7 +91,7 @@ class Beetle:
         self.gz = []
         self.EXPECTED_PKTS = 60
         self.CURRENT_PKTS = 0
-        self.ROWS_LEFT= 1 # CONFIGURE ME - THIS CONTROLS HOW MANY ROWS 
+        self.ROWS_LEFT= 3 # CONFIGURE ME - THIS CONTROLS HOW MANY ROWS 
 
         self.COLOR = RESET_COLOR if beetle_id is None else colors[beetle_id]
         self.relay_seq_num = 0
@@ -172,12 +172,12 @@ class Beetle:
                     # TODO do work
                     print(f"RX {pkt.seq_num}: {pkt.to_bytearray().hex()}")
                     self.CURRENT_PKTS += 1
-                    ax = int.from_bytes(pkt.accelX, byteorder='little')  # Convert first 2 bytes to int
-                    ay = int.from_bytes(pkt.accelY, byteorder='little')  # Convert next 2 bytes to int
-                    az = int.from_bytes(pkt.accelZ, byteorder='little')  # Convert next 2 bytes to int
-                    gx = int.from_bytes(pkt.gyroX, byteorder='little')  # Convert next 2 bytes to int
-                    gy = int.from_bytes(pkt.gyroY, byteorder='little') # Convert next 2 bytes to int
-                    gz = int.from_bytes(pkt.gyroZ, byteorder='little') # Convert next 2 bytes to int
+                    ax = int.from_bytes(pkt.accelX, byteorder='little', signed=True)  # Convert first 2 bytes to signed int
+                    ay = int.from_bytes(pkt.accelY, byteorder='little', signed=True)  # Convert next 2 bytes to signed int
+                    az = int.from_bytes(pkt.accelZ, byteorder='little', signed=True)  # Convert next 2 bytes to signed int
+                    gx = int.from_bytes(pkt.gyroX, byteorder='little', signed=True)   # Convert first 2 bytes to signed int
+                    gy = int.from_bytes(pkt.gyroY, byteorder='little', signed=True)   # Convert next 2 bytes to signed int
+                    gz = int.from_bytes(pkt.gyroZ, byteorder='little', signed=True)   # Convert next 2 bytes to signed int
 
                     self.ax.append(ax)
                     self.ay.append(ay)
@@ -195,7 +195,7 @@ class Beetle:
                         # Create a new row (as a dictionary) for the CSV data
                         # basket, bowling, reload, volley, rainbomb, shield, logout
                         row = {
-                            "gesture": "logout",
+                            "gesture": "basket",
                             "ax": self.ax.copy(),
                             "ay": self.ay.copy(),
                             "az": self.az.copy(),
@@ -419,7 +419,7 @@ class Beetle:
 def main():
     # Create Beetle instances
     # beetle0 = Beetle(BLUNO_RED_MAC_ADDRESS, 0, "red")
-    beetle0 = Beetle(BLUNO_RED_MAC_ADDRESS, 0, "green_debug")
+    beetle0 = Beetle(BLUNO_RED_MAC_ADDRESS, 0, "red_debug_1")
     beetle0.run()
 
 if __name__ == "__main__":

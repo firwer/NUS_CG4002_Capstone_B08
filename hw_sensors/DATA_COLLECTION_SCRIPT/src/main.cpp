@@ -100,8 +100,8 @@ void setup()
   mpu.setYGyroOffset(calibrationData.ygoffset);
   mpu.setZGyroOffset(calibrationData.zgoffset);
 
-  mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_4);
-  mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_250);
+  mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_8);
+  mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_500);
 
   mpu.setDHPFMode(MPU6050_DHPF_1P25);
   mpu.setDLPFMode(MPU6050_DLPF_BW_20);
