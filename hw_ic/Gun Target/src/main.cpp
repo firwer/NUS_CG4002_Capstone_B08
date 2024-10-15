@@ -36,8 +36,7 @@ unsigned long lastCriticalVibrationTime = 0;
 unsigned long lastVibrationTime = 0;
 bool vibrationActive = false; // Tracks if a vibration pulse is currently active
 
-int16_t curr_healthValue = 100; // HARDWARE-side tracker
-// int16_t incoming_healthState = 0; // INCOMING Game Engine health state
+uint8_t curr_healthValue = 100; // HARDWARE-side tracker
 
 Tone melody;
 
@@ -85,12 +84,12 @@ const int healthNotes[19][5] = {
     {NOTE_REST, NOTE_C7, NOTE_E6, NOTE_F6, NOTE_E6},
 };
 
-void playHealthDecrementTune(int16_t health);
+void playHealthDecrementTune(uint8_t health);
 void playStartupTune();
 void playDeathTune();
-void healthSynchronisation(int16_t curr_healthValue, int16_t incoming_healthState); // TODO: Integrate with internal comms
-void handleRespawn(bool isRespawn);                                                 // TODO: Integrate with internal comms
-void playCriticalHealthTune();                                                      // TODO: Integrate with internal comms
+void healthSynchronisation(uint8_t incoming_healthState); // TODO: Integrate with internal comms
+void handleRespawn(bool isRespawn);                       // TODO: Integrate with internal comms
+void playCriticalHealthTune();                            // TODO: Integrate with internal comms
 
 void setup()
 {
@@ -100,18 +99,13 @@ void setup()
 
     // Start the receiver and enable feedback on the built-in LED
     melody.begin(BUZZER_PIN);
-
     IrReceiver.begin(IR_RECEIVE_PIN, ENABLE_LED_FEEDBACK);
-    // IrReceiver.start();
-    // Serial.print(F("Ready to receive IR signals of protocols: "));
-    // printActiveIRProtocols(&Serial);
-    // Set up the built-in LED pin as output
     pinMode(LED_BUILTIN, OUTPUT);
     pinMode(VIBRATION_PIN, OUTPUT);
 
     while (!ic_connect())
         ;
-    melody.play(NOTE_A7, 100);
+    playStartupTune();
 }
 
 packet_gamestate_t pkt;
@@ -123,14 +117,13 @@ void loop()
     pkt = ic_get_state();
     if (pkt.packet_type == PACKET_DATA_GAMESTATE && pkt.health_num != curr_healthValue)
     {
-        healthSynchronisation(curr_healthValue, pkt.health_num);
+        healthSynchronisation(pkt.health_num);
     }
     // digitalWrite(VIBRATION_PIN, HIGH);
 
     //==========================Buzzer and Health Update SubRoutine ==========================
     if (millis() - lastSoundTime > NOTE_DELAY)
     {
-        // Serial.println(soundQueue.itemCount());
         if (noteQueue.itemCount() > 0)
         {
             uint16_t note = noteQueue.dequeue();
@@ -139,28 +132,20 @@ void loop()
         else if (noteQueue.itemCount() == 0)
         {
             IrReceiver.restartTimer();
+            communicate();
         }
         lastSoundTime = millis();
     }
 
-    if (curr_healthValue == 100 && !isFullHealthplayed || isRespawn && !isFullHealthplayed)
+    // vibration care later
+    if (vibrationActive && (millis() - lastVibrationTime >= PULSE_DURATION))
     {
-        playStartupTune();
-        isFullHealthplayed = true;
+        digitalWrite(VIBRATION_PIN, LOW);
+        vibrationActive = false;
     }
-    else if (curr_healthValue < 100 && isDamaged)
-    {
-        playHealthDecrementTune(curr_healthValue);
-        if (isDamaged && !vibrationActive)
-        {
-            digitalWrite(VIBRATION_PIN, HIGH);
-            vibrationActive = true;
-            lastVibrationTime = millis();
-        }
 
-        isDamaged = false;
-    }
-    else if (curr_healthValue <= 10 && curr_healthValue > 0 && !isCriticalHealth)
+    //==================== CRITICAL HEALTH SUBROUTINE=======================
+    if (curr_healthValue <= 10 && curr_healthValue > 0 && !isCriticalHealth)
     {
         isCriticalHealth = true;
         lastCriticalTuneTime = millis();
@@ -169,20 +154,7 @@ void loop()
     {
         isCriticalHealth = false;
     }
-    else if (curr_healthValue <= 0 && !isDeathPlayed)
-    {
-        playDeathTune();
-        isDeathPlayed = true;
-        // Serial.println(F("Player 1 is dead!"));
-    }
 
-    if (vibrationActive && (millis() - lastVibrationTime >= PULSE_DURATION))
-    {
-        digitalWrite(VIBRATION_PIN, LOW);
-        vibrationActive = false;
-    }
-
-    //==================== CRITICAL HEALTH SUBROUTINE=======================
     if (isCriticalHealth)
     {
         if (millis() - lastCriticalTuneTime >= 750)
@@ -210,39 +182,21 @@ void loop()
     //==========================IR Receiver SubRoutine ==========================
     if (IrReceiver.decode())
     {
-        // Serial.println(F("IR signal received:"));
-        // Serial.println(IrReceiver.decodedIRData.address, HEX);
-
-        if (IrReceiver.decodedIRData.protocol == UNKNOWN)
-        {
-            // Serial.println(F("Received noise or an unknown (or not yet enabled) protocol"));
-            // Print extended info for unknown protocols
-            // IrReceiver.printIRResultRawFormatted(&Serial, true);
-        }
-        else
-        {
-            // IrReceiver.printIRResultShort(&Serial);
-            // IrReceiver.printIRSendUsage(&Serial);
-        }
-
         if (IrReceiver.decodedIRData.address == PLAYER_1_ADDRESS)
         {
             digitalWrite(LED_BUILTIN, HIGH);
             curr_healthValue -= BULLET_DAMAGE;
             isFullHealthplayed = false;
-            isDamaged = true;
-            // Serial.print(F("Player 1 shot! Health: "));
-            // Serial.println(curr_healthValue);
 
             // @wanlin
             ic_push_health(curr_healthValue);
+            playHealthDecrementTune(curr_healthValue);
             communicate();
         }
         IrReceiver.resume(); // Receive the next value
     }
-    // communicate();
 }
-void playHealthDecrementTune(int16_t health)
+void playHealthDecrementTune(uint8_t health)
 {
     int8_t index = (95 - health) / 5;
 
@@ -294,29 +248,27 @@ void playCriticalHealthTune()
 Game engine handles health calculation for non-bullet damage.
 This function will handle the health agreement between the game engine and the hardware.
 */
-void healthSynchronisation(int16_t curr_healthValue, int16_t incoming_healthState)
+void healthSynchronisation(uint8_t incoming_healthState)
 {
     // CASE 1: Health is decremented
     if (incoming_healthState < curr_healthValue)
     {
-        curr_healthValue = incoming_healthState;
-        isDamaged = true;
+        playHealthDecrementTune(curr_healthValue);
     }
     // either respawn or revive and damaged (in the case of rain bomb)
     else if (incoming_healthState > curr_healthValue)
     {
         if (incoming_healthState == MAX_HEALTH)
         {
-            // CASE 2 RESPAWN
-            curr_healthValue = incoming_healthState;
-            isRespawn = true;
+            playStartupTune();
         }
         else
         {
             // CASE 3: If health from update is more but its less than max health then play revive + damage
-            curr_healthValue = incoming_healthState;
-            isRespawn = true;
-            isDamaged = true;
+
+            playStartupTune();
+            playHealthDecrementTune(curr_healthValue);
         }
     }
+    curr_healthValue = incoming_healthState;
 }
