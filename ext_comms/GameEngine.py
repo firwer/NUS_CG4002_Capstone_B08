@@ -4,7 +4,7 @@ import json
 import config
 from EvaluationProcess import start_evaluation_process
 from GameLogicProcess import game_state_manager
-from PredictionService import start_prediction_service_process
+from PredictionService import PredictionServiceProcess
 from comms.AsyncMQTTController import AsyncMQTTController
 from comms.TCPS_Controller import TCPS_Controller
 from int_comms.relay.packet import get_packet, PACKET_DATA_HEALTH, PACKET_DATA_BULLET, PACKET_DATA_IMU, PACKET_DATA_KICK
@@ -114,6 +114,10 @@ async def start_tcp_job(tcp_port: int, receive_queue_p1: asyncio.Queue, receive_
     await tcp_server.start_server()
 
 
+async def start_prediction_service_process(predict_input_queue: asyncio.Queue, predict_output_queue: asyncio.Queue):
+    PredictionService = PredictionServiceProcess(predict_input_queue=predict_input_queue, predict_output_queue=predict_output_queue)
+    await PredictionService.run()
+
 async def start_relay_node_data_handler(src_input_queue_p1: asyncio.Queue,
                                         src_input_queue_p2: asyncio.Queue,
                                         output_sensor_data_p1: asyncio.Queue,
@@ -156,7 +160,7 @@ async def start_relay_node_data_handler(src_input_queue_p1: asyncio.Queue,
                 # Send to prediction service
                 await output_sensor_queue.put(msg)
             elif pkt.packet_type == PACKET_DATA_KICK:
-                print("AKICK PACKET Received")
+                print("A KICK PACKET Received")
                 await output_action_queue.put("soccer")
             else:
                 print("Invalid packet type received")
