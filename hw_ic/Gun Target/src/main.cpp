@@ -14,7 +14,6 @@
 #define NOTE_DELAY 75
 #define BULLET_DAMAGE 5
 #define VIBRATION_PIN 5
-#define CRITICAL_VIBRATION_INTERVAL 350 // Interval between critical pulses in ms
 #define NOTE_REST 0
 #define MAX_HEALTH 100
 
@@ -25,9 +24,7 @@ bool isShot = false;    // to send to game engine
 bool isRespawn = false; // to integrate with game engine
 unsigned long lastSoundTime = 0;
 bool isFullHealthplayed = false;
-bool isDeathPlayed = false;
-bool isCriticalHealth = false;
-bool isDamaged = false;
+
 unsigned long lastCriticalTuneTime = 0;
 // Vibration State Variables for Critical Health
 unsigned long lastVibrationTime = 0;
@@ -156,12 +153,12 @@ void loop()
     }
 
     //==================== CRITICAL HEALTH SUBROUTINE=======================
-    if (curr_healthValue <= 10 && curr_healthValue > 0 && !isCriticalHealth)
+    if (curr_healthValue <= 10 && curr_healthValue > 0)
     {
-        if (millis() - lastCriticalTuneTime >= 750)
+        if (millis() - lastCriticalTuneTime >= 500)
         {
             playCriticalHealthTune();
-            playVibration(500);
+            playVibration(800);
             lastCriticalTuneTime = millis();
         }
     }
@@ -178,7 +175,7 @@ void loop()
             // @wanlin
             ic_push_health(curr_healthValue);
             playHealthDecrementTune(curr_healthValue);
-            playVibration(350);
+            playVibration(1000);
             communicate();
         }
         IrReceiver.resume(); // Receive the next value
