@@ -1,9 +1,12 @@
 import asyncio
 import os
 import random
+import sys
 import time
 
-from AI.RealAI.bitstream.AIClass import AIInference
+sys.path.append('/home/xilinx/IP')
+
+from AIClass import AI
 
 # async def start_prediction_service_process(predict_input_queue: asyncio.Queue,
 #                                            predict_output_queue: asyncio.Queue):
@@ -21,7 +24,7 @@ class PredictionServiceProcess:
         self.timeout = 10 # Timeout in seconds
         self.min_packets = int(0.95 * self.buffer_size)  # Minimum packets threshold (80%)
         self.last_packet_time = None
-        self.ai_inference = AIInference()  # Instance of your AI inference class
+        self.ai_inference = AI()  # Instance of your AI inference class
 
     async def run(self):
         while True:
