@@ -43,7 +43,6 @@ uint16_t soundList[10] = {
 // For gun shot
 bool isReloaded = false;
 uint8_t curr_bulletsLeft = 6;
-bool isFullMagazineTonePlayed = false;
 uint16_t flexValue = 0;
 bool isButtonPressed = false;
 bool shotBeenFired = false;
@@ -196,19 +195,12 @@ void loop()
     lastSoundTime = millis();
   }
 
-  if (curr_bulletsLeft == 6 && !isFullMagazineTonePlayed)
-  {
-    playFullMagazineTone();
-    isFullMagazineTonePlayed = true;
-  }
-
   if (isButtonPressed && !shotBeenFired && flexValue >= FLEX_THRESHOLD)
   {
     if (curr_bulletsLeft > 0)
     {
       IrSender.sendNEC2(PLAYER_1_ADDRESS, 0x23, 0);
       curr_bulletsLeft--;
-      isFullMagazineTonePlayed = false;
       soundQueue.enqueue(soundList[curr_bulletsLeft]);
       // @wanlin
     }
@@ -239,6 +231,7 @@ void loop()
       // Take the raw 16bit data, divide by 32767 to get the ratio, multiply by 4g to get the real value,
       // then multiply by 9.81 to get m/s^2
       // multiply by 100 to get integers
+      // CHANGE THIS SHIT TODO TODO CHANGE CHANGE
       mpuData.ax = (((mpuData.ax) / 32767.0) * 4.0 * 9.81) * 100;
       mpuData.ay = (((mpuData.ay) / 32767.0) * 4.0 * 9.81) * 100;
       mpuData.az = (((mpuData.az) / 32767.0) * 4.0 * 9.81) * 100;
@@ -271,16 +264,12 @@ void detectReloadAndSynchronise(uint8_t incoming_bulletState)
 {
   if (curr_bulletsLeft == 0 && incoming_bulletState == 6)
   {
-    isReloaded = true;
+    playFullMagazineTone();
     curr_bulletsLeft = 6;
   }
-  else if (curr_bulletsLeft != incoming_bulletState && curr_bulletsLeft != 0)
+  else if (curr_bulletsLeft != incoming_bulletState)
   {
     curr_bulletsLeft = incoming_bulletState;
-  }
-  else
-  {
-    isReloaded = false;
   }
 }
 

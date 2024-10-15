@@ -88,7 +88,6 @@ void playHealthDecrementTune(uint8_t health);
 void playStartupTune();
 void playDeathTune();
 void healthSynchronisation(uint8_t incoming_healthState); // TODO: Integrate with internal comms
-void handleRespawn(bool isRespawn);                       // TODO: Integrate with internal comms
 void playCriticalHealthTune();                            // TODO: Integrate with internal comms
 
 void setup()
@@ -137,11 +136,13 @@ void loop()
         lastSoundTime = millis();
     }
 
-    // vibration care later
-    if (vibrationActive && (millis() - lastVibrationTime >= PULSE_DURATION))
+    //==========================Vibration SubRoutine ==========================
+
+    if (vibrationActive && millis() - lastVibrationTime >= PULSE_DURATION)
     {
         digitalWrite(VIBRATION_PIN, LOW);
         vibrationActive = false;
+        lastVibrationTime = millis();
     }
 
     //==================== CRITICAL HEALTH SUBROUTINE=======================
@@ -190,6 +191,8 @@ void loop()
 
             // @wanlin
             ic_push_health(curr_healthValue);
+            digitalWrite(VIBRATION_PIN, HIGH);
+            vibrationActive = true;
             playHealthDecrementTune(curr_healthValue);
             communicate();
         }
@@ -254,6 +257,7 @@ void healthSynchronisation(uint8_t incoming_healthState)
     if (incoming_healthState < curr_healthValue)
     {
         playHealthDecrementTune(curr_healthValue);
+        vibrationActive = true;
     }
     // either respawn or revive and damaged (in the case of rain bomb)
     else if (incoming_healthState > curr_healthValue)
