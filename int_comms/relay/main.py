@@ -39,6 +39,7 @@ class NotifyDelegate(btle.DefaultDelegate):
         self.buffer = bytearray()
         self.buffer_len = len(self.buffer)
         self.fragmented_packets = 0
+        self.previous_fragmentation = 0
         self.total_packets = 0
         self.throughputStartTime = millis()
         self.bitsReceived = 0
@@ -54,10 +55,29 @@ class NotifyDelegate(btle.DefaultDelegate):
         self.relayTxNumber = 0
 
     def handleNotification(self, cHandle, data: bytes):
-        self.buffer += data
+        if len(data) < 20:
+            logger.info(f"Fragmentatation: {len(data)}, {data.hex()}")
+            if self.previous_fragmentation == 0:
+                self.previous_fragmentation = len(data)
+                self.buffer += data
+            elif self.previous_fragmentation + len(data) == 20:
+                self.buffer += data
+                self.previous_fragmentation = 0
+            else: 
+                # remove the previous fragmented buffer - its corresponding pair has been lost.
+                self.buffer = self.buffer[:-self.previous_fragmentation]
+                logger.error(f"Mismatched fragment pair! Discarding...")
+                self.previous_fragmentation = 0
+                self.buffer += data
+        else:
+            self.buffer += data
+            # if random.randint(1,100) <= 1:
+            #     logger.info(f"Fudging...")
+            #     self.buffer += data[:-1]
+
 
     def has_packet(self) -> bool:
-        return len(self.buffer) >= 20 and len(self.buffer) % 20 == 0
+        return len(self.buffer) >= 20
 
     def get_packet_bytes(self) -> bytearray | None:
         """returns a 20B bytearray representing a packet from the buffer. else, None"""
@@ -112,7 +132,7 @@ class Beetle:
         while not self.killThread:
             shouldAck = False
             # STEP 1. Handle reconnections if applicable
-            if not self.connected or self.errors > 2 or self.reliableRetransmissions > 3:
+            if not self.connected or self.errors > 4 or self.reliableRetransmissions > 3:
                 logger.debug(f"{self.COLOR}Restarting connection: isConnected={self.connected}, errors={self.errors}, retx={self.reliableRetransmissions}")
                 self.receiver.reset_buffer()
                 self.connect_to_beetle()
@@ -143,10 +163,8 @@ class Beetle:
 
                 # verify the checksum - if fail, process the next packet
                 if not verify_checksum(data):
-                    # print(f"{self.COLOR}Error: checksum failed for this PKT {data.hex()}")
-                    logger.error(f"{self.COLOR}Error: checksum failed! Moving to next packet in buffer...")
+                    logger.error(f"{self.COLOR}Error: checksum failed for this PKT {data.hex()}")
                     self.errors += 1
-                    # print(f"{self.COLOR}Moving to next packet in buffer...")
                     continue
                 else:
                     self.errors = 0
