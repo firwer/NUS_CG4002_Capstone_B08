@@ -14,7 +14,6 @@
 #define NOTE_DELAY 75
 #define BULLET_DAMAGE 5
 #define VIBRATION_PIN 5
-#define PULSE_DURATION 500
 #define CRITICAL_VIBRATION_INTERVAL 350 // Interval between critical pulses in ms
 #define NOTE_REST 0
 #define MAX_HEALTH 100
@@ -31,16 +30,23 @@ bool isCriticalHealth = false;
 bool isDamaged = false;
 unsigned long lastCriticalTuneTime = 0;
 // Vibration State Variables for Critical Health
-bool criticalVibrationActive = false;
-unsigned long lastCriticalVibrationTime = 0;
 unsigned long lastVibrationTime = 0;
-bool vibrationActive = false; // Tracks if a vibration pulse is currently active
+uint16_t pulseDuration = 100;
 
 uint8_t curr_healthValue = 100; // HARDWARE-side tracker
 
 Tone melody;
 
-ArduinoQueue<uint16_t> noteQueue(20);
+typedef struct
+{
+    bool vibrationActive;
+    uint16_t duration;
+} vibrationState;
+
+ArduinoQueue<vibrationState> vibrationQueue(10);
+
+ArduinoQueue<uint16_t>
+    noteQueue(20);
 
 // Define the healthNotes array with 5 notes per tune
 const int healthNotes[19][5] = {
@@ -89,6 +95,7 @@ void playStartupTune();
 void playDeathTune();
 void healthSynchronisation(uint8_t incoming_healthState); // TODO: Integrate with internal comms
 void playCriticalHealthTune();                            // TODO: Integrate with internal comms
+void playVibration(uint16_t duration);
 
 void setup()
 {
@@ -137,49 +144,28 @@ void loop()
     }
 
     //==========================Vibration SubRoutine ==========================
-
-    if (vibrationActive && millis() - lastVibrationTime >= PULSE_DURATION)
+    if (millis() - lastVibrationTime >= pulseDuration)
     {
-        digitalWrite(VIBRATION_PIN, LOW);
-        vibrationActive = false;
-        lastVibrationTime = millis();
+        if (vibrationQueue.itemCount() > 0)
+        {
+            vibrationState newvibestate = vibrationQueue.dequeue();
+            digitalWrite(VIBRATION_PIN, newvibestate.vibrationActive);
+            pulseDuration = newvibestate.duration;
+            lastVibrationTime = millis();
+        }
     }
 
     //==================== CRITICAL HEALTH SUBROUTINE=======================
     if (curr_healthValue <= 10 && curr_healthValue > 0 && !isCriticalHealth)
     {
-        isCriticalHealth = true;
-        lastCriticalTuneTime = millis();
-    }
-    else if ((curr_healthValue > 10 && isCriticalHealth) || (curr_healthValue <= 0 && isCriticalHealth))
-    {
-        isCriticalHealth = false;
-    }
-
-    if (isCriticalHealth)
-    {
         if (millis() - lastCriticalTuneTime >= 750)
         {
             playCriticalHealthTune();
+            playVibration(500);
             lastCriticalTuneTime = millis();
         }
-        // Start a new critical vibration pulse if interval has passed
-        if (!criticalVibrationActive && (millis() - lastCriticalVibrationTime >= CRITICAL_VIBRATION_INTERVAL))
-        {
-            digitalWrite(VIBRATION_PIN, HIGH);
-            criticalVibrationActive = true;
-            lastCriticalVibrationTime = millis();
-        }
-
-        // End the critical vibration pulse after PULSE_DURATION
-        if (criticalVibrationActive && (millis() - lastCriticalVibrationTime >= PULSE_DURATION))
-        {
-            digitalWrite(VIBRATION_PIN, LOW);
-            criticalVibrationActive = false;
-            // Set up for the next pulse interval
-            lastCriticalVibrationTime = millis();
-        }
     }
+
     //==========================IR Receiver SubRoutine ==========================
     if (IrReceiver.decode())
     {
@@ -191,14 +177,25 @@ void loop()
 
             // @wanlin
             ic_push_health(curr_healthValue);
-            digitalWrite(VIBRATION_PIN, HIGH);
-            vibrationActive = true;
             playHealthDecrementTune(curr_healthValue);
+            playVibration(350);
             communicate();
         }
         IrReceiver.resume(); // Receive the next value
     }
 }
+
+void playVibration(uint16_t duration)
+{
+    vibrationState newvibestate;
+    newvibestate.vibrationActive = true;
+    newvibestate.duration = duration;
+    vibrationQueue.enqueue(newvibestate);
+    newvibestate.vibrationActive = false;
+    newvibestate.duration = 100;
+    vibrationQueue.enqueue(newvibestate);
+}
+
 void playHealthDecrementTune(uint8_t health)
 {
     int8_t index = (95 - health) / 5;
@@ -257,7 +254,7 @@ void healthSynchronisation(uint8_t incoming_healthState)
     if (incoming_healthState < curr_healthValue)
     {
         playHealthDecrementTune(curr_healthValue);
-        vibrationActive = true;
+        playVibration(350);
     }
     // either respawn or revive and damaged (in the case of rain bomb)
     else if (incoming_healthState > curr_healthValue)
