@@ -69,10 +69,11 @@ class AI:
             max_idx = i
 
        #print("Input Buffer (Sent Data):", input_buffer)
-      print(f"Predicted Gesture: {max_idx}")
+      #print(f"Predicted Gesture: {max_idx}")
       print(f"Inference time: {((time.time() - start_time) * 1000):.4f} ms\n")
 
       # Clean up
       input_buffer.close()
       output_buffer.close()
+      return max_idx
 
