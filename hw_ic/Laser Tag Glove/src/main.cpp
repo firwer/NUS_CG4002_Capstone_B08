@@ -152,7 +152,7 @@ void setup()
   // COMMUNICATION @wanlin
   while (!ic_connect())
     ;
-  shotFired.play(NOTE_A7, 100);
+  playFullMagazineTone();
 }
 
 packet_gamestate_t pkt;
