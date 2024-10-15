@@ -58,7 +58,7 @@ class TCPC_Controller:
         if not self.writer:
             print("Connection not established. Exiting...")
             return
-        data = encrypt_msg(str(player_number), self.secret_key)
+        data = str(player_number).encode()
         self.writer.write(f"{len(data)}_".encode())
         self.writer.write(data)
         await self.writer.drain()
