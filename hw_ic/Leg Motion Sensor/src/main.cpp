@@ -50,7 +50,7 @@ void setup()
 
   mpu.setDHPFMode(MPU6050_DHPF_1P25);
   mpu.setDLPFMode(MPU6050_DLPF_BW_20);
-  mpu.setMotionDetectionThreshold(130);
+  mpu.setMotionDetectionThreshold(150);
   mpu.setMotionDetectionDuration(1);
 
   mpu.setIntMotionEnabled(true);
@@ -97,7 +97,7 @@ void loop()
 void motionDetected()
 {
 
-  if (millis() - lastKickTime > 200) // 200 ms debounce
+  if (millis() - lastKickTime > 1500) // 200 ms debounce
   {
     isKickDetected = true;
     lastKickTime = millis();

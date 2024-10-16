@@ -250,8 +250,8 @@ void healthSynchronisation(uint8_t incoming_healthState)
     // CASE 1: Health is decremented
     if (incoming_healthState < curr_healthValue)
     {
-        playHealthDecrementTune(curr_healthValue);
-        playVibration(350);
+        playHealthDecrementTune(incoming_healthState);
+        playVibration(1000);
     }
     // either respawn or revive and damaged (in the case of rain bomb)
     else if (incoming_healthState > curr_healthValue)
@@ -265,7 +265,7 @@ void healthSynchronisation(uint8_t incoming_healthState)
             // CASE 3: If health from update is more but its less than max health then play revive + damage
 
             playStartupTune();
-            playHealthDecrementTune(curr_healthValue);
+            playHealthDecrementTune(incoming_healthState);
         }
     }
     curr_healthValue = incoming_healthState;
