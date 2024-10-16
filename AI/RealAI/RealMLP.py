@@ -35,6 +35,14 @@ scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X_padded)
 X_scaled = torch.tensor(X_scaled, dtype=torch.float32)
 
+# Convert the mean and scale values to lists of strings
+mean_str = ', '.join(map(str, scaler.mean_))
+scale_str = ', '.join(map(str, scaler.scale_))
+# Print the formatted strings
+print("Mean values:", mean_str)
+print("Scale values:", scale_str)
+
+
 # Define MLP model for gesture classification
 class GestureMLP(nn.Module):
     def __init__(self, input_size, num_classes=7):  # 7 classes for the 7 gestures
@@ -186,7 +194,7 @@ for idx, row in debug_df.iterrows():
     # Convert to tensor
     tensor_input = torch.tensor(scaled_input, dtype=torch.float32)
     torch.set_printoptions(sci_mode=False, precision=4)
-    print(tensor_input)
+    #print(tensor_input)
     # Predict using the model
     with torch.no_grad():
         output = model(tensor_input)
