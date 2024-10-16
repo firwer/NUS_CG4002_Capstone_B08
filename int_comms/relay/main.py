@@ -11,14 +11,15 @@ from checksum import *
 import threading
 import external
 
-# GREEN == PLAYER 1
-# BLUNO_P1_GLOVE_MAC = "F4:B8:5E:42:4C:BB"
-BLUNO_P1_GLOVE_MAC = "F4:B8:5E:42:4C:BB"
-BLUNO_P1_CHEST_MAC = "F4:B8:5E:42:46:E5"
-BLUNO_P1_LEG_MAC   = "F4:B8:5E:42:61:6A"
+# RED == PLAYER 1
+BLUNO_P1_GLOVE_MAC = "F4:B8:5E:42:6D:49" # TO BE USED FOR EVAL
+#BLUNO_P1_CHEST_MAC = "F4:B8:5E:42:46:E5" 
+#BLUNO_P1_LEG_MAC   = "F4:B8:5E:42:6D:42"
 
-# BLUNO_P1_LEG_MAC = "F4:B8:5E:42:6D:42"
-# BLUNO_P1_CHEST_MAC = "F4:B8:5E:42:46:E5"
+# GREEN == PLAYER 2
+#BLUNO_P2_GLOVE_MAC = "F4:B8:5E:42:4C:BB" 
+BLUNO_P2_CHEST_MAC = "F4:B8:5E:42:6D:1E" #TO BE USED FOR EVAL
+BLUNO_P2_LEG_MAC   = "F4:B8:5E:42:61:6A" #TO BE USED FOR EVAL (TREAT AS PLAYER 1 FOR NOW)
 
 CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"
 logging.basicConfig(level=logging.DEBUG, format='\033[0m[%(levelname)s] [%(threadName)s] %(message)s')
@@ -37,6 +38,7 @@ class NotifyDelegate(btle.DefaultDelegate):
         self.buffer = bytearray()
         self.buffer_len = len(self.buffer)
         self.fragmented_packets = 0
+        self.previous_fragmentation = 0
         self.total_packets = 0
         self.throughputStartTime = millis()
         self.bitsReceived = 0
@@ -52,10 +54,29 @@ class NotifyDelegate(btle.DefaultDelegate):
         self.relayTxNumber = 0
 
     def handleNotification(self, cHandle, data: bytes):
-        self.buffer += data
+        if len(data) < 20:
+            logger.info(f"Fragmentatation: {len(data)}, {data.hex()}")
+            if self.previous_fragmentation == 0:
+                self.previous_fragmentation = len(data)
+                self.buffer += data
+            elif self.previous_fragmentation + len(data) == 20:
+                self.buffer += data
+                self.previous_fragmentation = 0
+            else: 
+                # remove the previous fragmented buffer - its corresponding pair has been lost.
+                self.buffer = self.buffer[:-self.previous_fragmentation]
+                logger.error(f"Mismatched fragment pair! Discarding...")
+                self.previous_fragmentation = 0
+                self.buffer += data
+        else:
+            self.buffer += data
+            # if random.randint(1,100) <= 1:
+            #     logger.info(f"Fudging...")
+            #     self.buffer += data[:-1]
+
 
     def has_packet(self) -> bool:
-        return len(self.buffer) >= 20 and len(self.buffer) % 20 == 0
+        return len(self.buffer) >= 20
 
     def get_packet_bytes(self) -> bytearray | None:
         """returns a 20B bytearray representing a packet from the buffer. else, None"""
@@ -99,7 +120,7 @@ class Beetle:
         self.sendReliableStart = 0
         self.cachedPacket = None
         self.reliableRetransmissions = 0
-        self.reliableTxRate = 5000 # ms
+        self.reliableTxRate = 10000 # ms @wanlin CONFIG ME
         self.reliableTimeout = 1000 # ms
 
         # CONFIG TEST: subcomponent test flags
@@ -113,7 +134,7 @@ class Beetle:
         while not self.killThread:
             shouldAck = False
             # STEP 1. Handle reconnections if applicable
-            if not self.connected or self.errors > 2 or self.reliableRetransmissions > 3:
+            if not self.connected or self.errors > 4 or self.reliableRetransmissions > 3:
                 logger.debug(f"{self.COLOR}Restarting connection: isConnected={self.connected}, errors={self.errors}, retx={self.reliableRetransmissions}")
                 self.receiver.reset_buffer()
                 self.connect_to_beetle()
@@ -144,10 +165,8 @@ class Beetle:
 
                 # verify the checksum - if fail, process the next packet
                 if not verify_checksum(data):
-                    # print(f"{self.COLOR}Error: checksum failed for this PKT {data.hex()}")
-                    logger.error(f"{self.COLOR}Error: checksum failed! Moving to next packet in buffer...")
+                    logger.error(f"{self.COLOR}Error: checksum failed for this PKT {data.hex()}")
                     self.errors += 1
-                    # print(f"{self.COLOR}Moving to next packet in buffer...")
                     continue
                 else:
                     self.errors = 0
@@ -234,6 +253,8 @@ class Beetle:
                 if canSendReliable:
                     if millis() - self.sendReliableStart > self.reliableTxRate:
                         sendPkt = self.getDataToSend()
+                        if self.MAC == BLUNO_P2_LEG_MAC:
+                            sendPkt = None
                         if sendPkt is not None:
                             self.cachedPacket = sendPkt
                             self.sendReliableStart = millis()
@@ -355,14 +376,14 @@ class Beetle:
         # else:
         #     # Create a PacketGamestate instance
         #     # TODO: integrate with backend
-        #     pkt = PacketGamestate()
-        #     pkt.seq_num = self.relay_seq_num
-        #     pkt.bullet = random.randint(0, 255)
-        #     pkt.health = random.randint(0, 255)
-        #     self.bullets = pkt.bullet
-        #     self.health = pkt.health
-        #     pkt.crc8 = get_checksum(pkt.to_bytearray())
-        #     return pkt
+        # pkt = PacketGamestate()
+        # pkt.seq_num = self.relay_seq_num
+        # pkt.bullet = 6
+        # pkt.health = 100
+        # self.bullets = pkt.bullet
+        # self.health = pkt.health
+        # pkt.crc8 = get_checksum(pkt.to_bytearray())
+        # return pkt
 
     def corrupt_packet(self, pkt):
         """Corrupt a gamestate packet for testing purposes"""
