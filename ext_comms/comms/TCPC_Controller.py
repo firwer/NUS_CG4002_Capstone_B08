@@ -41,7 +41,7 @@ class TCPC_Controller:
             attempt += 1
         print("Max reconnect attempts reached. Exiting...")
 
-    # Send a hello message to the evaluation server to initiate the handshake
+    # Eval Client: Send a hello message to the evaluation server to initiate the handshake
     async def init_handshake(self):
         if not self.writer:
             print("Connection not established. Exiting...")
@@ -52,12 +52,29 @@ class TCPC_Controller:
         await self.writer.drain()  # Ensure the data is sent
         print("Successfully initiated handshake with evaluation server!")
 
+    # Relay Node: Send a hello packet to the TCP server to identify itself
+
+    async def identify_relay_node(self, player_number):
+        if not self.writer:
+            print("Connection not established. Exiting...")
+            return
+        length = len(str(player_number))
+        self.writer.write(f"{length}_".encode() + str(player_number).encode())
+        await self.writer.drain()
+        print("Successfully identified player relay node with TCP server!")
+
     async def send(self, message):
         encrypted_message = encrypt_msg(message, self.secret_key)
         length = len(encrypted_message)
         self.writer.write(f"{length}_".encode() + encrypted_message)
         await self.writer.drain()
         print(f"Sent message: {message}")
+
+    async def send_no_encrypt(self, message):
+        length = len(message)
+        self.writer.write(f"{length}_".encode() + message)
+        await self.writer.drain()
+        #print(f"Sent message: {message}")
 
     async def recv(self):
         """

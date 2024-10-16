@@ -1,21 +1,10 @@
-import asyncssh
-import asyncio
+import paramiko
+import threading
 import socket
+import sys
+import time
+import select
 import config
-
-'''
-Purpose: This will allow evaluation client to communicate with evaluation server hosted outside of the Ultra96 board.
-
-It is bloody painful to manually find a free port on the remote machine and bind it to the local evaluation server port
-for reverse SSH tunneling each time. This script fully automates the process by finding a free port on the remote machine 
-and binding it to the local evaluation server port. The script then runs the game server on the remote machine using the 
-bound port.
-
-This script consist of 2 main jobs:
-1. Setup Reverse SSH Tunneling based on the port the evaluation server is listening on in your local machine.
-2. Run the game server on U96 using the random available port that was bound to the local evaluation server port.
-
-'''
 
 
 def prompt_user_for_port():
@@ -27,67 +16,130 @@ def prompt_user_for_port():
             print("Invalid input, please enter a valid port number.")
 
 
-def find_free_port():
-    """Find a free port on the local machine."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(('', 0))
-        return s.getsockname()[1]
-
-
-async def reverse_ssh_tunnel(remote_host, remote_user, local_port):
-    # Find a free port on the remote machine
-    remote_port = find_free_port()
-    print(f"Found free port on remote: {remote_port}")
-
-    try:
-        async with asyncssh.connect(remote_host, username=remote_user, password=config.ssh_password,
-                                    known_hosts=None) as conn:
-            # Bind the free remote port to the local evaluation server port
-            forwarder = await conn.forward_remote_port('127.0.0.1', remote_port, '127.0.0.1', local_port)
-            print(f"Reverse SSH tunnel established: remote {remote_port} -> local {local_port}")
-
-            await run_game_server_on_ultra96(conn, remote_port)
-            # Keep the SSH tunnel alive
-            await forwarder.wait_closed()
-
-    except (OSError, asyncssh.Error) as exc:
-        print(f'Error in SSH tunnel: {str(exc)}')
-
+def find_remote_free_port(client):
+    stdin, stdout, stderr = client.exec_command(
+        "python3 -c 'import socket; s=socket.socket(); s.bind((\"\",0)); print(s.getsockname()[1]); s.close()'")
+    remote_port_str = stdout.read().decode().strip()
+    if not remote_port_str.isdigit():
+        print(f"Could not find a free port on remote host: {remote_port_str}")
+        sys.exit(1)
+    remote_port = int(remote_port_str)
     return remote_port
 
 
-async def run_game_server_on_ultra96(conn, remote_port):
+def reverse_forward_tunnel(remote_port, local_host, local_port, transport):
+    """
+    Create a reverse tunnel from the remote server port to the specified local host and port.
+    """
+    try:
+        transport.request_port_forward('', remote_port)
+        print(f"Reverse SSH tunnel established: remote {remote_port} -> local {local_port}")
+    except Exception as e:
+        print(f"Failed to establish reverse SSH tunnel: {e}")
+        return
+
+    while True:
+        chan = transport.accept(1000)
+        if chan is None:
+            continue
+        # Open a connection to the local host and port
+        sock = socket.socket()
+        try:
+            sock.connect((local_host, local_port))
+        except Exception as e:
+            print(f"Forwarding request to {local_host}:{local_port} failed: {e}")
+            chan.close()
+            continue
+        # Start a thread to forward data between the channels
+        threading.Thread(target=handler, args=(chan, sock)).start()
+
+
+def handler(chan, sock):
+    while True:
+        r, w, x = select.select([sock, chan], [], [])
+        if sock in r:
+            data = sock.recv(1024)
+            if len(data) == 0:
+                break
+            chan.sendall(data)
+        if chan in r:
+            data = chan.recv(1024)
+            if len(data) == 0:
+                break
+            sock.sendall(data)
+    chan.close()
+    sock.close()
+
+
+def run_game_server_on_ultra96(client, remote_port):
     print(f"Running game server on Ultra96 using port {remote_port}...")
 
     try:
         # Kill any existing active relay node TCP port
-        print("Running game server on Ultra96...")
+        print("Killing any existing process on port 65001...")
+        client.exec_command('fuser -KILL -k -n tcp 65001', timeout=10)
+
         # Run the game server remotely on the Ultra96
-        await conn.run('fuser -KILL -k -n tcp 65001')
-        result = await conn.run(f'source /usr/local/share/pynq-venv/bin/activate && python '
-                                f'/home/xilinx/ext_comms/main.py {remote_port}', check=True)
-        # Print standard output and error
-        print("Game server output:")
-        print(result.stdout)
-        print("Game server errors (if any):")
-        print(result.stderr)
+        command = f'source /usr/local/share/pynq-venv/bin/activate && python /home/xilinx/ext_comms/main.py {remote_port}'
+        stdin, stdout, stderr = client.exec_command(command, get_pty=True)
 
-    except asyncssh.ProcessError as e:
+        # Start threads to read stdout and stderr
+        threading.Thread(target=read_stream, args=(stdout, "STDOUT")).start()
+        threading.Thread(target=read_stream, args=(stderr, "STDERR")).start()
+
+    except Exception as e:
         print(f"Failed to run the game server on Ultra96: {e}")
-        print(f"Error details: {e.stderr}")
 
-async def main():
+
+def read_stream(stream, stream_name):
+    for line in iter(lambda: stream.readline(2048), ""):
+        if line:
+            print(f"[REMOTE {stream_name}] {line}", end='')
+        else:
+            break
+
+
+def main():
     local_port = prompt_user_for_port()
+    local_host = '127.0.0.1'
 
     # Set up reverse SSH tunneling and get the remote free port
     remote_host = config.ssh_host
     remote_user = config.ssh_user
+    ssh_password = config.ssh_password
+
     try:
-        remote_port = await reverse_ssh_tunnel(remote_host, remote_user, local_port)
-        await run_game_server_on_ultra96(remote_port)
-    except KeyboardInterrupt as e:
+        # Create SSH client and connect
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(remote_host, username=remote_user, password=ssh_password)
+
+        # Find a free port on the remote host
+        remote_port = find_remote_free_port(client)
+        print(f"Found free port on remote: {remote_port}")
+
+        transport = client.get_transport()
+
+        # Start reverse port forwarding in a separate thread
+        reverse_tunnel_thread = threading.Thread(target=reverse_forward_tunnel,
+                                                 args=(remote_port, local_host, local_port, transport))
+        reverse_tunnel_thread.daemon = True
+        reverse_tunnel_thread.start()
+
+        # Run the game server on the remote host
+        run_game_server_on_ultra96(client, remote_port)
+
+        # Keep the main thread alive to maintain the SSH connection
+        while True:
+            time.sleep(1)
+
+    except KeyboardInterrupt:
         print("Exiting...")
+        sys.exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

@@ -7,6 +7,7 @@ from GameLogicProcess import game_state_manager
 from PredictionService import start_prediction_service_process
 from comms.AsyncMQTTController import AsyncMQTTController
 from comms.TCPS_Controller import TCPS_Controller
+from int_comms.relay.packet import get_packet, PACKET_DATA_HEALTH, PACKET_DATA_BULLET, PACKET_DATA_IMU, PACKET_DATA_KICK
 
 
 class GamePlayerData:
@@ -104,25 +105,94 @@ async def start_mqtt_job(receive_topic_p1: str,
     await mqtt_client.start(receive_topic_p1, receive_topic_p2, send_topic)
 
 
-async def start_tcp_job(tcp_port: int, receive_queue: asyncio.Queue, send_queue: asyncio.Queue):
+async def start_tcp_job(tcp_port: int, receive_queue_p1: asyncio.Queue, receive_queue_p2: asyncio.Queue,
+                        send_queue: asyncio.Queue):
     tcp_server = TCPS_Controller(ip=config.TCP_SERVER_HOST, port=tcp_port, secret_key=config.TCP_SECRET_KEY,
-                                 receive_queue=receive_queue,
+                                 receive_queue_p1=receive_queue_p1,
+                                 receive_queue_p2=receive_queue_p2,
                                  send_queue=send_queue)
     await tcp_server.start_server()
 
 
-async def start_relay_node_data_sorter(src_input_queue: asyncio.Queue,
-                                       output_sensor_data_p1: asyncio.Queue,
-                                       output_sensor_data_p2: asyncio.Queue):
-    while True:
-        data = await src_input_queue.get()
-        print(f"Received data from RelayNode: {data}, sorting...")
-        if data.startswith('p1_'):
-            await output_sensor_data_p1.put(data[3:])
-        elif data.startswith('p2_'):
-            await output_sensor_data_p2.put(data[3:])
+async def start_relay_node_data_handler(src_input_queue_p1: asyncio.Queue,
+                                        src_input_queue_p2: asyncio.Queue,
+                                        output_sensor_data_p1: asyncio.Queue,
+                                        output_sensor_data_p2: asyncio.Queue,
+                                        output_action_data_p1: asyncio.Queue,
+                                        output_action_data_p2: asyncio.Queue,
+                                        output_gun_state_p1: asyncio.Queue,
+                                        output_gun_state_p2: asyncio.Queue):
+    bullet_queue_p1 = asyncio.Queue()
+    bullet_queue_p2 = asyncio.Queue()
+    health_queue_p1 = asyncio.Queue()
+    health_queue_p2 = asyncio.Queue()
+
+    async def push_to_queue(player_id: int):
+        if player_id == 1:
+            input_queue = src_input_queue_p1
+            output_sensor_queue = output_sensor_data_p1
+            output_action_queue = output_action_data_p1
+            target_gun_queue = bullet_queue_p1
+            target_health_queue = health_queue_p1
         else:
-            print("Unknown player origin data received from Relay Node.")
+            input_queue = src_input_queue_p2
+            output_sensor_queue = output_sensor_data_p2
+            output_action_queue = output_action_data_p2
+            target_gun_queue = bullet_queue_p2
+            target_health_queue = health_queue_p2
+
+        while True:
+            msg = await input_queue.get()
+            pkt = get_packet(msg)
+            if pkt.packet_type == PACKET_DATA_HEALTH:
+                print("HEALTH PACKET Received")
+                await target_health_queue.put("target_hit")
+            elif pkt.packet_type == PACKET_DATA_BULLET:
+                print("BULLET PACKET Received")
+                await target_gun_queue.put("shoot_attempt")
+                await output_action_queue.put("gun")
+            elif pkt.packet_type == PACKET_DATA_IMU:
+                print("IMU PACKET Received")
+                # Send to prediction service
+                await output_sensor_queue.put(msg)
+            elif pkt.packet_type == PACKET_DATA_KICK:
+                print("AKICK PACKET Received")
+                await output_action_queue.put("soccer")
+            else:
+                print("Invalid packet type received")
+
+    async def sync_gun_action(player_id: int):
+        if player_id == 1:
+            bullet_queue = bullet_queue_p1
+            opponent_health_queue = health_queue_p2
+            output_gun_state_queue = output_gun_state_p1
+        else:
+            bullet_queue = bullet_queue_p2
+            opponent_health_queue = health_queue_p1
+            output_gun_state_queue = output_gun_state_p2
+        while True:
+            # Wait for a bullet packet
+            await bullet_queue.get()
+            print(f"Player {player_id} attempted to shoot")
+            try:
+                # Wait for corresponding health packet from the opponent
+                # fixme: what if there is accumulated health packet from previous round? We need to the health packet round by round
+                await asyncio.wait_for(opponent_health_queue.get(), timeout=1)
+                print(f"Shot from Player {player_id} hit the opponent")
+                output_gun_state_queue.put_nowait("hit")
+            except asyncio.TimeoutError:
+                print(f"Shot from Player {player_id} missed")
+                output_gun_state_queue.put_nowait("miss")
+
+    push_to_queue_p1 = asyncio.create_task(
+        push_to_queue(1))
+    push_to_queue_p2 = asyncio.create_task(
+        push_to_queue(2))
+
+    check_gun_p1 = asyncio.create_task(sync_gun_action(1))
+    check_gun_p2 = asyncio.create_task(sync_gun_action(2))
+
+    await asyncio.gather(push_to_queue_p1, push_to_queue_p2, check_gun_p1, check_gun_p2)
 
     # Packet IMU - Standard AI Dmg except soccer
     # Packet Bullet - Send straight for game state update (deduct attacker bullet)
@@ -145,12 +215,17 @@ class GameEngine:
         self.engine_to_evaluation_server_queue = asyncio.Queue()
         self.evaluation_server_to_engine_queue = asyncio.Queue()
 
-        self.relay_mqtt_to_engine_queue = asyncio.Queue()  # Pipeline from relay node for P1
-        self.engine_to_relay_mqtt_queue = asyncio.Queue()  # Pipeline to relay node for P1
+        self.relay_node_to_engine_queue_p1 = asyncio.Queue()  # Pipeline from relay node for P1
+        self.relay_node_to_engine_queue_p2 = asyncio.Queue()  # Pipeline from relay node for P2
+
+        self.engine_to_relay_node_queue = asyncio.Queue()  # Pipeline to relay node for both players
 
         self.engine_to_visualizer_queue = asyncio.Queue()
         self.visualizer_to_engine_queue_p1 = asyncio.Queue()
         self.visualizer_to_engine_queue_p2 = asyncio.Queue()
+
+        self.gun_state_queue_p1 = asyncio.Queue()
+        self.gun_state_queue_p2 = asyncio.Queue()
 
         self.currGameData = GameData()
 
@@ -159,8 +234,9 @@ class GameEngine:
 
             # Start MQTT Broker Connection & TCP Server
             start_tcp_job(tcp_port=config.TCP_SERVER_PORT,
-                          receive_queue=self.relay_mqtt_to_engine_queue,
-                          send_queue=self.engine_to_relay_mqtt_queue),
+                          receive_queue_p1=self.relay_node_to_engine_queue_p1,
+                          receive_queue_p2=self.relay_node_to_engine_queue_p2,
+                          send_queue=self.engine_to_relay_node_queue),
 
             start_mqtt_job(receive_topic_p1=config.MQTT_VISUALIZER_TO_ENG_P1,
                            receive_topic_p2=config.MQTT_VISUALIZER_TO_ENG_P2,
@@ -169,9 +245,14 @@ class GameEngine:
                            receive_queue_p2=self.visualizer_to_engine_queue_p2,
                            send_queue=self.engine_to_visualizer_queue),
 
-            start_relay_node_data_sorter(src_input_queue=self.relay_mqtt_to_engine_queue,
-                                         output_sensor_data_p1=self.prediction_input_queue_p1,
-                                         output_sensor_data_p2=self.prediction_input_queue_p2),
+            start_relay_node_data_handler(src_input_queue_p1=self.relay_node_to_engine_queue_p1,
+                                          src_input_queue_p2=self.relay_node_to_engine_queue_p2,
+                                          output_sensor_data_p1=self.prediction_input_queue_p1,
+                                          output_sensor_data_p2=self.prediction_input_queue_p2,
+                                          output_action_data_p1=self.prediction_output_queue_p1,
+                                          output_action_data_p2=self.prediction_output_queue_p2,
+                                          output_gun_state_p1=self.gun_state_queue_p1,
+                                          output_gun_state_p2=self.gun_state_queue_p2),
 
             start_prediction_service_process(predict_input_queue=self.prediction_input_queue_p1,
                                              predict_output_queue=self.prediction_output_queue_p1),
@@ -195,21 +276,24 @@ class GameEngine:
         # Select appropriate queues based on player_id
         visualizer_send_queue = self.engine_to_visualizer_queue
         # Currently all data for relay node sent back to this queue regardless of player
-        relay_node_input_queue = self.engine_to_relay_mqtt_queue
+        relay_node_input_queue = self.engine_to_relay_node_queue
 
         if player_id == 1:
             pred_output_queue = self.prediction_output_queue_p1
             visualizer_receive_queue = self.visualizer_to_engine_queue_p1
+            gun_state_queue = self.gun_state_queue_p1
         else:
             pred_output_queue = self.prediction_output_queue_p2
             visualizer_receive_queue = self.visualizer_to_engine_queue_p2
+            gun_state_queue = self.gun_state_queue_p2
 
         while True:
             # Verify FOV with visualizer and update game state
             await game_state_manager(currGameData=self.currGameData, attacker_id=player_id,
                                      pred_output_queue=pred_output_queue,
                                      visualizer_receive_queue=visualizer_receive_queue,
-                                     visualizer_send_queue=visualizer_send_queue)
+                                     visualizer_send_queue=visualizer_send_queue,
+                                     gun_state_queue=gun_state_queue)
             print("EVALUATING...")
             # Send updated game state to evaluation server
             await evaluation_server_job(curr_game_data=self.currGameData,

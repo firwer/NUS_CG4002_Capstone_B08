@@ -3,20 +3,32 @@ import json
 import os
 import sys
 
-from sshtunnel import SSHTunnelForwarder
-
 import config
 from comms.TCPC_Controller import TCPC_Controller
+from int_comms.relay.external import sim_get_packet
+from int_comms.relay.packet import PACKET_DATA_IMU, PACKET_DATA_HEALTH, PACKET_DATA_KICK, PACKET_DATA_BULLET
+
+RELAY_NODE_PLAYER_NUMBER = 1  # Player number for the relay node
 
 
 # To be deprecated. For testing purposes only
 async def user_input(send_queue: asyncio.Queue, receive_queue: asyncio.Queue):
     while True:
-        message = input("Input message: ")
-        if not message.startswith("p1_") and not message.startswith("p2_"):
-            print("Invalid message format. Must start with 'p1_' or 'p2_'")
+        user_input = input("Input message: ")
+        packet_type = user_input.strip().upper()
+        if packet_type == 'IMU':
+            packet = sim_get_packet(PACKET_DATA_IMU)
+        elif packet_type == 'BULLET':
+            packet = sim_get_packet(PACKET_DATA_BULLET)
+        elif packet_type == 'HEALTH':
+            packet = sim_get_packet(PACKET_DATA_HEALTH)
+        elif packet_type == 'KICK':
+            packet = sim_get_packet(PACKET_DATA_KICK)
+        else:
+            print("Invalid packet type.")
             continue
-        await send_queue.put(message)
+        print(f"Sending {packet.packet_type} packet")
+        await send_queue.put(packet.to_bytearray())
         print(f"Waiting for message")
         msg = await receive_queue.get()
         root = json.loads(msg)
@@ -52,7 +64,7 @@ async def msg_sender(wsController: TCPC_Controller, send_queue: asyncio.Queue):
     """
     while True:
         message = await send_queue.get()
-        await wsController.send(message)
+        await wsController.send_no_encrypt(message)
 
 
 # Async Task Manager for TCP Communication and data transfer
@@ -63,6 +75,7 @@ async def run_tcp_client(send_queue: asyncio.Queue, receive_queue: asyncio.Queue
     wsController = TCPC_Controller(config.TCP_SERVER_HOST, port, config.TCP_SECRET_KEY)
 
     await wsController.connect()
+    await wsController.identify_relay_node(RELAY_NODE_PLAYER_NUMBER)
 
     # Tasks for sending and receiving messages
     tasks = [

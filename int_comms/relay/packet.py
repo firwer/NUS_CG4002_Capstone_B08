@@ -9,6 +9,7 @@ PACKET_CONN_ESTAB = 0xD
 PACKET_INVALID = 0xE
 PACKET_HELLO = 0xF
 
+
 def get_packettype_string(packet_type):
     """Takes in a byte and returns the associated type"""
     if packet_type == PACKET_DATA_HEALTH:
@@ -20,6 +21,7 @@ def get_packettype_string(packet_type):
     elif packet_type == PACKET_DATA_IMU:
         return "IMU"
     return "Unknown"
+
 
 def get_packet(bytearray: bytearray):
     """Convert the bytearray a PacketClass and returns it."""
@@ -42,9 +44,11 @@ def get_packet(bytearray: bytearray):
         # print(f"err: unknown packet type: {pkt_typ}, {bytearray.hex()}")
         return PacketInvalid()
 
+
 class PacketInvalid():
     def __init__(self) -> None:
         self.packet_type = PACKET_INVALID
+
 
 class PacketAck():
     def __init__(self, byteArray=None) -> None:
@@ -57,6 +61,7 @@ class PacketAck():
             self.seq_num = byteArray[1]
             self.padding = byteArray[2:19]
             self.crc8 = byteArray[19]
+
     def to_bytearray(self) -> bytearray:
         byte_array = bytearray()
         byte_array.append(self.packet_type)
@@ -64,6 +69,7 @@ class PacketAck():
         byte_array.extend(self.padding)
         byte_array.append(self.crc8)
         return byte_array
+
 
 class PacketConnEstab():
     def __init__(self, byteArray=None) -> None:
@@ -76,6 +82,7 @@ class PacketConnEstab():
             self.seq_num = byteArray[1]
             self.padding = byteArray[2:19]
             self.crc8 = byteArray[19]
+
     def to_bytearray(self) -> bytearray:
         byte_array = bytearray()
         byte_array.append(self.packet_type)
@@ -83,6 +90,7 @@ class PacketConnEstab():
         byte_array.extend(self.padding)
         byte_array.append(self.crc8)
         return byte_array
+
 
 class PacketSynAck():
     def __init__(self, byteArray=None) -> None:
@@ -95,6 +103,7 @@ class PacketSynAck():
             self.seq_num = byteArray[1]
             self.padding = byteArray[2:19]
             self.crc8 = byteArray[19]
+
     def to_bytearray(self) -> bytearray:
         byte_array = bytearray()
         byte_array.append(self.packet_type)
@@ -102,6 +111,7 @@ class PacketSynAck():
         byte_array.extend(self.padding)
         byte_array.append(self.crc8)
         return byte_array
+
 
 class PacketHello():
     def __init__(self, byteArray=None) -> None:
@@ -114,6 +124,7 @@ class PacketHello():
             self.seq_num = byteArray[1]
             self.padding = byteArray[2:19]
             self.crc8 = byteArray[19]
+
     def to_bytearray(self) -> bytearray:
         byte_array = bytearray()
         byte_array.append(self.packet_type)
@@ -121,6 +132,7 @@ class PacketHello():
         byte_array.extend(self.padding)
         byte_array.append(self.crc8)
         return byte_array
+
 
 class PacketHealth():
     def __init__(self, byteArray=None) -> None:
@@ -135,6 +147,7 @@ class PacketHealth():
             self.health = byteArray[2]
             self.padding = byteArray[3:19]
             self.crc8 = byteArray[19]
+
     def to_bytearray(self) -> bytearray:
         byte_array = bytearray()
         byte_array.append(self.packet_type)
@@ -143,6 +156,7 @@ class PacketHealth():
         byte_array.extend(self.padding)
         byte_array.append(self.crc8)
         return byte_array
+
 
 class PacketBullet():
     def __init__(self, byteArray=None) -> None:
@@ -157,6 +171,7 @@ class PacketBullet():
             self.bullet = byteArray[2]
             self.padding = byteArray[3:19]
             self.crc8 = byteArray[19]
+
     def to_bytearray(self) -> bytearray:
         byte_array = bytearray()
         byte_array.append(self.packet_type)
@@ -165,6 +180,7 @@ class PacketBullet():
         byte_array.extend(self.padding)
         byte_array.append(self.crc8)
         return byte_array
+
 
 class PacketKick():
     def __init__(self, byteArray=None) -> None:
@@ -177,6 +193,7 @@ class PacketKick():
             self.seq_num = byteArray[1]
             self.padding = byteArray[2:19]
             self.crc8 = byteArray[19]
+
     def to_bytearray(self) -> bytearray:
         byte_array = bytearray()
         byte_array.append(self.packet_type)
@@ -184,6 +201,7 @@ class PacketKick():
         byte_array.extend(self.padding)
         byte_array.append(self.crc8)
         return byte_array
+
 
 class PacketImu():
     def __init__(self, byteArray=None) -> None:
@@ -210,6 +228,7 @@ class PacketImu():
             self.gyroZ = byteArray[13:15]
             self.padding = byteArray[15:19]
             self.crc8 = byteArray[19]
+
     def to_bytearray(self) -> bytearray:
         byte_array = bytearray()
         byte_array.append(self.packet_type)
@@ -224,6 +243,7 @@ class PacketImu():
         byte_array.extend(self.padding)
         byte_array.append(self.crc8)
         return byte_array
+
 
 class PacketGamestate():
     def __init__(self, byteArray=None) -> None:

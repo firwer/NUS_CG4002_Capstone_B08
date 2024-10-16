@@ -1,5 +1,6 @@
 import argparse
 import logging
+from queue import Queue
 import random
 import signal
 import time
@@ -8,6 +9,7 @@ from bluepy import btle
 from packet import * 
 from checksum import *
 import threading
+import external
 
 # RED == PLAYER 1
 BLUNO_P1_GLOVE_MAC = "F4:B8:5E:42:6D:49" # TO BE USED FOR EVAL
@@ -18,9 +20,6 @@ BLUNO_P1_GLOVE_MAC = "F4:B8:5E:42:6D:49" # TO BE USED FOR EVAL
 #BLUNO_P2_GLOVE_MAC = "F4:B8:5E:42:4C:BB" 
 BLUNO_P2_CHEST_MAC = "F4:B8:5E:42:6D:1E" #TO BE USED FOR EVAL
 BLUNO_P2_LEG_MAC   = "F4:B8:5E:42:61:6A" #TO BE USED FOR EVAL (TREAT AS PLAYER 1 FOR NOW)
-
-# BLUNO_P1_LEG_MAC = "F4:B8:5E:42:6D:42"
-# BLUNO_P1_CHEST_MAC = "F4:B8:5E:42:46:E5"
 
 CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"
 logging.basicConfig(level=logging.DEBUG, format='\033[0m[%(levelname)s] [%(threadName)s] %(message)s')
@@ -92,7 +91,7 @@ class NotifyDelegate(btle.DefaultDelegate):
 
 # A beetle object maintains its own connection and state
 class Beetle:
-    def __init__(self, MAC_ADDRESS, beetle_id=None) -> None:
+    def __init__(self, MAC_ADDRESS, beetle_id=None, sendToGameServerQueue:Queue=None, receiveFromGameServerQueue:Queue=None) -> None:
         RESET_COLOR = "\033[0m"  # Reset color
         RED_COLOR = "\033[31m"   # Red color
         GREEN_COLOR = "\033[32m"  # Green color
@@ -101,6 +100,9 @@ class Beetle:
         MAGENTA_COLOR = "\033[35m" # Magenta color
         CYAN_COLOR = "\033[36m"   # Cyan color
         colors = [BLUE_COLOR, GREEN_COLOR, RED_COLOR]
+
+        self.sendToGameServerQueue = sendToGameServerQueue
+        self.receiveFromGameServerQueue = receiveFromGameServerQueue
 
         self.COLOR = RESET_COLOR if beetle_id is None else colors[beetle_id]
         self.relay_seq_num = 0
@@ -183,8 +185,10 @@ class Beetle:
 
                 # Is unreliable send
                 if pkt.packet_type == PACKET_DATA_IMU:
-                    # TODO do work
+                    # TODO do work: WARNING - signness needs to be preserved
                     logger.info(f"{self.COLOR}RX PKT b{pkt.seq_num} <IMU> (beetle stream)")
+                    if self.sendToGameServerQueue is not None: 
+                        self.sendToGameServerQueue.put_nowait(pkt)
                     continue
 
                 # Is reliable packet
@@ -198,11 +202,17 @@ class Beetle:
                     if pkt.packet_type == PACKET_DATA_HEALTH: 
                         # TODO: do work
                         logger.info(f"{self.COLOR}RX PKT b{latestPacket.seq_num} <{get_packettype_string(pkt.packet_type)}> Health={pkt.health} (beetle reliable)")
+                        if self.sendToGameServerQueue is not None: 
+                            self.sendToGameServerQueue.put_nowait(pkt)
                     elif pkt.packet_type == PACKET_DATA_BULLET:    
                         # TODO: do work
+                        if self.sendToGameServerQueue is not None: 
+                            self.sendToGameServerQueue.put_nowait(pkt)
                         logger.info(f"{self.COLOR}RX PKT b{latestPacket.seq_num} <{get_packettype_string(pkt.packet_type)}> Bullet={pkt.bullet} (beetle reliable)")
-                    else:
+                    else: # KICK packet
                         # TODO: do work
+                        if self.sendToGameServerQueue is not None: 
+                            self.sendToGameServerQueue.put_nowait(pkt)
                         logger.info(f"{self.COLOR}RX PKT b{latestPacket.seq_num} <{get_packettype_string(pkt.packet_type)}> (beetle reliable)")
 
                 # Is an ACK
@@ -248,7 +258,7 @@ class Beetle:
                         if sendPkt is not None:
                             self.cachedPacket = sendPkt
                             self.sendReliableStart = millis()
-                            logger.info(f"{self.COLOR}TX PKT r{sendPkt.seq_num}, curr r{self.relay_seq_num} (relay reliable)")
+                            logger.info(f"{self.COLOR}TX PKT r{sendPkt.seq_num}, curr r{self.relay_seq_num}, data(bl{sendPkt.bullet},hp{sendPkt.}) (relay reliable)")
                             self.write_packet(sendPkt)
                             self.receiver.relayTxNumber += 1
                             canSendReliable = False
@@ -351,16 +361,29 @@ class Beetle:
         
     def getDataToSend(self):
         """Check if there is data to send to the beetle. Returns a packet if so, else None"""
-        # Create a PacketGamestate instance
-        # TODO: integrate with backend
-        pkt = PacketGamestate()
-        pkt.seq_num = self.relay_seq_num
-        pkt.bullet = 6
-        pkt.health = 100
-        self.bullets = pkt.bullet
-        self.health = pkt.health
-        pkt.crc8 = get_checksum(pkt.to_bytearray())
-        return pkt
+        if self.receiveFromGameServerQueue is not None:
+            if not self.receiveFromGameServerQueue.empty():
+                # TODO: make this more resilient with try-catch
+                pkt = self.receiveFromGameServerQueue.get()
+                # WARN: unrecoverable point of failure
+                if isinstance(pkt, PacketGamestate):
+                    pkt.seq_num = self.relay_seq_num
+                    pkt.crc8 = get_checksum(pkt.to_bytearray())
+                    return pkt
+                else:
+                    logger.error(f"pkt from ext-comms is not a PacketGamestate. Skipping!")
+        return None
+        # else:
+        #     # Create a PacketGamestate instance
+        #     # TODO: integrate with backend
+        # pkt = PacketGamestate()
+        # pkt.seq_num = self.relay_seq_num
+        # pkt.bullet = 6
+        # pkt.health = 100
+        # self.bullets = pkt.bullet
+        # self.health = pkt.health
+        # pkt.crc8 = get_checksum(pkt.to_bytearray())
+        # return pkt
 
     def corrupt_packet(self, pkt):
         """Corrupt a gamestate packet for testing purposes"""
@@ -392,21 +415,27 @@ def main():
         print("Invalid beetle_id. Must be 0, 1, or 2.")
         return
 
+    # Message queues
+    receiveFromGameServerQueue0 = Queue()
+    receiveFromGameServerQueue1 = Queue()
+    sendToGameServerQueue = Queue()
+    
     # Create Beetle instances
-    beetle0 = Beetle(BLUNO_P1_GLOVE_MAC, 0)
-    beetle1 = Beetle(BLUNO_P2_CHEST_MAC, 1)
-    beetle2 = Beetle(BLUNO_P2_LEG_MAC, 2)
+    beetle0 = Beetle(BLUNO_P1_GLOVE_MAC, 0, sendToGameServerQueue, receiveFromGameServerQueue0)
+    beetle1 = Beetle(BLUNO_P1_CHEST_MAC, 1, sendToGameServerQueue, receiveFromGameServerQueue1)
+    beetle2 = Beetle(BLUNO_P1_LEG_MAC, 2, sendToGameServerQueue)
+    externalThread = threading.Thread(target=external.begin_external, args=(sendToGameServerQueue, receiveFromGameServerQueue0, receiveFromGameServerQueue1, 1,), name="External")
     t0 = threading.Thread(target=run_beetle, args=(beetle0,), name="Beetle0")
     t1 = threading.Thread(target=run_beetle, args=(beetle1,), name=f"Beetle1")
     t2 = threading.Thread(target=run_beetle, args=(beetle2,), name=f"Beetle2")
-    threads = []
-    threads.extend([t0,t1,t2])
     t0.start()
     t1.start()
     t2.start()
+    externalThread.start()
     t0.join()
     t1.join()
     t2.join()
+    externalThread.join()
 
 if __name__ == "__main__":
     main()
