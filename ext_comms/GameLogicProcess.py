@@ -121,13 +121,10 @@ async def game_state_manager(currGameData, attacker_id: int,
             await reduce_health(OpponentPlayerData, config.GAME_RAIN_DMG)
 
     if prediction_action == "gun":
-        result = await gun_state_queue.get()
-        # empty out gun_state_queue and get the last item - Prevent accumulation
-        while not gun_state_queue.empty():
-            result = await gun_state_queue.get()
-        if result == "hit":
+        # Check if target is in FOV (For testing, I replaced the actual health pkt with fov)
+        if targetInFOV:
             await gun_shoot(targetPlayerData, OpponentPlayerData)
-        elif result == "miss":
+        else:
             # Only deduct bullet
             if targetPlayerData["bullets"] > 0:
                 targetPlayerData["bullets"] -= 1
@@ -141,7 +138,6 @@ async def game_state_manager(currGameData, attacker_id: int,
         if targetInFOV:
             await reduce_health(OpponentPlayerData, config.GAME_AI_DMG)
     elif prediction_action == "logout":
-        # TODO: Implement logout action
         print("User logout")
     else:
         print("Invalid action received. Doing nothing.")

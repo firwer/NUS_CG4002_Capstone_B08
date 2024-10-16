@@ -117,7 +117,7 @@ class TCPS_Controller:
                 data += chunk
             length = int(data[:-1].decode())
             message = await asyncio.wait_for(reader.readexactly(length), timeout)
-            return True, message
+            return True, message.decode()
         except (asyncio.TimeoutError, asyncio.IncompleteReadError, ValueError):
             print("Data reception error or invalid format.")
             return False, None

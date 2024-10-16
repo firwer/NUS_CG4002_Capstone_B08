@@ -73,7 +73,8 @@ class TCPC_Controller:
 
     async def send_no_encrypt(self, message):
         length = len(message)
-        self.writer.write(f"{length}_".encode() + message)
+        mystr = f"{length}_" + message
+        self.writer.write(mystr.encode())
         await self.writer.drain()
         #print(f"Sent message: {message}")
 

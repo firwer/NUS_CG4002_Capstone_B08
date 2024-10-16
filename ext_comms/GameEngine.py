@@ -130,75 +130,78 @@ async def start_relay_node_data_handler(src_input_queue_p1: asyncio.Queue,
                                         output_action_data_p2: asyncio.Queue,
                                         output_gun_state_p1: asyncio.Queue,
                                         output_gun_state_p2: asyncio.Queue):
-    bullet_queue_p1 = asyncio.Queue()
-    bullet_queue_p2 = asyncio.Queue()
-    health_queue_p1 = asyncio.Queue()
-    health_queue_p2 = asyncio.Queue()
+    while True:
+        msg = await src_input_queue_p1.get()
+        await output_action_data_p1.put(msg)
+    # bullet_queue_p1 = asyncio.Queue()
+    # bullet_queue_p2 = asyncio.Queue()
+    # health_queue_p1 = asyncio.Queue()
+    # health_queue_p2 = asyncio.Queue()
+    #
+    # async def push_to_queue(player_id: int):
+    #     if player_id == 1:
+    #         input_queue = src_input_queue_p1
+    #         output_sensor_queue = output_sensor_data_p1
+    #         output_action_queue = output_action_data_p1
+    #         target_gun_queue = bullet_queue_p1
+    #         target_health_queue = health_queue_p1
+    #     else:
+    #         input_queue = src_input_queue_p2
+    #         output_sensor_queue = output_sensor_data_p2
+    #         output_action_queue = output_action_data_p2
+    #         target_gun_queue = bullet_queue_p2
+    #         target_health_queue = health_queue_p2
+    #
+    #     while True:
+    #         msg = await input_queue.get()
+    #         pkt = get_packet(msg)
+    #         if pkt.packet_type == PACKET_DATA_HEALTH:
+    #             print("HEALTH PACKET Received")
+    #             await target_health_queue.put("target_hit")
+    #         elif pkt.packet_type == PACKET_DATA_BULLET:
+    #             print("BULLET PACKET Received")
+    #             await target_gun_queue.put("shoot_attempt")
+    #             await output_action_queue.put("gun")
+    #         elif pkt.packet_type == PACKET_DATA_IMU:
+    #             # Send to prediction service
+    #             await output_sensor_queue.put(pkt)
+    #         elif pkt.packet_type == PACKET_DATA_KICK:
+    #             print("KICK PACKET Received")
+    #             await output_action_queue.put("soccer")
+    #         else:
+    #             print("Invalid packet type received")
 
-    async def push_to_queue(player_id: int):
-        if player_id == 1:
-            input_queue = src_input_queue_p1
-            output_sensor_queue = output_sensor_data_p1
-            output_action_queue = output_action_data_p1
-            target_gun_queue = bullet_queue_p1
-            target_health_queue = health_queue_p1
-        else:
-            input_queue = src_input_queue_p2
-            output_sensor_queue = output_sensor_data_p2
-            output_action_queue = output_action_data_p2
-            target_gun_queue = bullet_queue_p2
-            target_health_queue = health_queue_p2
-
-        while True:
-            msg = await input_queue.get()
-            pkt = get_packet(msg)
-            if pkt.packet_type == PACKET_DATA_HEALTH:
-                print("HEALTH PACKET Received")
-                await target_health_queue.put("target_hit")
-            elif pkt.packet_type == PACKET_DATA_BULLET:
-                print("BULLET PACKET Received")
-                await target_gun_queue.put("shoot_attempt")
-                await output_action_queue.put("gun")
-            elif pkt.packet_type == PACKET_DATA_IMU:
-                # Send to prediction service
-                await output_sensor_queue.put(pkt)
-            elif pkt.packet_type == PACKET_DATA_KICK:
-                print("KICK PACKET Received")
-                await output_action_queue.put("soccer")
-            else:
-                print("Invalid packet type received")
-
-    async def sync_gun_action(player_id: int):
-        if player_id == 1:
-            bullet_queue = bullet_queue_p1
-            opponent_health_queue = health_queue_p2
-            output_gun_state_queue = output_gun_state_p1
-        else:
-            bullet_queue = bullet_queue_p2
-            opponent_health_queue = health_queue_p1
-            output_gun_state_queue = output_gun_state_p2
-        while True:
-            # Wait for a bullet packet
-            await bullet_queue.get()
-            print(f"Player {player_id} attempted to shoot")
-            try:
-                # Wait for corresponding health packet from the opponent
-                await asyncio.wait_for(opponent_health_queue.get(), timeout=0.1)
-                print(f"Shot from Player {player_id} hit the opponent")
-                output_gun_state_queue.put_nowait("hit")
-            except asyncio.TimeoutError:
-                print(f"Shot from Player {player_id} missed")
-                output_gun_state_queue.put_nowait("miss")
-
-    push_to_queue_p1 = asyncio.create_task(
-        push_to_queue(1))
-    push_to_queue_p2 = asyncio.create_task(
-        push_to_queue(2))
-
-    check_gun_p1 = asyncio.create_task(sync_gun_action(1))
-    check_gun_p2 = asyncio.create_task(sync_gun_action(2))
-
-    await asyncio.gather(push_to_queue_p1, push_to_queue_p2, check_gun_p1, check_gun_p2)
+    # async def sync_gun_action(player_id: int):
+    #     if player_id == 1:
+    #         bullet_queue = bullet_queue_p1
+    #         opponent_health_queue = health_queue_p2
+    #         output_gun_state_queue = output_gun_state_p1
+    #     else:
+    #         bullet_queue = bullet_queue_p2
+    #         opponent_health_queue = health_queue_p1
+    #         output_gun_state_queue = output_gun_state_p2
+    #     while True:
+    #         # Wait for a bullet packet
+    #         await bullet_queue.get()
+    #         print(f"Player {player_id} attempted to shoot")
+    #         try:
+    #             # Wait for corresponding health packet from the opponent
+    #             await asyncio.wait_for(opponent_health_queue.get(), timeout=0.1)
+    #             print(f"Shot from Player {player_id} hit the opponent")
+    #             output_gun_state_queue.put_nowait("hit")
+    #         except asyncio.TimeoutError:
+    #             print(f"Shot from Player {player_id} missed")
+    #             output_gun_state_queue.put_nowait("miss")
+    #
+    # push_to_queue_p1 = asyncio.create_task(
+    #     push_to_queue(1))
+    # push_to_queue_p2 = asyncio.create_task(
+    #     push_to_queue(2))
+    #
+    # check_gun_p1 = asyncio.create_task(sync_gun_action(1))
+    # check_gun_p2 = asyncio.create_task(sync_gun_action(2))
+    #
+    # await asyncio.gather(push_to_queue_p1, push_to_queue_p2, check_gun_p1, check_gun_p2)
 
     # Packet IMU - Standard AI Dmg except soccer
     # Packet Bullet - Send straight for game state update (deduct attacker bullet)
@@ -260,8 +263,8 @@ class GameEngine:
                                           output_gun_state_p1=self.gun_state_queue_p1,
                                           output_gun_state_p2=self.gun_state_queue_p2),
 
-            start_prediction_service_process(predict_input_queue=self.prediction_input_queue_p1,
-                                             predict_output_queue=self.prediction_output_queue_p1),
+            # start_prediction_service_process(predict_input_queue=self.prediction_input_queue_p1,
+            #                                  predict_output_queue=self.prediction_output_queue_p1),
 
             # start_prediction_service_process(predict_input_queue=self.prediction_input_queue_p2,
             #                                  predict_output_queue=self.prediction_output_queue_p2),

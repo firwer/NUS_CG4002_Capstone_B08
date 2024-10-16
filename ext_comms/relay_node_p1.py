@@ -15,20 +15,28 @@ RELAY_NODE_PLAYER_NUMBER = 1  # Player number for the relay node
 async def user_input(send_queue: asyncio.Queue, receive_queue: asyncio.Queue):
     while True:
         user_input = input("Input message: ")
-        packet_type = user_input.strip().upper()
-        if packet_type == 'IMU':
-            packet = sim_get_packet(PACKET_DATA_IMU)
-        elif packet_type == 'BULLET':
-            packet = sim_get_packet(PACKET_DATA_BULLET)
-        elif packet_type == 'HEALTH':
-            packet = sim_get_packet(PACKET_DATA_HEALTH)
-        elif packet_type == 'KICK':
-            packet = sim_get_packet(PACKET_DATA_KICK)
-        else:
-            print("Invalid packet type.")
-            continue
-        print(f"Sending {packet.packet_type} packet")
-        await send_queue.put(packet.to_bytearray())
+        packet_type = user_input.strip().lower()
+
+        await send_queue.put(packet_type)
+        # if packet_type == 'soccer':
+        #     await send_queue.put(b'SOCCER')
+        # elif packet_type == 'basket':
+        #
+        # elif packet_type == 'volley':
+        #     packet = sim_get_packet(PACKET_DATA_BULLET)
+        # elif packet_type == 'bowl':
+        #     packet = sim_get_packet(PACKET_DATA_HEALTH)
+        # elif packet_type == 'bomb':
+        #     packet = sim_get_packet(PACKET_DATA_KICK)
+        # elif packet_type == 'shield':
+        # elif packet_type == 'gun':
+        # elif packet_type == 'reload':
+        # elif packet_type == 'logout':
+        # else:
+        #     print("Invalid packet type.")
+        #     continue
+        # print(f"Sending {packet.packet_type} packet")
+        # await send_queue.put(packet.to_bytearray())
         print(f"Waiting for message")
         msg = await receive_queue.get()
         root = json.loads(msg)
@@ -49,7 +57,7 @@ async def msg_receiver(wsController: TCPC_Controller, receive_queue: asyncio.Que
     """
     while True:
         try:
-            msg = await wsController.recv_decrypt()
+            msg = await wsController.recv()
             await receive_queue.put(msg)
         except (asyncio.IncompleteReadError, ConnectionResetError, ConnectionAbortedError):
             print("Connection lost. Attempting to reconnect...")
