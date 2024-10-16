@@ -14,10 +14,10 @@ from comms.TCPC_Controller_Sync import TCPC_Controller_Sync
 from int_comms.relay.packet import PACKET_DATA_IMU, PACKET_DATA_BULLET, PACKET_DATA_HEALTH, PACKET_DATA_KICK, PacketImu, \
     PacketBullet, PacketHealth, PacketKick, PacketGamestate, get_packet
 
-ext_logger = logging.getLogger("External")
+ext_logger = logging.getLogger("External2")
 
 RELAY_NODE_PLAYER = -1
-PLAYER_NUMBER = 1
+PLAYER_NUMBER = 2
 
 def get_user_input(from_beetles_queue1 : Queue, from_beetles_queue2 : Queue, from_beetles_queue3 : Queue):
     IMU_Bullet_beetle = from_beetles_queue1
@@ -69,7 +69,6 @@ def receive_queue_handler_integrated(tcpController: TCPC_Controller_Sync, receiv
                 pkt.bullet = player["game_state"]["bullets"]
                 pkt.health = player["game_state"]["hp"]
                 ext_logger.info(f"P2 getting {pkt.bullet} bullets, {pkt.health} health")
-
             # broadcast the queues 
             for receive_queue in receive_queues:
                 receive_queue.put(pkt)

@@ -35,6 +35,7 @@ void handleValidPacket(struct packet_general_t *packet, uint8_t packet_type);
 struct packet_general_t reliable_receive();
 bool await_packet(struct packet_general_t *packet_buffer);
 void await_handshake(bool helloReceived);
+bool ic_push_imu(MPUData data, uint8_t action_count);
 
 // hw-ic integration declarations
 bool ic_connect();

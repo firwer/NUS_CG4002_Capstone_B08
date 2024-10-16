@@ -58,7 +58,6 @@ class TCPC_Controller:
         if not self.writer:
             print("Connection not established. Exiting...")
             return
-          
         length = len(str(player_number))
         self.writer.write(f"{length}_".encode() + str(player_number).encode())
         await self.writer.drain()

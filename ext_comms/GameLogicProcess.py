@@ -1,8 +1,5 @@
 import asyncio
-import logging
-
 import config
-
 
 async def reduce_health(targetGameState: dict, hp_reduction: int):
     print(f"Reducing health by {hp_reduction}")
@@ -98,7 +95,8 @@ async def getVState(visualizer_receive_queue: asyncio.Queue):
 async def game_state_manager(currGameData, attacker_id: int,
                              pred_output_queue: asyncio.Queue,
                              visualizer_receive_queue: asyncio.Queue,
-                             visualizer_send_queue: asyncio.Queue):
+                             visualizer_send_queue: asyncio.Queue,
+                             gun_state_queue: asyncio.Queue):
     prediction_action = await pred_output_queue.get()
     print(f"Received prediction from PredictionService: {prediction_action} for player {attacker_id}")
 
@@ -124,7 +122,17 @@ async def game_state_manager(currGameData, attacker_id: int,
             await reduce_health(OpponentPlayerData, config.GAME_RAIN_DMG)
 
     if prediction_action == "gun":
-        await gun_shoot(targetPlayerData, OpponentPlayerData)
+        result = await gun_state_queue.get()
+        # empty out gun_state_queue and get the last item - Prevent accumulation
+        while not gun_state_queue.empty():
+            result = await gun_state_queue.get()
+
+        if result == "hit":
+            await gun_shoot(targetPlayerData, OpponentPlayerData)
+        elif result == "miss":
+            # Only deduct bullet
+            if targetPlayerData["bullets"] > 0:
+                targetPlayerData["bullets"] -= 1
     elif prediction_action == "shield":
         await shield(targetPlayerData)
     elif prediction_action == "reload":
@@ -138,7 +146,7 @@ async def game_state_manager(currGameData, attacker_id: int,
         # TODO: Implement logout action
         pass
     else:
+        print("Invalid action received. Doing nothing.")
         pass
     # Send updated game state to visualizer
     await visualizer_send_queue.put("gs_" + currGameData.to_json(attacker_id))  # Add gs_ prefix to indicate game
-    # state msg type to the visualizer
