@@ -1,4 +1,6 @@
 import asyncio
+import time
+
 import config
 
 async def reduce_health(targetGameState: dict, hp_reduction: int):
@@ -144,9 +146,10 @@ async def game_state_manager(currGameData, attacker_id: int,
             await reduce_health(OpponentPlayerData, config.GAME_AI_DMG)
     elif prediction_action == "logout":
         # TODO: Implement logout action
-        pass
+        print("User logout")
     else:
         print("Invalid action received. Doing nothing.")
-        pass
+
+    print(f"SENDING TO VISUALIZER QUEUE: {currGameData.to_json(attacker_id)}")
     # Send updated game state to visualizer
     await visualizer_send_queue.put("gs_" + currGameData.to_json(attacker_id))  # Add gs_ prefix to indicate game

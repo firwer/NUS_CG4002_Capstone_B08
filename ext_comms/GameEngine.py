@@ -4,7 +4,7 @@ import json
 import config
 from EvaluationProcess import start_evaluation_process
 from GameLogicProcess import game_state_manager
-from PredictionService import start_prediction_service_process
+from PredictionService import PredictionServiceProcess
 from comms.AsyncMQTTController import AsyncMQTTController
 from comms.TCPS_Controller import TCPS_Controller
 from int_comms.relay.packet import get_packet, PACKET_DATA_HEALTH, PACKET_DATA_BULLET, PACKET_DATA_IMU, PACKET_DATA_KICK
@@ -79,6 +79,7 @@ async def evaluation_server_job(curr_game_data: GameData, player_id: int, eval_i
             "p2": curr_game_data.p2.game_state
         }
     }
+    print("SENDING TO EVAL SERVER ", EvalGameData)
     # Send updated game state to evaluation server
     await eval_input_queue.put(json.dumps(EvalGameData))
     # Wait for evaluation response
@@ -112,6 +113,13 @@ async def start_tcp_job(tcp_port: int, receive_queue_p1: asyncio.Queue, receive_
                                  receive_queue_p2=receive_queue_p2,
                                  send_queue=send_queue)
     await tcp_server.start_server()
+
+
+async def start_prediction_service_process(predict_input_queue: asyncio.Queue, predict_output_queue: asyncio.Queue):
+    PredictionService = PredictionServiceProcess(predict_input_queue=predict_input_queue,
+                                                 predict_output_queue=predict_output_queue)
+    print("Prediction Service Started")
+    await PredictionService.run()
 
 
 async def start_relay_node_data_handler(src_input_queue_p1: asyncio.Queue,
@@ -154,9 +162,9 @@ async def start_relay_node_data_handler(src_input_queue_p1: asyncio.Queue,
             elif pkt.packet_type == PACKET_DATA_IMU:
                 print("IMU PACKET Received")
                 # Send to prediction service
-                await output_sensor_queue.put(msg)
+                await output_sensor_queue.put(pkt)
             elif pkt.packet_type == PACKET_DATA_KICK:
-                print("AKICK PACKET Received")
+                print("A KICK PACKET Received")
                 await output_action_queue.put("soccer")
             else:
                 print("Invalid packet type received")
@@ -176,8 +184,7 @@ async def start_relay_node_data_handler(src_input_queue_p1: asyncio.Queue,
             print(f"Player {player_id} attempted to shoot")
             try:
                 # Wait for corresponding health packet from the opponent
-                # fixme: what if there is accumulated health packet from previous round? We need to the health packet round by round
-                await asyncio.wait_for(opponent_health_queue.get(), timeout=1)
+                await asyncio.wait_for(opponent_health_queue.get(), timeout=0.1)
                 print(f"Shot from Player {player_id} hit the opponent")
                 output_gun_state_queue.put_nowait("hit")
             except asyncio.TimeoutError:
@@ -257,8 +264,8 @@ class GameEngine:
             start_prediction_service_process(predict_input_queue=self.prediction_input_queue_p1,
                                              predict_output_queue=self.prediction_output_queue_p1),
 
-            start_prediction_service_process(predict_input_queue=self.prediction_input_queue_p2,
-                                             predict_output_queue=self.prediction_output_queue_p2),
+            # start_prediction_service_process(predict_input_queue=self.prediction_input_queue_p2,
+            #                                  predict_output_queue=self.prediction_output_queue_p2),
 
             # Start Evaluation Server Process
             start_evaluation_process(eval_server_port=self.eval_server_port,

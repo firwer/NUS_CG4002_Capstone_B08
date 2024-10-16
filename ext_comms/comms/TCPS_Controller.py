@@ -105,9 +105,8 @@ class TCPS_Controller:
                 await self.clean_up_connection(writer)
 
     async def _send_message(self, writer, message):
-        encrypted_message = encrypt_msg(message, self.secret_key)
-        length = len(encrypted_message)
-        writer.write(f"{length}_".encode() + encrypted_message)
+        print(f"Sending message to Player {self.client_player_map.get(writer, 'Unknown')}: {message}")
+        writer.write(f"{len(message)}_".encode() + message.encode())
         await writer.drain()
         print(f"Sent message to Player {self.client_player_map.get(writer, 'Unknown')}: {message}")
 
