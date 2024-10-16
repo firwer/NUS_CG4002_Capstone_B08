@@ -19,7 +19,7 @@
 #define NOTE_DELAY 100
 #define DEBOUNCE_DELAY 50
 #define MPU_SAMPLING_RATE 40
-#define NUM_RECORDED_POINTS 60
+#define NUM_RECORDED_POINTS 64
 
 const uint8_t PLAYER_1_ADDRESS = 0x23; // 8-bits, no need for 16-bits
 const uint8_t PLAYER_2_ADDRESS = 0x77;
@@ -59,7 +59,7 @@ bool isRecording = false;
 bool isMotionDetected = false;
 bool isMotionTunePlayed = false;
 bool hasMotionEnded = false;
-
+uint8_t actionCounter = 0;
 MPUData mpuData; // @wanlin
 
 struct MPUData_FLOAT
@@ -239,9 +239,9 @@ void loop()
       mpuData.gx = (((mpuData.gx) / 32767.0) * 250.0) * 100;
       mpuData.gy = (((mpuData.gy) / 32767.0) * 250.0) * 100;
       mpuData.gz = (((mpuData.gz) / 32767.0) * 250.0) * 100;
-
+      
       // @wanlin
-      ic_push_imu(mpuData);
+      ic_push_imu(mpuData, actionCounter);
       communicate();
 
       lastSampleTime = millis();
@@ -255,6 +255,7 @@ void loop()
         recordedPoints = 0;
         isMotionTunePlayed = false;
         hasMotionEnded = true;
+        ++actionCounter;
       }
     }
   }

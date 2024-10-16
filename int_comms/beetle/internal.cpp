@@ -261,6 +261,22 @@ bool ic_push_imu(MPUData data)
   return true;
 }
 
+bool ic_push_imu(MPUData data, uint8_t action_count)
+{
+  if (unreliable_buffer_filled)
+    return false;
+  unreliable_buffer.packet_type = PACKET_DATA_IMU;
+  unreliable_buffer.accX = data.ax;
+  unreliable_buffer.accY = data.ay;
+  unreliable_buffer.accZ = data.ax;
+  unreliable_buffer.gyrX = data.gx;
+  unreliable_buffer.gyrY = data.gy;
+  unreliable_buffer.gyrZ = data.gz;
+  unreliable_buffer_filled = true;
+  unreliable_buffer.adc = action_count;
+  return true;
+}
+
 // Queue the bullet data to be sent when communicate() is called.
 // Returns true if data has been successfully put into the todo buffer
 bool ic_push_bullet(uint8_t bullets)
