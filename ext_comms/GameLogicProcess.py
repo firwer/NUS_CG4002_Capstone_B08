@@ -1,4 +1,6 @@
 import asyncio
+import time
+
 import config
 
 async def reduce_health(targetGameState: dict, hp_reduction: int):
@@ -120,7 +122,7 @@ async def game_state_manager(currGameData, attacker_id: int,
     if targetInFOV:
         for _ in range(numOfRain):
             await reduce_health(OpponentPlayerData, config.GAME_RAIN_DMG)
-
+    gun_shoot_time = time.time()
     if prediction_action == "gun":
         result = await gun_state_queue.get()
         # empty out gun_state_queue and get the last item - Prevent accumulation
@@ -128,6 +130,8 @@ async def game_state_manager(currGameData, attacker_id: int,
             result = await gun_state_queue.get()
 
         if result == "hit":
+            wait_time = time.time() - gun_shoot_time
+            print(f"Wait time for gun hit: {wait_time}")
             await gun_shoot(targetPlayerData, OpponentPlayerData)
         elif result == "miss":
             # Only deduct bullet
@@ -144,9 +148,10 @@ async def game_state_manager(currGameData, attacker_id: int,
             await reduce_health(OpponentPlayerData, config.GAME_AI_DMG)
     elif prediction_action == "logout":
         # TODO: Implement logout action
-        pass
+        print("User logout")
     else:
         print("Invalid action received. Doing nothing.")
-        pass
+
+    print(f"SENDING TO VISUALIZER QUEUE: {currGameData.to_json(attacker_id)}")
     # Send updated game state to visualizer
     await visualizer_send_queue.put("gs_" + currGameData.to_json(attacker_id))  # Add gs_ prefix to indicate game

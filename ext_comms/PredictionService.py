@@ -3,6 +3,7 @@ import os
 import random
 import sys
 import time
+from int_comms.relay.packet import PacketImu
 
 sys.path.append('/home/xilinx/IP')
 
@@ -29,12 +30,14 @@ class PredictionServiceProcess:
         while True:
             first_packet = await self.relay_to_engine_queue.get()
             print(f"First packet received, starting data collection.")
+            print(first_packet.adc)
             if first_packet.adc != self.current_imu_count:
                 self.current_imu_count = first_packet.adc
             else:
                 continue
             self.buffer.clear()
-            start_time = asyncio.get_event_loop().time()
+            start_time = time.time()
+            print("sanity check")
             self.buffer.append(first_packet)
             await self.collect_data(start_time)
 
@@ -43,7 +46,9 @@ class PredictionServiceProcess:
         Collects data packets and processes them when enough data is collected
         or a timeout occurs.
         """
+        print("Collecting data...")
         while len(self.buffer) < self.expected_packets:
+            print(f"Buffer size: {len(self.buffer)}")
             try:
                 # Calculate remaining time for timeout
                 remaining_time = self.timeout - (time.time() - start_time)
@@ -76,12 +81,12 @@ class PredictionServiceProcess:
 
         for packet in self.buffer:
             # Convert bytearrays to signed integers (assuming big-endian format)
-            ax = int.from_bytes(packet.accelX, byteorder='big', signed=True)
-            ay = int.from_bytes(packet.accelY, byteorder='big', signed=True)
-            az = int.from_bytes(packet.accelZ, byteorder='big', signed=True)
-            gx = int.from_bytes(packet.gyroX, byteorder='big', signed=True)
-            gy = int.from_bytes(packet.gyroY, byteorder='big', signed=True)
-            gz = int.from_bytes(packet.gyroZ, byteorder='big', signed=True)
+            ax = int.from_bytes(packet.accelX, byteorder='little', signed=True)
+            ay = int.from_bytes(packet.accelY, byteorder='little', signed=True)
+            az = int.from_bytes(packet.accelZ, byteorder='little', signed=True)
+            gx = int.from_bytes(packet.gyroX, byteorder='little', signed=True)
+            gy = int.from_bytes(packet.gyroY, byteorder='little', signed=True)
+            gz = int.from_bytes(packet.gyroZ, byteorder='little', signed=True)
 
             ax_list.append(ax)
             ay_list.append(ay)
@@ -99,7 +104,8 @@ class PredictionServiceProcess:
         combined_input = self.assemble_data()
         prediction_index = await asyncio.to_thread(self.ai_inference.predict, combined_input)
         print(f"Assembled Input: {combined_input}")
-        action_names = ["basket", "volley", "bowl", "bomb", "logout", "shield", "reload"]
+        action_names = ["basket", "bowl", "logout", "bomb",  "reload", "shield", "volley"]
         action = action_names[prediction_index]
         print(f"Prediction: {action}")
         await self.prediction_service_to_engine_queue.put(action)
+        print("Prediction sent to Engine.")

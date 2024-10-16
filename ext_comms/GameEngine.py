@@ -79,6 +79,7 @@ async def evaluation_server_job(curr_game_data: GameData, player_id: int, eval_i
             "p2": curr_game_data.p2.game_state
         }
     }
+    print("SENDING TO EVAL SERVER ", EvalGameData)
     # Send updated game state to evaluation server
     await eval_input_queue.put(json.dumps(EvalGameData))
     # Wait for evaluation response
@@ -115,9 +116,11 @@ async def start_tcp_job(tcp_port: int, receive_queue_p1: asyncio.Queue, receive_
 
 
 async def start_prediction_service_process(predict_input_queue: asyncio.Queue, predict_output_queue: asyncio.Queue):
-    PredictionService = PredictionServiceProcess(predict_input_queue=predict_input_queue, predict_output_queue=predict_output_queue)
+    PredictionService = PredictionServiceProcess(predict_input_queue=predict_input_queue,
+                                                 predict_output_queue=predict_output_queue)
     print("Prediction Service Started")
     await PredictionService.run()
+
 
 async def start_relay_node_data_handler(src_input_queue_p1: asyncio.Queue,
                                         src_input_queue_p2: asyncio.Queue,
@@ -159,7 +162,7 @@ async def start_relay_node_data_handler(src_input_queue_p1: asyncio.Queue,
             elif pkt.packet_type == PACKET_DATA_IMU:
                 print("IMU PACKET Received")
                 # Send to prediction service
-                await output_sensor_queue.put(msg)
+                await output_sensor_queue.put(pkt)
             elif pkt.packet_type == PACKET_DATA_KICK:
                 print("A KICK PACKET Received")
                 await output_action_queue.put("soccer")
