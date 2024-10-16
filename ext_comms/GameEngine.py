@@ -160,11 +160,10 @@ async def start_relay_node_data_handler(src_input_queue_p1: asyncio.Queue,
                 await target_gun_queue.put("shoot_attempt")
                 await output_action_queue.put("gun")
             elif pkt.packet_type == PACKET_DATA_IMU:
-                print("IMU PACKET Received")
                 # Send to prediction service
                 await output_sensor_queue.put(pkt)
             elif pkt.packet_type == PACKET_DATA_KICK:
-                print("A KICK PACKET Received")
+                print("KICK PACKET Received")
                 await output_action_queue.put("soccer")
             else:
                 print("Invalid packet type received")

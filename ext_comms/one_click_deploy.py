@@ -80,8 +80,16 @@ def run_game_server_on_ultra96(client, remote_port):
         client.exec_command('fuser -KILL -k -n tcp 65001', timeout=10)
 
         # Run the game server remotely on the Ultra96
-        command = f'source /usr/local/share/pynq-venv/bin/activate && python /home/xilinx/ext_comms/main.py {remote_port}'
+        command = (
+            'source /usr/local/share/pynq-venv/bin/activate && '
+            '. /etc/profile.d/xrt_setup.sh && '
+            f'echo "{config.ssh_password}" | sudo -S python /home/xilinx/ext_comms/main.py {remote_port}'
+        )
         stdin, stdout, stderr = client.exec_command(command, get_pty=True)
+
+        # Optionally, handle the sudo password prompt if not using echo
+        # stdin.write(config.ssh_password + '\n')
+        # stdin.flush()
 
         # Start threads to read stdout and stderr
         threading.Thread(target=read_stream, args=(stdout, "STDOUT")).start()
@@ -121,8 +129,10 @@ def main():
         transport = client.get_transport()
 
         # Start reverse port forwarding in a separate thread
-        reverse_tunnel_thread = threading.Thread(target=reverse_forward_tunnel,
-                                                 args=(remote_port, local_host, local_port, transport))
+        reverse_tunnel_thread = threading.Thread(
+            target=reverse_forward_tunnel,
+            args=(remote_port, local_host, local_port, transport)
+        )
         reverse_tunnel_thread.daemon = True
         reverse_tunnel_thread.start()
 

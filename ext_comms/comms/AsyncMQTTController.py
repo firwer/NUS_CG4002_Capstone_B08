@@ -66,7 +66,6 @@ class AsyncMQTTController:
         print("Listening for messages...")
         async for message in self.mqttc.messages:
             if message.topic.matches(topic_receive_p1):
-                print(f"Received message from topic {topic_receive_p1}: {message.payload}")
                 await self.receive_data_queue_p1.put(message.payload)
             elif message.topic.matches(topic_receive_p2):
                 await self.receive_data_queue_p2.put(message.payload)
@@ -77,9 +76,8 @@ class AsyncMQTTController:
             try:
                 print("Waiting for message to send...")
                 msg = await self.send_data_queue.get()
-                print(f"Publishing message: {msg}")
                 await self.mqttc.publish(topic_send, msg)
-                print(f"Published message: {msg}")
+                print(f"Published message to Visualizer: {msg}")
             except (aiomqtt.MqttError, aiomqtt.MqttCodeError) as e:
                 self.connected = False
                 raise e

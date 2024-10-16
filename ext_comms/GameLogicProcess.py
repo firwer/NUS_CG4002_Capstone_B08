@@ -75,9 +75,7 @@ async def getVState(visualizer_receive_queue: asyncio.Queue):
         msg = await asyncio.wait_for(visualizer_receive_queue.get(),
                                      config.VISUALIZER_RESPONSE_TIMEOUT)  # Wait for visualizer response
         msgStr = msg.decode()
-        print(f"Received message from Visualizer: {msgStr}")
         if msgStr.startswith('vstate_fov_'):
-            print("Received Message from Visualizer")
             parts = msgStr.split('_')
             fov_bool = parts[2]
             numOfRain = int(parts[4])
@@ -111,16 +109,15 @@ async def game_state_manager(currGameData, attacker_id: int,
         targetPlayerData = currGameData.p2.game_state
         OpponentPlayerData = currGameData.p1.game_state
 
-    print("Updating Visualizer..")
     # Send game state to visualizer
-    print("Sending action to Visualizer")
     await visualizer_send_queue.put("action_" + str(
         attacker_id) + "_" + prediction_action)
     targetInFOV, numOfRain = await getVState(visualizer_receive_queue)
-
+    print(f"Target in FOV: {targetInFOV}, Num of Rain: {numOfRain}")
     # Handle rain bomb damage
     if targetInFOV:
         for _ in range(numOfRain):
+            print("-5 HP RAIN BOMB")
             await reduce_health(OpponentPlayerData, config.GAME_RAIN_DMG)
 
     if prediction_action == "gun":
@@ -128,7 +125,6 @@ async def game_state_manager(currGameData, attacker_id: int,
         # empty out gun_state_queue and get the last item - Prevent accumulation
         while not gun_state_queue.empty():
             result = await gun_state_queue.get()
-
         if result == "hit":
             await gun_shoot(targetPlayerData, OpponentPlayerData)
         elif result == "miss":
@@ -150,6 +146,5 @@ async def game_state_manager(currGameData, attacker_id: int,
     else:
         print("Invalid action received. Doing nothing.")
 
-    print(f"SENDING TO VISUALIZER QUEUE: {currGameData.to_json(attacker_id)}")
     # Send updated game state to visualizer
     await visualizer_send_queue.put("gs_" + currGameData.to_json(attacker_id))  # Add gs_ prefix to indicate game

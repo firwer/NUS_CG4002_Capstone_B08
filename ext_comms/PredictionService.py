@@ -30,14 +30,14 @@ class PredictionServiceProcess:
         while True:
             first_packet = await self.relay_to_engine_queue.get()
             print(f"First packet received, starting data collection.")
-            print(first_packet.adc)
+            #print(first_packet.adc)
             if first_packet.adc != self.current_imu_count:
                 self.current_imu_count = first_packet.adc
             else:
                 continue
             self.buffer.clear()
             start_time = time.time()
-            print("sanity check")
+            #print("sanity check")
             self.buffer.append(first_packet)
             await self.collect_data(start_time)
 
@@ -46,9 +46,7 @@ class PredictionServiceProcess:
         Collects data packets and processes them when enough data is collected
         or a timeout occurs.
         """
-        print("Collecting data...")
         while len(self.buffer) < self.expected_packets:
-            print(f"Buffer size: {len(self.buffer)}")
             try:
                 # Calculate remaining time for timeout
                 remaining_time = self.timeout - (time.time() - start_time)
@@ -64,7 +62,6 @@ class PredictionServiceProcess:
                 # Timeout occurred
                 if len(self.buffer) < self.expected_packets:
                     print("Not enough data to proceed; discarding buffer.")
-
                     return
 
         # Proceed to inference if enough data is collected

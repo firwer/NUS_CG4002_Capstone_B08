@@ -75,7 +75,6 @@ class TCPS_Controller:
                 if not success:
                     print(f"Error in data received from {addr}. Sent error response.")
                     break
-                print(f"Received message from Player {player_number} ({addr}): {message}")
                 if player_number == 1:
                     await self.receive_queue_p1.put(message)
                 elif player_number == 2:
@@ -105,10 +104,8 @@ class TCPS_Controller:
                 await self.clean_up_connection(writer)
 
     async def _send_message(self, writer, message):
-        print(f"Sending message to Player {self.client_player_map.get(writer, 'Unknown')}: {message}")
         writer.write(f"{len(message)}_".encode() + message.encode())
         await writer.drain()
-        print(f"Sent message to Player {self.client_player_map.get(writer, 'Unknown')}: {message}")
 
     async def _recv_message(self, reader, timeout=60):
         try:

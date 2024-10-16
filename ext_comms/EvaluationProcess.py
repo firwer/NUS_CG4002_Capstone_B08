@@ -33,7 +33,6 @@ class EvaluationProcess:
 
     async def msg_receiver(self):
         msg = await self.tcpClient.recv()
-        print(f"Received message from Evaluation Server: {msg}")
         await self.evaluation_server_to_engine_queue.put(msg)
         self.response_pending = False
 
@@ -42,6 +41,5 @@ class EvaluationProcess:
         if self.response_pending:
             print("Response already pending, skipping send")
             return
-        print(f"Sending message to Evaluation Server: {message}")
         await self.tcpClient.send(message)
         self.response_pending = True
