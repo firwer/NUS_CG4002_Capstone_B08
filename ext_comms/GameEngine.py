@@ -116,6 +116,7 @@ async def start_tcp_job(tcp_port: int, receive_queue_p1: asyncio.Queue, receive_
 
 async def start_prediction_service_process(predict_input_queue: asyncio.Queue, predict_output_queue: asyncio.Queue):
     PredictionService = PredictionServiceProcess(predict_input_queue=predict_input_queue, predict_output_queue=predict_output_queue)
+    print("Prediction Service Started")
     await PredictionService.run()
 
 async def start_relay_node_data_handler(src_input_queue_p1: asyncio.Queue,
@@ -261,8 +262,8 @@ class GameEngine:
             start_prediction_service_process(predict_input_queue=self.prediction_input_queue_p1,
                                              predict_output_queue=self.prediction_output_queue_p1),
 
-            start_prediction_service_process(predict_input_queue=self.prediction_input_queue_p2,
-                                             predict_output_queue=self.prediction_output_queue_p2),
+            # start_prediction_service_process(predict_input_queue=self.prediction_input_queue_p2,
+            #                                  predict_output_queue=self.prediction_output_queue_p2),
 
             # Start Evaluation Server Process
             start_evaluation_process(eval_server_port=self.eval_server_port,

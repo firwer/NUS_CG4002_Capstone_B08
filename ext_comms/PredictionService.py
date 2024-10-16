@@ -8,36 +8,42 @@ sys.path.append('/home/xilinx/IP')
 
 from AIClass import AI
 
-# async def start_prediction_service_process(predict_input_queue: asyncio.Queue,
-#                                            predict_output_queue: asyncio.Queue):
-#     ps = PredictionServiceProcess(predict_input_queue, predict_output_queue)
-#     while True:
-#         await ps.predict()
-
 
 class PredictionServiceProcess:
     def __init__(self, predict_input_queue, predict_output_queue):
         self.relay_to_engine_queue = predict_input_queue
         self.prediction_service_to_engine_queue = predict_output_queue
         self.buffer = []
-        self.buffer_size = 60  # Desired number of packets
-        self.timeout = 10 # Timeout in seconds
-        self.min_packets = int(0.95 * self.buffer_size)  # Minimum packets threshold (80%)
+        self.expected_packets = 60  # Desired number of packets
+        self.timeout = 4  # Timeout in seconds
         self.last_packet_time = None
-        self.ai_inference = AI()  # Instance of your AI inference class
+        self.ai_inference = None  # Initialize to None
+        self.current_imu_count = -1
+
+    async def initialize_ai(self):
+        self.ai_inference = AI()
 
     async def run(self):
+        await self.initialize_ai()
+        print("Prediction Service initialized.")
         while True:
-            await self.collect_data()
+            first_packet = await self.relay_to_engine_queue.get()
+            print(f"First packet received, starting data collection.")
+            if first_packet.adc != self.current_imu_count:
+                self.current_imu_count = first_packet.adc
+            else:
+                continue
+            self.buffer.clear()
+            start_time = asyncio.get_event_loop().time()
+            self.buffer.append(first_packet)
+            await self.collect_data(start_time)
 
-    async def collect_data(self):
+    async def collect_data(self, start_time: time.time()):
         """
         Collects data packets and processes them when enough data is collected
         or a timeout occurs.
         """
-        self.buffer.clear()
-        start_time = time.time()
-        while True:
+        while len(self.buffer) < self.expected_packets:
             try:
                 # Calculate remaining time for timeout
                 remaining_time = self.timeout - (time.time() - start_time)
@@ -45,34 +51,24 @@ class PredictionServiceProcess:
                     raise asyncio.TimeoutError()
 
                 # Wait for new data with the remaining timeout
-                data = await asyncio.wait_for(
+                imu_packet = await asyncio.wait_for(
                     self.relay_to_engine_queue.get(), timeout=remaining_time
                 )
-
-                # Proceed to inference if enough data is collected
-                if len(self.buffer) >= self.buffer_size:
-                    await self.process_data()
-                    self.buffer.clear()
-                    start_time = time.time()  # Reset the timer for the next batch
+                self.buffer.append(imu_packet)
             except asyncio.TimeoutError:
                 # Timeout occurred
-                if len(self.buffer) >= self.min_packets:
-                    await self.process_data()
-                else:
-                    # Not enough data; decide whether to proceed or discard
+                if len(self.buffer) < self.expected_packets:
                     print("Not enough data to proceed; discarding buffer.")
-                self.buffer.clear()
-                start_time = time.time()  # Reset the timer for the next batch
 
-    # async def predict(self):
-    #     data = await self.relay_mqtt_to_engine_queue.get()
-    #     print(f"Received data from RelayNode: {data}, predicting...")
-    #     # Randomly generate a prediction from actions
-    #     # TODO: Replace with actual prediction model
-    #     data = random.choice(["basket", "volley", "bowl", "bomb", "logout", "shield", "reload"])
-    #     await asyncio.sleep(0.2)  # Simulating processing time
-    #     print(f"Prediction: {data}")
-    #     await self.prediction_service_to_engine_queue.put(data)
+                    return
+
+        # Proceed to inference if enough data is collected
+        if len(self.buffer) >= self.expected_packets:
+            await self.process_data()
+
+        # Purge queue for next iteration
+        # while not self.relay_to_engine_queue.empty():
+        #     await self.relay_to_engine_queue.get()
 
     def assemble_data(self):
         ax_list, ay_list, az_list = [], [], []
@@ -101,7 +97,8 @@ class PredictionServiceProcess:
 
     async def process_data(self):
         combined_input = self.assemble_data()
-        prediction_index = self.ai_inference.predict(combined_input)
+        prediction_index = await asyncio.to_thread(self.ai_inference.predict, combined_input)
+        print(f"Assembled Input: {combined_input}")
         action_names = ["basket", "volley", "bowl", "bomb", "logout", "shield", "reload"]
         action = action_names[prediction_index]
         print(f"Prediction: {action}")
