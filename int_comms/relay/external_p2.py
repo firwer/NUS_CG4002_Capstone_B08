@@ -1,3 +1,6 @@
+import json
+from logging import Logger
+import logging
 import os
 import random
 import sys
@@ -6,14 +9,15 @@ from queue import Queue
 from threading import Thread
 
 import config
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from comms.TCPC_Controller_Sync import TCPC_Controller_Sync
 from int_comms.relay.packet import PACKET_DATA_IMU, PACKET_DATA_BULLET, PACKET_DATA_HEALTH, PACKET_DATA_KICK, PacketImu, \
-    PacketBullet, PacketHealth, PacketKick, get_packet
+    PacketBullet, PacketHealth, PacketKick, PacketGamestate, get_packet
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+ext_logger = logging.getLogger("External2")
 
-RELAY_NODE_PLAYER = 0
-
+RELAY_NODE_PLAYER = -1
+PLAYER_NUMBER = 2
 
 def get_user_input(from_beetles_queue1 : Queue, from_beetles_queue2 : Queue, from_beetles_queue3 : Queue):
     IMU_Bullet_beetle = from_beetles_queue1
@@ -39,6 +43,39 @@ def get_user_input(from_beetles_queue1 : Queue, from_beetles_queue2 : Queue, fro
             print("Invalid packet type.")
             continue
 
+def receive_queue_handler_integrated(tcpController: TCPC_Controller_Sync, receive_queues):
+    """Receives gamestate from game engine. Packs it into PacketGamestate, sends to int-comms.
+    WARN: Does not do any checksum logic.
+    """
+    prev_err = None
+    while True:
+        try:
+            msg = tcpController.recv_decrypt() # this is blocking?
+            if msg is None:
+                # ext_logger.info("msg is none, continuing..")
+                continue
+            ext_logger.info(f"MSG: {msg}")
+            root = json.loads(msg)
+            # ext_logger.info(f"ROOT: {root}")
+            player = None
+            pkt = PacketGamestate()
+            if PLAYER_NUMBER == 1:
+                player = json.loads(root['p1'])
+                pkt.bullet = player["game_state"]["bullets"]
+                pkt.health = player["game_state"]["hp"]
+                ext_logger.info(f"P1 getting {pkt.bullet} bullets, {pkt.health} health")
+            else:
+                player = json.loads(root['p2'])
+                pkt.bullet = player["game_state"]["bullets"]
+                pkt.health = player["game_state"]["hp"]
+                ext_logger.info(f"P2 getting {pkt.bullet} bullets, {pkt.health} health")
+            # broadcast the queues 
+            for receive_queue in receive_queues:
+                receive_queue.put(pkt)
+        except Exception as e:
+            if prev_err != e:
+                prev_err = e
+                # ext_logger.debug(f"Error receiving message: {e}")
 
 def receive_queue_handler(tcpController: TCPC_Controller_Sync, receive_queue: Queue):
     while True:
@@ -141,46 +178,68 @@ def sim_beetle(id, toExternal: Queue, fromExternal: Queue = None):
             toExternal.put(packet)
 
 
-def simulate():
-    # simulate beetle passing messages
+def begin_external(sendToGameServerQueue:Queue, receiveFromGameServerQueue0:Queue, receiveFromGameServerQueue1, player_num):
     global RELAY_NODE_PLAYER
-    fromBeetle1 = Queue()
-    fromBeetle2 = Queue()
-    fromBeetle3 = Queue()
-    toBeetle1 = Queue()
-    toBeetle2 = Queue()
-    receiveFromGameServerQueue = Queue()
-    sendToGameServerQueue = Queue()
-
-    from_beetles_queues = [fromBeetle1, fromBeetle2, fromBeetle3]
-    to_beetles_queues = [toBeetle1, toBeetle2]
-    while RELAY_NODE_PLAYER != 1 and RELAY_NODE_PLAYER != 2:
-        relay_node_id = input("Select Relay Node (1/2): ")
-        RELAY_NODE_PLAYER = int(relay_node_id)
-
-    print("Establishing connection to TCP server...")
+    RELAY_NODE_PLAYER = player_num
+    ext_logger.debug("Controller sync begin...")
     wsController = TCPC_Controller_Sync(
         config.TCP_SERVER_HOST, config.TCP_SERVER_PORT, config.TCP_SECRET_KEY
     )
+    ext_logger.debug("External comms liaison starting...")
     wsController.connect()
     wsController.identify_relay_node(RELAY_NODE_PLAYER)
-
-    agg_thread = Thread(target=aggregator_thread_main, args=(
-        sendToGameServerQueue, from_beetles_queues, to_beetles_queues, receiveFromGameServerQueue))
+    receiveQueues = [receiveFromGameServerQueue0, receiveFromGameServerQueue1]
+    ext_logger.debug("External comms liaison connected!")
+    # start the input thread
     send_thread = Thread(target=send_queue_handler, args=(wsController, sendToGameServerQueue))
-    receive_thread = Thread(target=receive_queue_handler, args=(wsController, receiveFromGameServerQueue))
-    # Manual User Input Testing Thread
-    user_input_thread = Thread(target=get_user_input, args=[fromBeetle1, fromBeetle2, fromBeetle3])
-
-    agg_thread.start()
+    receive_thread = Thread(target=receive_queue_handler_integrated, args=(wsController, receiveQueues))    
     send_thread.start()
     receive_thread.start()
-    user_input_thread.start()
-
-    agg_thread.join()
     send_thread.join()
     receive_thread.join()
-    user_input_thread.join()
+
+def simulate():
+    print("hello")
+    begin_external(Queue(), Queue(), Queue(), 1)
+    # simulate beetle passing messages
+    # global RELAY_NODE_PLAYER
+    # fromBeetle1 = Queue()
+    # fromBeetle2 = Queue()
+    # fromBeetle3 = Queue()
+    # toBeetle1 = Queue()
+    # toBeetle2 = Queue()
+    # receiveFromGameServerQueue = Queue()
+    # sendToGameServerQueue = Queue()
+
+    # from_beetles_queues = [fromBeetle1, fromBeetle2, fromBeetle3]
+    # to_beetles_queues = [toBeetle1, toBeetle2]
+    # while RELAY_NODE_PLAYER != 1 and RELAY_NODE_PLAYER != 2:
+    #     relay_node_id = input("Select Relay Node (1/2): ")
+    #     RELAY_NODE_PLAYER = int(relay_node_id)
+
+    # Logger.debug("Establishing connection to TCP server...")
+    # wsController = TCPC_Controller_Sync(
+    #     config.TCP_SERVER_HOST, config.TCP_SERVER_PORT, config.TCP_SECRET_KEY
+    # )
+    # wsController.connect()
+    # wsController.identify_relay_node(RELAY_NODE_PLAYER)
+
+    # agg_thread = Thread(target=aggregator_thread_main, args=(
+    #     sendToGameServerQueue, from_beetles_queues, to_beetles_queues, receiveFromGameServerQueue))
+    # send_thread = Thread(target=send_queue_handler, args=(wsController, sendToGameServerQueue))
+    # receive_thread = Thread(target=receive_queue_handler, args=(wsController, receiveFromGameServerQueue))
+    # # Manual User Input Testing Thread
+    # user_input_thread = Thread(target=get_user_input, args=[fromBeetle1, fromBeetle2, fromBeetle3])
+
+    # agg_thread.start()
+    # send_thread.start()
+    # receive_thread.start()
+    # user_input_thread.start()
+
+    # agg_thread.join()
+    # send_thread.join()
+    # receive_thread.join()
+    # user_input_thread.join()
 
     # Simulated Input Threads
     #thread_beetle1 = Thread(target=sim_beetle, args=(1, fromBeetle1, toBeetle1,))

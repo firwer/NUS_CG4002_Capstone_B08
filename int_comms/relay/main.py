@@ -10,14 +10,14 @@ from packet import *
 from checksum import *
 import threading
 import external
-
+import external_p2
 # RED == PLAYER 1
 BLUNO_P1_GLOVE_MAC = "F4:B8:5E:42:6D:49" # TO BE USED FOR EVAL
-#BLUNO_P1_CHEST_MAC = "F4:B8:5E:42:46:E5" 
-#BLUNO_P1_LEG_MAC   = "F4:B8:5E:42:6D:42"
+BLUNO_P1_CHEST_MAC = "F4:B8:5E:42:46:E5" 
+BLUNO_P1_LEG_MAC   = "F4:B8:5E:42:6D:42"
 
 # GREEN == PLAYER 2
-#BLUNO_P2_GLOVE_MAC = "F4:B8:5E:42:4C:BB" 
+BLUNO_P2_GLOVE_MAC = "F4:B8:5E:42:4C:BB" 
 BLUNO_P2_CHEST_MAC = "F4:B8:5E:42:6D:1E" #TO BE USED FOR EVAL
 BLUNO_P2_LEG_MAC   = "F4:B8:5E:42:61:6A" #TO BE USED FOR EVAL (TREAT AS PLAYER 1 FOR NOW)
 
@@ -99,7 +99,7 @@ class Beetle:
         BLUE_COLOR = "\033[34m"   # Blue color
         MAGENTA_COLOR = "\033[35m" # Magenta color
         CYAN_COLOR = "\033[36m"   # Cyan color
-        colors = [BLUE_COLOR, GREEN_COLOR, RED_COLOR]
+        colors = [BLUE_COLOR, GREEN_COLOR, RED_COLOR, MAGENTA_COLOR, CYAN_COLOR, YELLOW_COLOR]
 
         self.sendToGameServerQueue = sendToGameServerQueue
         self.receiveFromGameServerQueue = receiveFromGameServerQueue
@@ -120,7 +120,7 @@ class Beetle:
         self.sendReliableStart = 0
         self.cachedPacket = None
         self.reliableRetransmissions = 0
-        self.reliableTxRate = 10000 # ms @wanlin CONFIG ME
+        self.reliableTxRate = 0 # ms @wanlin CONFIG ME
         self.reliableTimeout = 1000 # ms
 
         # CONFIG TEST: subcomponent test flags
@@ -186,7 +186,7 @@ class Beetle:
                 # Is unreliable send
                 if pkt.packet_type == PACKET_DATA_IMU:
                     # TODO do work: WARNING - signness needs to be preserved
-                    logger.info(f"{self.COLOR}RX PKT b{pkt.seq_num} <IMU> (beetle stream)")
+                    # logger.info(f"{self.COLOR}RX PKT b{pkt.seq_num} #{pkt.adc} <IMU> (beetle stream)")
                     if self.sendToGameServerQueue is not None: 
                         self.sendToGameServerQueue.put_nowait(pkt)
                     continue
@@ -258,7 +258,7 @@ class Beetle:
                         if sendPkt is not None:
                             self.cachedPacket = sendPkt
                             self.sendReliableStart = millis()
-                            logger.info(f"{self.COLOR}TX PKT r{sendPkt.seq_num}, curr r{self.relay_seq_num}, data(bl{sendPkt.bullet},hp{sendPkt.}) (relay reliable)")
+                            logger.info(f"{self.COLOR}TX PKT r{sendPkt.seq_num}, curr r{self.relay_seq_num}, data(bl{sendPkt.bullet},hp{sendPkt.health}) (relay reliable)")
                             self.write_packet(sendPkt)
                             self.receiver.relayTxNumber += 1
                             canSendReliable = False
@@ -365,13 +365,10 @@ class Beetle:
             if not self.receiveFromGameServerQueue.empty():
                 # TODO: make this more resilient with try-catch
                 pkt = self.receiveFromGameServerQueue.get()
-                # WARN: unrecoverable point of failure
-                if isinstance(pkt, PacketGamestate):
-                    pkt.seq_num = self.relay_seq_num
-                    pkt.crc8 = get_checksum(pkt.to_bytearray())
-                    return pkt
-                else:
-                    logger.error(f"pkt from ext-comms is not a PacketGamestate. Skipping!")
+                # WARN: unrecoverable point of failure if pkt is not gamestate
+                pkt.seq_num = self.relay_seq_num
+                pkt.crc8 = get_checksum(pkt.to_bytearray())
+                return pkt
         return None
         # else:
         #     # Create a PacketGamestate instance
@@ -408,11 +405,11 @@ def main():
 
     # Parse arguments
     args = parser.parse_args()
-    beetle_id = args.beetle_id
+    player = args.beetle_id
 
     # Validate beetle_id
-    if beetle_id not in [0, 1, 2]:
-        print("Invalid beetle_id. Must be 0, 1, or 2.")
+    if player not in [1, 2]:
+        print("Invalid player_id. Must be 1, or 2.")
         return
 
     # Message queues
@@ -421,21 +418,33 @@ def main():
     sendToGameServerQueue = Queue()
     
     # Create Beetle instances
-    beetle0 = Beetle(BLUNO_P1_GLOVE_MAC, 0, sendToGameServerQueue, receiveFromGameServerQueue0)
-    beetle1 = Beetle(BLUNO_P1_CHEST_MAC, 1, sendToGameServerQueue, receiveFromGameServerQueue1)
-    beetle2 = Beetle(BLUNO_P1_LEG_MAC, 2, sendToGameServerQueue)
-    externalThread = threading.Thread(target=external.begin_external, args=(sendToGameServerQueue, receiveFromGameServerQueue0, receiveFromGameServerQueue1, 1,), name="External")
-    t0 = threading.Thread(target=run_beetle, args=(beetle0,), name="Beetle0")
-    t1 = threading.Thread(target=run_beetle, args=(beetle1,), name=f"Beetle1")
-    t2 = threading.Thread(target=run_beetle, args=(beetle2,), name=f"Beetle2")
-    t0.start()
-    t1.start()
-    t2.start()
-    externalThread.start()
-    t0.join()
-    t1.join()
-    t2.join()
-    externalThread.join()
+    # Player 1 process
+    if player == 1:
+        beetle0 = Beetle(BLUNO_P1_GLOVE_MAC, 0, sendToGameServerQueue, receiveFromGameServerQueue0)
+        beetle1 = Beetle(BLUNO_P1_CHEST_MAC, 1, sendToGameServerQueue, receiveFromGameServerQueue1)
+        beetle2 = Beetle(BLUNO_P2_LEG_MAC, 2, sendToGameServerQueue)
+        externalThread = threading.Thread(target=external.begin_external, args=(sendToGameServerQueue, receiveFromGameServerQueue0, receiveFromGameServerQueue1, 1,), name="External")
+        t0 = threading.Thread(target=run_beetle, args=(beetle0,), name="Beetle0")
+        t1 = threading.Thread(target=run_beetle, args=(beetle1,), name=f"Beetle1")
+        t2 = threading.Thread(target=run_beetle, args=(beetle2,), name=f"Beetle2")
+        t0.start()
+        t1.start()
+        t2.start()
+        externalThread.start()
+        t0.join()
+        t1.join()
+        t2.join()
+        externalThread.join()
+    elif player == 2:
+        # Player 2 Process
+        beetle1 = Beetle(BLUNO_P2_CHEST_MAC, 3, sendToGameServerQueue, receiveFromGameServerQueue0)
+        t1 = threading.Thread(target=run_beetle, args=(beetle1,), name="Beetle1")
+        externalThread = threading.Thread(target=external_p2.begin_external, args=(sendToGameServerQueue, receiveFromGameServerQueue0, receiveFromGameServerQueue1, 2,), name="External")
+        t1.start()
+        externalThread.start()
+        t1.join()
+        externalThread.join()
+
 
 if __name__ == "__main__":
     main()
