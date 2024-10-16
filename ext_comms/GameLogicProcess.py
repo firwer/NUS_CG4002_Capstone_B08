@@ -122,7 +122,7 @@ async def game_state_manager(currGameData, attacker_id: int,
     if targetInFOV:
         for _ in range(numOfRain):
             await reduce_health(OpponentPlayerData, config.GAME_RAIN_DMG)
-    gun_shoot_time = time.time()
+
     if prediction_action == "gun":
         result = await gun_state_queue.get()
         # empty out gun_state_queue and get the last item - Prevent accumulation
@@ -130,8 +130,6 @@ async def game_state_manager(currGameData, attacker_id: int,
             result = await gun_state_queue.get()
 
         if result == "hit":
-            wait_time = time.time() - gun_shoot_time
-            print(f"Wait time for gun hit: {wait_time}")
             await gun_shoot(targetPlayerData, OpponentPlayerData)
         elif result == "miss":
             # Only deduct bullet
