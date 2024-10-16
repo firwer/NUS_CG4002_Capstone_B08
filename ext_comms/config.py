@@ -38,7 +38,7 @@ MQTT_VISUALIZER_TO_ENG_P2 = "game_state/visualizer_to_engine/p2"
 
 MQTT_ENGINE_TO_RELAY = "sensor_data/return"
 
-VISUALIZER_RESPONSE_TIMEOUT = 1.5 # second
+VISUALIZER_RESPONSE_TIMEOUT = 1.5  # second
 
 # MQTT Broker Exponential Backoff Recovery Config
 FIRST_RECONNECT_DELAY = 1
@@ -56,3 +56,8 @@ GAME_BULLET_DMG = 5  # the hp reduction for bullet
 GAME_AI_DMG = 10  # the hp reduction for AI action
 GAME_BOMB_DMG = 5
 GAME_RAIN_DMG = 5
+
+# Game Configurations
+GAME_HEALTH_PKT_TIMEOUT = 0.5  # Time to wait for health packet to arrive before timeout
+GAME_AI_PACKET_COUNT = 60  # Desired number of packets to collect
+GAME_AI_BUFFER_ACCUMULATION_TIMEOUT = 5  # Timeout in seconds

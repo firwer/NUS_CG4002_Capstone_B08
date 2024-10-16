@@ -183,7 +183,7 @@ async def start_relay_node_data_handler(src_input_queue_p1: asyncio.Queue,
             print(f"Player {player_id} attempted to shoot")
             try:
                 # Wait for corresponding health packet from the opponent
-                await asyncio.wait_for(opponent_health_queue.get(), timeout=0.1)
+                await asyncio.wait_for(opponent_health_queue.get(), timeout=config.GAME_HEALTH_PKT_TIMEOUT)
                 print(f"Shot from Player {player_id} hit the opponent")
                 output_gun_state_queue.put_nowait("hit")
             except asyncio.TimeoutError:

@@ -3,6 +3,8 @@ import os
 import random
 import sys
 import time
+
+import config
 from int_comms.relay.packet import PacketImu
 
 sys.path.append('/home/xilinx/IP')
@@ -15,8 +17,8 @@ class PredictionServiceProcess:
         self.relay_to_engine_queue = predict_input_queue
         self.prediction_service_to_engine_queue = predict_output_queue
         self.buffer = []
-        self.expected_packets = 60  # Desired number of packets
-        self.timeout = 4  # Timeout in seconds
+        self.expected_packets = config.GAME_AI_PACKET_COUNT  # Desired number of packets
+        self.timeout = config.GAME_AI_BUFFER_ACCUMULATION_TIMEOUT # Timeout in seconds
         self.last_packet_time = None
         self.ai_inference = None  # Initialize to None
         self.current_imu_count = -1
@@ -30,14 +32,12 @@ class PredictionServiceProcess:
         while True:
             first_packet = await self.relay_to_engine_queue.get()
             print(f"First packet received, starting data collection.")
-            #print(first_packet.adc)
             if first_packet.adc != self.current_imu_count:
                 self.current_imu_count = first_packet.adc
             else:
                 continue
             self.buffer.clear()
             start_time = time.time()
-            #print("sanity check")
             self.buffer.append(first_packet)
             await self.collect_data(start_time)
 
