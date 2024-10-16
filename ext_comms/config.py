@@ -10,12 +10,12 @@ EVAL_SERVER_HOST = '127.0.0.1'
 EVAL_SECRET_KEY = "bitcoingoingmoon"
 
 # Ultra96 TCP Server Configuration
-TCP_SERVER_HOST = "makerslab-fpga-29.d2.comp.nus.edu.sg"
+TCP_SERVER_HOST = "172.26.190.199"
 TCP_SERVER_PORT = 65001
 TCP_SECRET_KEY = "ethgoingmoonsoon"
 
 # Ultra96 SSH Credentials
-ssh_host = "makerslab-fpga-29.d2.comp.nus.edu.sg"
+ssh_host = "172.26.190.199"
 ssh_user = "xilinx"
 ssh_password = "leonardo"  # pushing password up to git, excellent swe practice
 

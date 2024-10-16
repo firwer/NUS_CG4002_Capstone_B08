@@ -1,4 +1,6 @@
 import asyncio
+import traceback
+
 from Utils import encrypt_msg, decrypt_message
 
 
@@ -103,9 +105,8 @@ class TCPS_Controller:
                 await self.clean_up_connection(writer)
 
     async def _send_message(self, writer, message):
-        encrypted_message = encrypt_msg(message, self.secret_key)
-        length = len(encrypted_message)
-        writer.write(f"{length}_".encode() + encrypted_message)
+        print(f"Sending message to Player {self.client_player_map.get(writer, 'Unknown')}: {message}")
+        writer.write(f"{len(message)}_".encode() + message.encode())
         await writer.drain()
         print(f"Sent message to Player {self.client_player_map.get(writer, 'Unknown')}: {message}")
 
@@ -119,7 +120,7 @@ class TCPS_Controller:
                 data += chunk
             length = int(data[:-1].decode())
             message = await asyncio.wait_for(reader.readexactly(length), timeout)
-            return True, decrypt_message(self.secret_key, message.decode())
+            return True, message
         except (asyncio.TimeoutError, asyncio.IncompleteReadError, ValueError):
             print("Data reception error or invalid format.")
             return False, None

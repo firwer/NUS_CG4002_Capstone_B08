@@ -3,7 +3,7 @@
 #include <EEPROM.h>
 #define LED_OUTPUT_PIN 5
 #define IMU_INTERRUPT_PIN 2
-#define MPU_SAMPLE_RATE 20
+#define MPU_SAMPLE_RATE 40
 #define VIBRATOR_PIN 4
 
 MPU6050 mpu;
@@ -86,22 +86,22 @@ void loop()
     isLedOn = false;
   }
 
-  // if (isRecording)
-  // {
-  //   if (millis() - lastSampleTime >= SAMPLING_DELAY && recordedPoints < 40)
-  //   {
+  if (isRecording)
+  {
+    if (millis() - lastSampleTime >= SAMPLING_DELAY && recordedPoints < 60)
+    {
 
-  //     lastSampleTime = millis();
-  //     mpu.getMotion6(&MPUData.ax, &MPUData.ay, &MPUData.az, &MPUData.gx, &MPUData.gy, &MPUData.gz);
-  //     recordedPoints++;
+      lastSampleTime = millis();
+      mpu.getMotion6(&MPUData.ax, &MPUData.ay, &MPUData.az, &MPUData.gx, &MPUData.gy, &MPUData.gz);
+      recordedPoints++;
 
-  //     if (recordedPoints >= 40)
-  //     {
-  //       isRecording = false;
-  //       recordedPoints = 0;
-  //     }
-  //   }
-  // }
+      if (recordedPoints >= 60)
+      {
+        isRecording = false;
+        recordedPoints = 0;
+      }
+    }
+  }
 }
 
 void motionDetected()
