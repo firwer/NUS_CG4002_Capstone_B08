@@ -23,19 +23,28 @@ class _MessageType:
     position     = "position"
 
 
-def get_json_ws(m_type, message="", pos_1=-1, pos_2=-1, action_match=-2, player_id=-1):
+def get_json_ws(m_type, message="", pos_1=-1, pos_2=-1, action_match=-2, player_id=-1, response_time=None, game_state_expected=None, game_state_received=None, expected_action=None, user_action=None):
     """
-    The json corresponding to the web client
+    The json corresponding to the web client, extended for development diagnostics.
     """
     data = {
-        "type":         m_type,
-        "message":      message,
-        "pos_1":        pos_1,
-        "pos_2":        pos_2,
-        "action_match": action_match,
-        "player_id":    player_id
+        "type":                 m_type,
+        "message":              message,
+        "pos_1":                pos_1,
+        "pos_2":                pos_2,
+        "action_match":         action_match,
+        "player_id":            player_id,
+        "response_time":        response_time,
+        "game_state_expected":  game_state_expected,
+        "game_state_received":  game_state_received,
+        "expected_action":      expected_action,  # New field
+        "user_action":          user_action       # New field
     }
     return json.dumps(data)
+
+
+
+
 
 
 async def ws_send_error(websocket, message):
@@ -86,13 +95,34 @@ async def ws_send_actions(websocket, action_1, action_2):
     """
     await websocket.send (get_json_ws (m_type=_MessageType.action, pos_1=action_1, pos_2=action_2))
 
+async def ws_send_rainbomb_counts(websocket, rainbomb_counts_p1, rainbomb_counts_p2):
+    """
+    Send the current number of rainbombs in each quadrant for each player to the web client.
+    """
+    data = {
+        "type":       "rainbomb_count",
+        "player_1":   rainbomb_counts_p1,
+        "player_2":   rainbomb_counts_p2
+    }
+    await websocket.send(json.dumps(data))
 
-async def ws_send_action_update(websocket, action_match, player_id, message):
+
+async def ws_send_action_update(websocket, action_match, player_id, message, response_time, game_state_expected, game_state_received, expected_action, user_action):
     """
-    Send the update of player actions to the web client
+    Send the update of player actions to the web client along with diagnostics.
     """
-    await websocket.send (get_json_ws (m_type=_MessageType.action_match, action_match=action_match, player_id=player_id,
-                                       message=message))
+    await websocket.send(get_json_ws(
+        m_type=_MessageType.action_match,
+        action_match=action_match,
+        player_id=player_id,
+        message=message,
+        response_time=response_time,
+        game_state_expected=game_state_expected,
+        game_state_received=game_state_received,
+        expected_action=expected_action,  # New field
+        user_action=user_action           # New field
+    ))
+
 
 
 async def perform_handshake(message, websocket):
@@ -119,7 +149,7 @@ async def perform_handshake(message, websocket):
         # check if the group is already connected to the server
         if group_name in client_dict.keys():
             # we do not allow more than one connection
-            await ws_send_error (websocket, "Connection denied: Duplicate connection to eval_server")
+            await ws_send_error (websocket, "Connection denied: Duplicate connection to dev_eval_server")
         else:
             # create a Client object
             client = Client(group_name, password, num_player, does_not_have_visualizer)
@@ -137,7 +167,7 @@ async def perform_handshake(message, websocket):
 
                 # check if some other connection established by the same group
                 if group_name in client_dict:
-                    await ws_send_error(websocket, "Connection denied: Duplicate connection to eval_server")
+                    await ws_send_error(websocket, "Connection denied: Duplicate connection to dev_eval_server")
                 else:
                     await ws_send_info_y(websocket, "eval_client connected")
                     await ws_send_info  (websocket, "Verifying Password")
@@ -201,46 +231,57 @@ async def handler(websocket):
         num_actions_matched_ai  = 0
 
         while client.is_running:
-            # display the player location if 2-player game
+            # Display positions
             pos_1, pos_2 = client.current_positions()
             await ws_send_positions(websocket, pos_1, pos_2)
 
-            # wait for the user the click next
+            # Wait for "Next" button click
             success = await ws_recv_next_click(websocket, group_name)
 
-            # display the number of moves
-            await ws_send_num_move (websocket, client.current_move())
+            # Display number of moves
+            await ws_send_num_move(websocket, client.current_move())
 
-            # send action
+            # Send actions
             action_1, action_2 = client.current_actions()
             await ws_send_actions(websocket, action_1, action_2)
 
             if not success:
                 # The websocket is disconnected
                 break
-            # wait to receive 2 jsons with timeout from eval_client
-            await ws_send_info(websocket, "------------")
-            player_processed = -1   # variable to ensure we do not process a player twice
+
+            # Process players' actions
+            player_processed = -1
 
             timeout_remaining = client.timeout
-            for _ in range (num_players):
-                action_match, player_id, message, action_recv, response_time, timeout_remaining = \
+            for _ in range(num_players):
+                action_match, player_id, message, action_recv, response_time, timeout_remaining, game_state_expected, game_state_received, expected_action, user_action = \
                     await client.handle_a_player(player_processed, timeout_remaining)
+
+                # Send action update with diagnostics
+                await ws_send_action_update(
+                    websocket,
+                    action_match,
+                    player_id,
+                    message,
+                    response_time,
+                    game_state_expected,
+                    game_state_received,
+                    expected_action=expected_action,  # Corrected
+                    user_action=user_action  # Corrected
+                )
 
                 player_processed = player_id
 
-                # update display based on received action
                 if action_match == 1:
-                    # action mismatch
+                    # Action mismatch
                     await ws_send_info_y(websocket, message="Action received: " + action_recv)
 
                 if action_match == -1:
-                    # error during processing
+                    # Error during processing
                     await ws_send_error(websocket, message)
                 else:
                     if action_match == 0:
-                        # action matched
-                        # process response time
+                        # Action matched
                         if action_recv == Action.shoot:
                             num_actions_matched_gun += 1
                             response_time_gun.append(response_time)
@@ -248,13 +289,36 @@ async def handler(websocket):
                             num_actions_matched_ai += 1
                             response_time_ai.append(response_time)
 
-                    # display the difference in game states for both match amd mismatch
-                    await ws_send_action_update (websocket, action_match, player_id, message)
+                # Send correct game state
+                await client.send_game_state()
 
-                    # send the correct json back only if there is no error
-                    await client.send_game_state()
-            # move one step forward
-            client.move_forward ()
+            # After processing all players, extract rainbomb counts
+            # Determine who threw the bomb in this round
+            # Assuming 'action_recv' contains the action type
+
+            # Initialize rainbomb counts
+            rainbomb_counts_p1 = {quadrant: 0 for quadrant in range(1, 5)}
+            rainbomb_counts_p2 = {quadrant: 0 for quadrant in range(1, 5)}
+
+            # Iterate through all actions in this round to update counts
+            # This requires tracking actions per round; if not currently tracked, consider implementing it
+            # For simplicity, assuming each player can throw at most one bomb per round
+
+            for player in [client.simulator.game_state.player_1, client.simulator.game_state.player_2]:
+                for quadrant in player.rain_list:
+                    # Identify the target player based on who threw the bomb
+                    if player == client.simulator.game_state.player_1:
+                        # Player 1 threw the bomb at Player 2
+                        rainbomb_counts_p2[quadrant] += 1
+                    elif player == client.simulator.game_state.player_2:
+                        # Player 2 threw the bomb at Player 1
+                        rainbomb_counts_p1[quadrant] += 1
+
+            # Send rainbomb counts
+            await ws_send_rainbomb_counts(websocket, rainbomb_counts_p1, rainbomb_counts_p2)
+
+            # Move forward
+            client.move_forward()
 
         await ws_send_num_move(websocket, "Eval Terminated")
         await ws_send_info_y(websocket, "------------------- Stat -------------------")

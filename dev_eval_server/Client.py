@@ -169,7 +169,7 @@ class Client:
         """ The positions the player is supposed to be in """
         return self.simulator.current_actions()
 
-    async def handle_a_player (self, player_processed, timeout_para):
+    async def handle_a_player(self, player_processed, timeout_para):
         """
         Function which will handle both the players one after another
         """
@@ -178,28 +178,34 @@ class Client:
         # wait for a json from eval_client with timeout
         success, timeout, text_received = await self.recv_text(timeout_para)
 
-        player_id       = -1
-        action          = ""
-        action_match    = -1  # -1 means error
-        response_time   = 0
+        player_id = -1
+        action = ""
+        action_match = -1  # -1 means error
+        response_time = 0
+        game_state_expected = None
+        game_state_received = None
+        expected_action = None
+        user_action = None
 
         if success:
             try:
-                data = json.loads (text_received)
+                data = json.loads(text_received)
 
                 # process the received game state
-                player_id           = int (data["player_id"])
-                action              = data["action"]
+                player_id = int(data["player_id"])
+                action = data["action"]
                 received_game_state = data["game_state"]
 
                 if player_id == player_processed:
                     # we have received a duplicate json, hence discarding
-                    message = "player_id "+str(player_id)+" received twice, discarding the packet"
+                    message = "player_id " + str(player_id) + " received twice, discarding the packet"
                 elif player_id > self.num_players or player_id < 1:
                     message = "player_id " + str(player_id) + " INVALID, discarding the packet"
                 else:
                     # does the action match
                     current_action = self.simulator.current_action(player_id)
+                    expected_action = current_action
+                    user_action = action
                     if action == current_action:
                         # action matches
                         action_match = 0
@@ -207,18 +213,26 @@ class Client:
                         action_match = 1
 
                     # use the user sent action to alter the game state
-                    self.simulator.perform_action (action, player_id)
+                    self.simulator.perform_action(action, player_id)
 
                     # find the difference between the game states
-                    message = self.simulator.get_game_state_difference (received_game_state)
+                    message = self.simulator.get_game_state_difference(received_game_state)
 
                     # log the result
                     response_time = perf_counter() - start_time
-                    await self.logger.write_state(response_time=response_time, player_id=player_id,
-                                                  correct_action=current_action,
-                                                  predicted_action=action, action_matched=action_match,
-                                                  game_state_received=received_game_state,
-                                                  game_state_expected=self.simulator.get_game_state_dict())
+                    await self.logger.write_state(
+                        response_time=response_time,
+                        player_id=player_id,
+                        correct_action=current_action,
+                        predicted_action=action,
+                        action_matched=action_match,
+                        game_state_received=received_game_state,
+                        game_state_expected=self.simulator.get_game_state_dict()
+                    )
+
+                    # Get game states
+                    game_state_expected = self.simulator.get_game_state_dict()
+                    game_state_received = received_game_state
 
             except (ValueError, TypeError):  # includes simplejson.decoder.JSONDecodeError
                 message = 'Decoding JSON has failed'
@@ -228,7 +242,7 @@ class Client:
         else:
             message = "Timeout"
 
-        return action_match, player_id, message, action, response_time, timeout
+        return action_match, player_id, message, action, response_time, timeout, game_state_expected, game_state_received, expected_action, user_action
 
     def move_forward (self):
         """

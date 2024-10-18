@@ -19,7 +19,7 @@ class Logger:
 
         self.log_filepath_json = os.path.join(log_dir, '{}_{}_logs.json'.format(group_name, num_players))
 
-        # used to distinguish 2 different usages of eval_server for the same group
+        # used to distinguish 2 different usages of dev_eval_server for the same group
         # not foolproof, needs manual verification
         self.random_id = random.randint(1, 10 * 1000)
 

@@ -1,0 +1,373 @@
+/* evalstyle.css */
+
+/* Body Background */
+body {
+    background-image: url('images/76_touched.jpg');
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: center;
+    font-family: Arial, sans-serif;
+    color: #333; /* Default text color */
+    margin: 0;
+    padding: 0;
+}
+
+/* Box Styling */
+.box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 20px;
+    margin: 20px 0;
+}
+
+/* Player Container */
+.player {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    text-align: center;
+    gap: 40vw;
+    margin: 0 10vw;
+}
+
+.player h1 {
+    margin: 0;
+    font-size: 36px;
+}
+
+/* Action Styling */
+.action {
+    flex: 1;
+    background-color: #f1f1f1;
+    font-size: 150px;
+    border: 2px solid #abc;
+    border-radius: 8px;
+    padding: 20px;
+    color: #333; /* Default action text color */
+}
+
+/* Button Styling */
+.button-10 {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 20px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
+    border-radius: 6px;
+    border: none;
+    font-size: 30px;
+    color: #fff;
+    background: linear-gradient(180deg, #4B91F7 0%, #367AF6 100%);
+    background-origin: border-box;
+    box-shadow: 0px 0.5px 1.5px rgba(54, 122, 246, 0.25), inset 0px 0.8px 0px -0.25px rgba(255, 255, 255, 0.2);
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+    cursor: pointer;
+}
+
+.button-10:focus {
+    box-shadow: inset 0px 0.8px 0px -0.25px rgba(255, 255, 255, 0.2), 0px 0.5px 1.5px rgba(54, 122, 246, 0.25), 0px 0px 0px 3.5px rgba(58, 108, 217, 0.5);
+    outline: 0;
+}
+
+.button-10.disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Number of Moves Display */
+.num_move {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.num_move p {
+    font-size: 50px;
+    color: white;
+    text-align: center;
+    margin: 0;
+}
+
+/* Info Box Styling */
+.info_box {
+    height: 30vh;
+    border: 2px solid #ccc;
+    font: 16px/26px Georgia, Garamond, Serif;
+    background: rgba(0, 0, 0, 0.6);
+    overflow: auto;
+    margin: 5vh 10vw 0 10vw;
+    padding: 10px;
+    border-radius: 8px;
+    color: #fff; /* Info text color */
+}
+
+.info_box h3 {
+    margin-top: 0;
+    text-align: center;
+}
+
+/* Response Time Display */
+.response_time_box {
+    margin: 2vh 10vw;
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 20px;
+    border-radius: 8px;
+    color: #fff;
+}
+
+.response_time_box h2 {
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+#response_time_table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#response_time_table th, #response_time_table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: center;
+}
+
+#response_time_table th {
+    background-color: #4CAF50;
+    color: white;
+}
+
+/* Correct and Incorrect Rows in Response Time Table */
+.response_time_correct {
+    background-color: #d4edda; /* Light Green */
+    color: #155724; /* Dark Green Text */
+}
+
+.response_time_incorrect {
+    background-color: #f8d7da; /* Light Red */
+    color: #721c24; /* Dark Red Text */
+}
+
+/* Icons for Correct and Incorrect Actions */
+.response_time_correct::after {
+    content: " ✓";
+    color: #155724; /* Dark Green Icon */
+    font-weight: bold;
+}
+
+.response_time_incorrect::after {
+    content: " ✗";
+    color: #721c24; /* Dark Red Icon */
+    font-weight: bold;
+}
+
+/* Game State Comparison */
+.game_state_box {
+    margin: 2vh 10vw;
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 20px;
+    border-radius: 8px;
+    color: #fff;
+}
+
+.game_state_box h2 {
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.game_state_container {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    flex-direction: column;
+}
+
+.game_state_log {
+    width: 100%;
+}
+
+.round_section {
+    background-color: rgba(255, 255, 255, 0.2);
+    margin-bottom: 10px;
+    border-radius: 4px;
+    padding: 10px;
+}
+
+.round_header {
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px;
+}
+
+.toggle_indicator {
+    font-size: 18px;
+}
+
+.game_state_tables {
+    display: none;
+    margin-top: 10px;
+}
+
+.game_state_tables table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 10px;
+}
+
+.game_state_tables th, .game_state_tables td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+
+.game_state_tables th {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.match {
+    background-color: #93C572; /* Green for matches */
+}
+
+.mismatch {
+    background-color: #F08080; /* Light Coral for mismatches */
+}
+
+/* Toggle Buttons Styling */
+.toggle_table_btn {
+    margin: 10px 0;
+    padding: 5px 10px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.toggle_table_btn:hover {
+    background-color: #218838;
+}
+
+/* Rainbomb Counts */
+.rainbomb_box {
+    margin: 2vh 10vw;
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 20px;
+    border-radius: 8px;
+    color: #fff;
+}
+
+.rainbomb_box h2 {
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.rainbomb_container {
+    display: flex;
+    justify-content: space-around;
+    gap: 20px;
+}
+
+.player_rainbomb {
+    width: 45%;
+}
+
+.player_rainbomb h3 {
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.player_rainbomb ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+.player_rainbomb li {
+    background-color: rgba(255, 255, 255, 0.2);
+    margin-bottom: 5px;
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 18px;
+}
+
+/* Differences Table Styling */
+.differences_table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+
+.differences_table th, .differences_table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: center;
+}
+
+.differences_table th {
+    background-color: #4CAF50;
+    color: white;
+}
+
+/* Status-based row coloring */
+.status_over {
+    background-color: #d4edda; /* Light green */
+}
+
+.status_under {
+    background-color: #fff3cd; /* Light yellow */
+}
+
+.status_mismatch {
+    background-color: #f8d7da; /* Light red */
+}
+
+.status_missing {
+    background-color: #d1ecf1; /* Light blue */
+}
+
+.status_extra {
+    background-color: #cce5ff; /* Light sky blue */
+}
+
+/* Game State Table Styling */
+.game_state_table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+
+.game_state_table th, .game_state_table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+
+.game_state_table th {
+    background-color: #4CAF50;
+    color: white;
+}
+
+/* Responsive Design */
+@media screen and (max-width: 768px) {
+    .player {
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+    }
+
+    .box {
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .player_rainbomb {
+        width: 100%;
+    }
+}
