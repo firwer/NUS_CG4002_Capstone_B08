@@ -38,7 +38,7 @@ function enableButton(elementId) {
 }
 
 /**
- * Function to change the colour of player box
+ * Function to change the color of player box
  * state:
  *  0: Action matched
  *  1: Action mismatched
@@ -57,10 +57,10 @@ function changePlayerState(player, state) {
                 colour = 'Salmon'; // Red for mismatch
                 break;
             case 2:
-                colour = '#f1f1f1'; // Default colour
+                colour = '#f1f1f1'; // Default color
                 break;
             default:
-                colour = '#f1f1f1'; // Default colour
+                colour = '#f1f1f1'; // Default color
         }
         targetElement.style.backgroundColor = colour;
     } else {
@@ -161,7 +161,10 @@ function startConnection() {
     }
 
     // Initialize round counter
-    window.current_round = 0;
+    window.current_round = 1;
+
+    // Initialize response tracking
+    window.round_responses = {};
 
     // Disable the "Next" button initially
     disableButton('button_next');
@@ -259,39 +262,12 @@ function startConnection() {
                 }
                 break;
             case "action_match":
-                let player_id;
-                if (data.player_id == 1)
-                    player_id = "p1";
-                else
-                    player_id = "p2";
-
-                const playerName = player_id === "p1" ? "Player 1" : "Player 2";
-                changePlayerState(player_id, data.action_match);
-                updateInfo(data.message);
-
-                if (data.response_time !== null && data.response_time !== undefined) {
-                    // Increment round counter
-                    window.current_round += 1;
-                    appendResponseTime(
-                        window.current_round,
-                        playerName,
-                        data.response_time,
-                        data.expected_action,
-                        data.user_action
-                    );
-                }
-
-                if (data.game_state_expected && data.game_state_received) {
-                    appendGameStateComparison(window.current_round, data.game_state_expected, data.game_state_received);
-                }
-
+                handleActionMatch(data);
                 break;
             case "rainbomb_count":
                 // Update rainbomb counts for players
-                updateRainbombCounts("p1", data.player_1);
-                if (data.player_2) {
-                    updateRainbombCounts("p2", data.player_2);
-                }
+                updateRainbombCounts("p1", data.rainbomb_p1);
+                updateRainbombCounts("p2", data.rainbomb_p2);
                 break;
             default:
                 updateInfoError(`Invalid message type received: ${data.type}`);
@@ -308,6 +284,68 @@ function startConnection() {
 
     // Assign the WebSocket to a global variable for access in other functions
     window.ws = ws;
+}
+
+/**
+ * Handle the "action_match" message type
+ * @param {Object} data - The data received from the server
+ */
+function handleActionMatch(data) {
+    let player_id;
+    if (data.player_id == 1)
+        player_id = "p1";
+    else
+        player_id = "p2";
+
+    const playerName = player_id === "p1" ? "Player 1" : "Player 2";
+    changePlayerState(player_id, data.action_match);
+    updateInfo(data.message);
+
+    const num_player = parseInt(sessionStorage.getItem("num_player"), 10);
+
+    if (!window.round_responses[window.current_round]) {
+        window.round_responses[window.current_round] = {};
+    }
+
+    if (data.response_time !== null && data.response_time !== undefined) {
+        window.round_responses[window.current_round][player_id] = {
+            playerName: playerName,
+            response_time: data.response_time,
+            expected_action: data.expected_action,
+            user_action: data.user_action
+        };
+    }
+
+    if (data.game_state_expected && data.game_state_received) {
+        window.round_responses[window.current_round][player_id].game_state_expected = data.game_state_expected;
+        window.round_responses[window.current_round][player_id].game_state_received = data.game_state_received;
+    }
+
+    // Check if all players have responded for the current round
+    if (Object.keys(window.round_responses[window.current_round]).length === num_player) {
+        // Iterate over each player's response and append to tables
+        for (const pid in window.round_responses[window.current_round]) {
+            if (!window.round_responses[window.current_round].hasOwnProperty(pid)) continue;
+            const resp = window.round_responses[window.current_round][pid];
+            appendResponseTime(
+                window.current_round,
+                resp.playerName,
+                resp.response_time,
+                resp.expected_action,
+                resp.user_action
+            );
+
+            if (resp.game_state_expected && resp.game_state_received) {
+                appendGameStateComparison(window.current_round, resp.game_state_expected, resp.game_state_received);
+            }
+        }
+
+        // Increment round counter for the next round
+        window.current_round += 1;
+
+        // Clear the responses for the new round
+        window.round_responses[window.current_round] = {};
+    }
 }
 
 /**
@@ -352,7 +390,7 @@ function appendResponseTime(round, player_id, response_time, expected_action, us
     timeCell.textContent = response_time.toFixed(3); // Display up to 3 decimal places
     row.appendChild(timeCell);
 
-    // Evaluation Server Action
+    // Expected Action
     const expectedActionCell = document.createElement("td");
     expectedActionCell.textContent = expected_action || "N/A";
     row.appendChild(expectedActionCell);
@@ -396,6 +434,7 @@ function appendGameStateComparison(round, expected, received) {
     // Create game state tables container
     const tablesContainer = document.createElement("div");
     tablesContainer.classList.add("game_state_tables");
+    tablesContainer.style.display = "none"; // Initially collapsed
 
     // Create Differences Table
     const differences = compareGameStates(expected, received);
@@ -440,7 +479,10 @@ function appendGameStateComparison(round, expected, received) {
     gameStateLog.prepend(roundSection);
 
     // Add event listener for collapsing/expanding the round section
-    roundHeader.addEventListener("click", () => {
+    roundHeader.addEventListener("click", (event) => {
+        // Prevent triggering toggle when clicking on buttons
+        if (event.target.tagName.toLowerCase() === 'button') return;
+
         const isVisible = tablesContainer.style.display === "block";
         tablesContainer.style.display = isVisible ? "none" : "block";
         toggleIndicator.textContent = isVisible ? "+" : "-";
@@ -590,7 +632,7 @@ function createDifferencesTable(differences) {
         row.classList.add(`status_${diff.status}`); // For styling based on status
 
         const tdPlayer = document.createElement("td");
-        tdPlayer.textContent = diff.player;
+        tdPlayer.textContent = diff.player.toUpperCase();
         const tdAttribute = document.createElement("td");
         tdAttribute.textContent = diff.attribute;
         const tdExpected = document.createElement("td");
@@ -742,14 +784,4 @@ function updateRainbombCounts(player, counts) {
     } else {
         console.error(`Rainbomb list for ${player} not found.`);
     }
-}
-
-/**
- * Display expected vs received game states
- * @param {Object} expected - The expected game state
- * @param {Object} received - The received game state
- */
-function displayGameState(expected, received) {
-    // Append comparison for the current round
-    appendGameStateComparison(window.current_round, expected, received);
 }

@@ -112,14 +112,8 @@ async def start_tcp_job(tcp_port: int, receive_queue_p1: asyncio.Queue, receive_
                                  receive_queue_p1=receive_queue_p1,
                                  receive_queue_p2=receive_queue_p2,
                                  send_queue=send_queue)
+    print("Starting TCP Server...")
     await tcp_server.start_server()
-
-
-async def start_prediction_service_process(predict_input_queue: asyncio.Queue, predict_output_queue: asyncio.Queue):
-    PredictionService = PredictionServiceProcess(predict_input_queue=predict_input_queue,
-                                                 predict_output_queue=predict_output_queue)
-    print("Prediction Service Started")
-    await PredictionService.run()
 
 
 async def start_relay_node_data_handler(src_input_queue_p1: asyncio.Queue,
@@ -260,11 +254,12 @@ class GameEngine:
                                           output_gun_state_p1=self.gun_state_queue_p1,
                                           output_gun_state_p2=self.gun_state_queue_p2),
 
-            start_prediction_service_process(predict_input_queue=self.prediction_input_queue_p1,
-                                             predict_output_queue=self.prediction_output_queue_p1),
-
-            # start_prediction_service_process(predict_input_queue=self.prediction_input_queue_p2,
-            #                                  predict_output_queue=self.prediction_output_queue_p2),
+            PredictionServiceProcess(
+                predict_input_queue_p1=self.prediction_input_queue_p1,
+                predict_input_queue_p2=self.prediction_input_queue_p2,
+                predict_output_queue_p1=self.prediction_output_queue_p1,
+                predict_output_queue_p2=self.prediction_output_queue_p2
+            ).run(),
 
             # Start Evaluation Server Process
             start_evaluation_process(eval_server_port=self.eval_server_port,

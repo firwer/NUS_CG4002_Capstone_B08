@@ -21,6 +21,7 @@ class _MessageType:
     info_wobr    = "info_wobr"
     num_move     = "num_move"
     position     = "position"
+    rainbomb_count = "rainbomb_count"  # New message type
 
 
 def get_json_ws(m_type, message="", pos_1=-1, pos_2=-1, action_match=-2, player_id=-1, response_time=None, game_state_expected=None, game_state_received=None, expected_action=None, user_action=None):
@@ -43,66 +44,63 @@ def get_json_ws(m_type, message="", pos_1=-1, pos_2=-1, action_match=-2, player_
     return json.dumps(data)
 
 
-
-
-
-
 async def ws_send_error(websocket, message):
     """
     Send the error message to the web client
     """
-    await websocket.send (get_json_ws(m_type=_MessageType.error, message=message))
+    await websocket.send(get_json_ws(m_type=_MessageType.error, message=message))
 
 
 async def ws_send_info(websocket, message):
     """
     Send the info message to the web client
     """
-    await websocket.send (get_json_ws(m_type=_MessageType.info, message=message))
+    await websocket.send(get_json_ws(m_type=_MessageType.info, message=message))
 
 
 async def ws_send_info_y(websocket, message):
     """
     Send the info message to the web client in yellow font colour
     """
-    await websocket.send (get_json_ws(m_type=_MessageType.info_y, message=message))
+    await websocket.send(get_json_ws(m_type=_MessageType.info_y, message=message))
 
 
 async def ws_send_info_wobr(websocket, message):
     """
     Send the info message to the web client without a newline
     """
-    await websocket.send (get_json_ws(m_type=_MessageType.info_wobr, message=message))
+    await websocket.send(get_json_ws(m_type=_MessageType.info_wobr, message=message))
 
 
 async def ws_send_num_move(websocket, message):
     """
     Send the number of steps to the web client
     """
-    await websocket.send (get_json_ws(m_type=_MessageType.num_move, message=message))
+    await websocket.send(get_json_ws(m_type=_MessageType.num_move, message=message))
 
 
 async def ws_send_positions(websocket, pos_1, pos_2):
     """
     Send the player positions to the web client
     """
-    await websocket.send (get_json_ws (m_type=_MessageType.position, pos_1=pos_1, pos_2=pos_2))
+    await websocket.send(get_json_ws(m_type=_MessageType.position, pos_1=pos_1, pos_2=pos_2))
 
 
 async def ws_send_actions(websocket, action_1, action_2):
     """
     Send the player actions to the web client
     """
-    await websocket.send (get_json_ws (m_type=_MessageType.action, pos_1=action_1, pos_2=action_2))
+    await websocket.send(get_json_ws(m_type=_MessageType.action, pos_1=action_1, pos_2=action_2))
+
 
 async def ws_send_rainbomb_counts(websocket, rainbomb_counts_p1, rainbomb_counts_p2):
     """
     Send the current number of rainbombs in each quadrant for each player to the web client.
     """
     data = {
-        "type":       "rainbomb_count",
-        "player_1":   rainbomb_counts_p1,
-        "player_2":   rainbomb_counts_p2
+        "type":            _MessageType.rainbomb_count,
+        "rainbomb_p1":     rainbomb_counts_p1,
+        "rainbomb_p2":     rainbomb_counts_p2
     }
     await websocket.send(json.dumps(data))
 
@@ -122,7 +120,6 @@ async def ws_send_action_update(websocket, action_match, player_id, message, res
         expected_action=expected_action,  # New field
         user_action=user_action           # New field
     ))
-
 
 
 async def perform_handshake(message, websocket):
@@ -149,11 +146,11 @@ async def perform_handshake(message, websocket):
         # check if the group is already connected to the server
         if group_name in client_dict.keys():
             # we do not allow more than one connection
-            await ws_send_error (websocket, "Connection denied: Duplicate connection to dev_eval_server")
+            await ws_send_error(websocket, "Connection denied: Duplicate connection to dev_eval_server")
         else:
             # create a Client object
             client = Client(group_name, password, num_player, does_not_have_visualizer)
-            await ws_send_info(websocket, "Welcome: "+group_name)
+            await ws_send_info(websocket, "Welcome: " + group_name)
             await ws_send_info(websocket, "------------")
             await ws_send_info(websocket, "TCP server waiting for connection from eval_client on port number "
                                + str(client.port_number) + " ")
@@ -170,28 +167,28 @@ async def perform_handshake(message, websocket):
                     await ws_send_error(websocket, "Connection denied: Duplicate connection to dev_eval_server")
                 else:
                     await ws_send_info_y(websocket, "eval_client connected")
-                    await ws_send_info  (websocket, "Verifying Password")
+                    await ws_send_info(websocket, "Verifying Password")
                     verified, timeout = await client.verify_password()
                     if verified:
                         await ws_send_info_y(websocket, "Successful")
-                        await ws_send_info  (websocket, "------------")
+                        await ws_send_info(websocket, "------------")
                         client_dict[group_name] = client
                         success = True
                     elif timeout <= 0:
-                        await ws_send_error (websocket, "Failed: Timeout")
-                        await ws_send_info  (websocket, "------------")
+                        await ws_send_error(websocket, "Failed: Timeout")
+                        await ws_send_info(websocket, "------------")
                     else:
-                        await ws_send_error (websocket, "Failed")
-                        await ws_send_info  (websocket, "------------")
+                        await ws_send_error(websocket, "Failed")
+                        await ws_send_info(websocket, "------------")
             except (websockets.ConnectionClosed, websockets.ConnectionClosedOK):
                 # this is a duplicate connection and can be discarded
-                ice_print_group_name (group_name, "Terminated Dangling TCP server : port_num=", client.port_number)
+                ice_print_group_name(group_name, "Terminated Dangling TCP server : port_num=", client.port_number)
 
             if not success:
                 client.stop()
 
     except json.JSONDecodeError:
-        print ("Handshake data loading failed: JSONDecodeError - ", message)
+        print("Handshake data loading failed: JSONDecodeError - ", message)
 
     return success, group_name, num_player, client
 
@@ -217,7 +214,7 @@ async def ws_recv_next_click(websocket, group_name):
 
 async def handler(websocket):
     """ All incoming websockets are handled by this function """
-    print ("Waiting for Handshake")
+    print("Waiting for Handshake")
     message = await websocket.recv()
     success, group_name, num_players, client = await perform_handshake(message, websocket)
 
@@ -229,6 +226,10 @@ async def handler(websocket):
         response_time_ai    = []    # response times of correct match for AI actions
         num_actions_matched_gun = 0
         num_actions_matched_ai  = 0
+
+        # Initialize rainbomb counts
+        rainbomb_counts_p1 = {quadrant: 0 for quadrant in range(1, 5)}
+        rainbomb_counts_p2 = {quadrant: 0 for quadrant in range(1, 5)}
 
         while client.is_running:
             # Display positions
@@ -266,8 +267,8 @@ async def handler(websocket):
                     response_time,
                     game_state_expected,
                     game_state_received,
-                    expected_action=expected_action,  # Corrected
-                    user_action=user_action  # Corrected
+                    expected_action=expected_action,  # New field
+                    user_action=user_action           # New field
                 )
 
                 player_processed = player_id
@@ -293,25 +294,11 @@ async def handler(websocket):
                 await client.send_game_state()
 
             # After processing all players, extract rainbomb counts
-            # Determine who threw the bomb in this round
-            # Assuming 'action_recv' contains the action type
-
-            # Initialize rainbomb counts
-            rainbomb_counts_p1 = {quadrant: 0 for quadrant in range(1, 5)}
-            rainbomb_counts_p2 = {quadrant: 0 for quadrant in range(1, 5)}
-
-            # Iterate through all actions in this round to update counts
-            # This requires tracking actions per round; if not currently tracked, consider implementing it
-            # For simplicity, assuming each player can throw at most one bomb per round
-
             for player in [client.simulator.game_state.player_1, client.simulator.game_state.player_2]:
                 for quadrant in player.rain_list:
-                    # Identify the target player based on who threw the bomb
                     if player == client.simulator.game_state.player_1:
-                        # Player 1 threw the bomb at Player 2
                         rainbomb_counts_p2[quadrant] += 1
                     elif player == client.simulator.game_state.player_2:
-                        # Player 2 threw the bomb at Player 1
                         rainbomb_counts_p1[quadrant] += 1
 
             # Send rainbomb counts
@@ -323,10 +310,10 @@ async def handler(websocket):
         await ws_send_num_move(websocket, "Eval Terminated")
         await ws_send_info_y(websocket, "------------------- Stat -------------------")
 
-        accuracy = str(num_actions_matched_gun)+"/"+str(client.num_actions_gun())
+        accuracy = str(num_actions_matched_gun) + "/" + str(client.num_actions_gun())
         await send_stat(accuracy, "GUN", response_time_gun, websocket, client.timeout)
 
-        accuracy = str(num_actions_matched_ai)+"/"+str(client.num_actions_ai())
+        accuracy = str(num_actions_matched_ai) + "/" + str(client.num_actions_ai())
         await send_stat(accuracy, "AI ", response_time_ai, websocket, client.timeout)
 
     except Exception as e:
@@ -351,13 +338,13 @@ async def send_stat(accuracy, component, response_times, websocket, timeout):
 
 
 async def main():
-    print ("Waiting for new websocket client")
+    print("Waiting for new websocket client")
     async with websockets.serve(handler, "", 8001):
         await asyncio.Future()  # run forever
 
 
 if __name__ == "__main__":
-    print ("running main")
+    print("running main")
     try:
         asyncio.run(main())
     except KeyboardInterrupt:

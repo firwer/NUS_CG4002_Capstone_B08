@@ -203,6 +203,9 @@ body {
     justify-content: space-between;
     align-items: center;
     padding: 5px;
+    color: #fff;
+    background-color: #333; /* Dark background for header */
+    border-radius: 4px;
 }
 
 .toggle_indicator {
@@ -231,12 +234,66 @@ body {
     color: white;
 }
 
-.match {
-    background-color: #93C572; /* Green for matches */
+/* Differences Table Styling */
+.differences_table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
 }
 
-.mismatch {
-    background-color: #F08080; /* Light Coral for mismatches */
+.differences_table th, .differences_table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: center;
+}
+
+.differences_table th {
+    background-color: #4CAF50;
+    color: white;
+}
+
+/* Status-based row coloring */
+.status_over {
+    background-color: #d4edda; /* Light green */
+    color: #155724;
+}
+
+.status_under {
+    background-color: #fff3cd; /* Light yellow */
+    color: #856404;
+}
+
+.status_mismatch {
+    background-color: #f8d7da; /* Light red */
+    color: #721c24;
+}
+
+.status_missing {
+    background-color: #d1ecf1; /* Light blue */
+    color: #0c5460;
+}
+
+.status_extra {
+    background-color: #cce5ff; /* Light sky blue */
+    color: #004085;
+}
+
+/* Game State Table Styling */
+.game_state_table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+
+.game_state_table th, .game_state_table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+
+.game_state_table th {
+    background-color: #4CAF50;
+    color: white;
 }
 
 /* Toggle Buttons Styling */
@@ -272,10 +329,12 @@ body {
     display: flex;
     justify-content: space-around;
     gap: 20px;
+    flex-wrap: wrap;
 }
 
 .player_rainbomb {
     width: 45%;
+    min-width: 250px;
 }
 
 .player_rainbomb h3 {
@@ -294,63 +353,7 @@ body {
     padding: 10px;
     border-radius: 4px;
     font-size: 18px;
-}
-
-/* Differences Table Styling */
-.differences_table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 20px;
-}
-
-.differences_table th, .differences_table td {
-    border: 1px solid #ddd;
-    padding: 8px;
-    text-align: center;
-}
-
-.differences_table th {
-    background-color: #4CAF50;
-    color: white;
-}
-
-/* Status-based row coloring */
-.status_over {
-    background-color: #d4edda; /* Light green */
-}
-
-.status_under {
-    background-color: #fff3cd; /* Light yellow */
-}
-
-.status_mismatch {
-    background-color: #f8d7da; /* Light red */
-}
-
-.status_missing {
-    background-color: #d1ecf1; /* Light blue */
-}
-
-.status_extra {
-    background-color: #cce5ff; /* Light sky blue */
-}
-
-/* Game State Table Styling */
-.game_state_table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 20px;
-}
-
-.game_state_table th, .game_state_table td {
-    border: 1px solid #ddd;
-    padding: 8px;
-    text-align: left;
-}
-
-.game_state_table th {
-    background-color: #4CAF50;
-    color: white;
+    color: #fff;
 }
 
 /* Responsive Design */
