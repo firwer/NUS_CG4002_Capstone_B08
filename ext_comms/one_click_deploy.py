@@ -77,19 +77,23 @@ def run_game_server_on_ultra96(client, remote_port):
     try:
         # Kill any existing active relay node TCP port
         print("Killing any existing process on port 65001...")
-        client.exec_command('fuser -KILL -k -n tcp 65001', timeout=10)
+        kill_command = 'fuser -KILL -k -n tcp 65001'
+        kill_stdin, kill_stdout, kill_stderr = client.exec_command(kill_command, timeout=10)
+        kill_stdout.channel.recv_exit_status()  # Wait for the command to complete
 
-        # Run the game server remotely on the Ultra96
-        command = (
+        # Prepare the remote command
+        remote_command = (
             'source /usr/local/share/pynq-venv/bin/activate && '
             '. /etc/profile.d/xrt_setup.sh && '
-            f'echo "{config.ssh_password}" | sudo -S python /home/xilinx/ext_comms/main.py {remote_port}'
+            f'sudo -E python3 /home/xilinx/ext_comms/main.py {remote_port}'
         )
-        stdin, stdout, stderr = client.exec_command(command, get_pty=True)
 
-        # Optionally, handle the sudo password prompt if not using echo
-        # stdin.write(config.ssh_password + '\n')
-        # stdin.flush()
+        # Execute the remote command with PTY to handle sudo
+        stdin, stdout, stderr = client.exec_command(remote_command, get_pty=True)
+
+        # Send the sudo password
+        stdin.write(f"{config.ssh_password}\n")
+        stdin.flush()
 
         # Start threads to read stdout and stderr
         threading.Thread(target=read_stream, args=(stdout, "STDOUT")).start()
