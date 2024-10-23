@@ -232,14 +232,14 @@ void loop()
       // then multiply by 9.81 to get m/s^2
       // multiply by 100 to get integers
       // CHANGE THIS SHIT TODO TODO CHANGE CHANGE
-      mpuData.ax = (((mpuData.ax) / 32767.0) * 4.0 * 9.81) * 100;
-      mpuData.ay = (((mpuData.ay) / 32767.0) * 4.0 * 9.81) * 100;
-      mpuData.az = (((mpuData.az) / 32767.0) * 4.0 * 9.81) * 100;
+      mpuData.ax = (((mpuData.ax) / 32767.0) * 8.0 * 9.81) * 100;
+      mpuData.ay = (((mpuData.ay) / 32767.0) * 8.0 * 9.81) * 100;
+      mpuData.az = (((mpuData.az) / 32767.0) * 8.0 * 9.81) * 100;
       // same for gyroscope scaling
-      mpuData.gx = (((mpuData.gx) / 32767.0) * 250.0) * 100;
-      mpuData.gy = (((mpuData.gy) / 32767.0) * 250.0) * 100;
-      mpuData.gz = (((mpuData.gz) / 32767.0) * 250.0) * 100;
-      
+      mpuData.gx = (((mpuData.gx) / 32767.0) * 500.0) * 100;
+      mpuData.gy = (((mpuData.gy) / 32767.0) * 500.0) * 100;
+      mpuData.gz = (((mpuData.gz) / 32767.0) * 500.0) * 100;
+
       // @wanlin
       ic_push_imu(mpuData, actionCounter);
       communicate();
