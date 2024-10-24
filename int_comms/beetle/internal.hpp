@@ -44,7 +44,8 @@ bool ic_push_bullet(uint8_t bullets);
 bool ic_push_health(uint8_t health);
 bool ic_push_kick();
 packet_gamestate_t ic_get_state();
-void communicate();
+bool communicate();
+void ic_udp_quicksend();
 
 // Testing function declarations
 void flip_bits_with_probability(packet_general_t* pkt, float probability);

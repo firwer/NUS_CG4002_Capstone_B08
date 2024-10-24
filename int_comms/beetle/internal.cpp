@@ -198,7 +198,7 @@ void getRandomReliablePacket(packet_general_t *pkt)
 }
 
 // ----- Two-way TX/RX -----
-uint8_t rel_tx_rate = 1000;       // CONFIG: Tuning of reliable transfer rate in ms
+uint8_t rel_tx_rate = 2;          // CONFIG: Tuning of reliable transfer rate in ms
 uint8_t unrel_tx_rate = 2;        // CONFIG: Tuning of unreliable transfer rate in ms
 long unreliableStartRateTime = 0; // TESTING: rate limit for unreliable sending
 long reliableStartRateTime = 0;   // TESTING: rate limit for reliable sending
@@ -337,13 +337,31 @@ long cooldownStart = 0;
 long long cooldown_period = 4000;
 bool cooldown = false;
 
-void communicate()
+// Quality of life -- send the udp data straight without FSM
+// WARN: this does not account for connection losses, and silently fails
+void ic_udp_quicksend()
+{
+  if (unreliable_buffer_filled)
+  {
+    unreliableStartRateTime = millis();
+    packet_imu_t &pkt = unreliable_buffer;
+    pkt.seq_num = beetle_seq_num;
+    ++beetle_seq_num;
+    setChecksum((packet_general_t *)&pkt);
+    write_serial((packet_general_t *)&pkt);
+    unreliable_buffer_filled = false;
+  }
+}
+
+// Returns true if reconnect happens, else false indicating no issue
+bool communicate()
 {
   auto rate_start = millis();
 
   // ---- RECEIVING LOGIC ----
   packet_general_t rcv = {0};
   bool shouldAck = false;
+  bool hasReconnected = false;
   if (await_packet((packet_general_t *)&rcv, 10))
   {
     // case 1: checksum error (continue)
@@ -354,7 +372,10 @@ void communicate()
       if (rcv.packet_type == PACKET_HELLO)
       {
         await_handshake(true);
-        return;
+        hasReconnected = true;
+        // check again for a packet
+        if (!await_packet((packet_general_t *)&rcv, 10))
+          return hasReconnected
       }
 
       // case 4: ACKn
@@ -486,4 +507,5 @@ void communicate()
     setChecksum((packet_general_t *)&ack);
     write_serial((packet_general_t *)&ack);
   }
+  return hasReconnected;
 }
