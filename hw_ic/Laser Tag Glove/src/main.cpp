@@ -242,7 +242,8 @@ void loop()
 
       // @wanlin
       ic_push_imu(mpuData, actionCounter);
-      communicate();
+      ic_udp_quicksend();
+     // communicate();
 
       lastSampleTime = millis();
       recordedPoints++;
