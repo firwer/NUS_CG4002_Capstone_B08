@@ -375,7 +375,7 @@ bool communicate()
         hasReconnected = true;
         // check again for a packet
         if (!await_packet((packet_general_t *)&rcv, 10))
-          return hasReconnected
+          return hasReconnected;
       }
 
       // case 4: ACKn
