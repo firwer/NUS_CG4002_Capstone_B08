@@ -174,42 +174,70 @@ def create_imu_packets(imu_data_list):
 
     return packets
 
+def display_menu():
+    """Display the interactive menu for packet selection"""
+    print("\nSelect packet type to send:")
+    print("1. Basket")
+    print("2. Bowling")
+    print("3. Reload")
+    print("4. Volley")
+    print("5. Bomb (Rainbomb)")
+    print("6. Shield")
+    print("7. Logout")
+    print("8. Gun")
+    print("9. Health")
+    print("10. Soccer (Kick)")
+    print("0. Exit")
+
+
 def get_user_input(sendToGameServerQueue: Queue):
     adc_counter = 0
     pkts = []
+
+    # Dictionary to map user selections to packet types and functions
+    packet_options = {
+        '1': ("Basket", create_imu_packets, basket_packets),
+        '2': ("Bowl", create_imu_packets, bowling_packets),
+        '3': ("Reload", create_imu_packets, reload_packets),
+        '4': ("Volley", create_imu_packets, volley_packets),
+        '5': ("Bomb (Rainbomb)", create_imu_packets, rainbomb_packets),
+        '6': ("Shield", create_imu_packets, shield_packets),
+        '7': ("Logout", create_imu_packets, logout_packets),
+        '8': ("Gun", [sim_get_packet], PACKET_DATA_BULLET),
+        '9': ("Health", [sim_get_packet], PACKET_DATA_HEALTH),
+        '10': ("Soccer (Kick)", [sim_get_packet], PACKET_DATA_KICK)
+    }
+
     while True:
-        user_input = input("\nEnter packet type to send: ")
-        # Map user input to packet types
-        packet_type = user_input.strip().upper()
-        if packet_type == 'BASKET':
-            pkts = create_imu_packets(basket_packets)
-        elif packet_type == 'BOWL':
-            pkts = create_imu_packets(bowling_packets)
-        elif packet_type == 'RELOAD':
-            pkts = create_imu_packets(reload_packets)
-        elif packet_type == 'VOLLEY':
-            pkts = create_imu_packets(volley_packets)
-        elif packet_type == 'BOMB':
-            pkts = create_imu_packets(rainbomb_packets)
-        elif packet_type == 'SHIELD':
-            pkts = create_imu_packets(shield_packets)
-        elif packet_type == 'LOGOUT':
-            pkts = create_imu_packets(logout_packets)
-        elif packet_type == 'GUN':
-            pkts = [sim_get_packet(PACKET_DATA_BULLET)]
-        elif packet_type == 'HEALTH':
-            pkts = [sim_get_packet(PACKET_DATA_HEALTH)]
-        elif packet_type == 'SOCCER':
-            pkts = [sim_get_packet(PACKET_DATA_KICK)]
+        display_menu()
+        user_input = input("\nEnter your choice (0 to exit): ").strip()
+
+        if user_input == '0':
+            print("Exiting...")
+            break
+
+        # Get packet type based on user selection
+        if user_input in packet_options:
+            packet_name, packet_function, packet_data = packet_options[user_input]
+            print(f"\nYou selected: {packet_name}")
+
+            # Generate packets based on the selected packet type
+            if packet_name == "Gun" or packet_name == "Health" or packet_name == "Soccer (Kick)":
+                pkts = [sim_get_packet(packet_data)]  # Single packet for Gun, Health, and Kick
+            else:
+                pkts = packet_function(packet_data)  # IMU packets for other options
+
+            # Send packets
+            for i, packet in enumerate(pkts):
+                packet.adc = adc_counter
+                print(f"Sending {i + 1}/60 packet")
+                time.sleep(0.01)  # Delay to simulate real-time packet sending
+                sendToGameServerQueue.put(packet)
+
+            adc_counter += 1
+
         else:
-            print("Invalid packet type.")
-            continue
-        for i, n in enumerate(pkts):
-            n.adc = adc_counter
-            print(f"Sending {i + 1}/60 packet")
-            time.sleep(0.01)
-            sendToGameServerQueue.put(n)
-        adc_counter += 1
+            print("Invalid selection. Please choose a valid option.")
 
 
 # This is only for testing/simulation purposes. Actual internal comms side entry point is not here.
