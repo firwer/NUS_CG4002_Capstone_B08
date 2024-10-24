@@ -69,7 +69,7 @@ class NotifyDelegate(btle.DefaultDelegate):
 
 # A beetle object maintains its own connection and state
 class Beetle:
-    def __init__(self, MAC_ADDRESS, beetle_id=None, filename="") -> None:
+    def __init__(self, MAC_ADDRESS, beetle_id=None) -> None:
         RESET_COLOR = "\033[0m"  # Reset color
         RED_COLOR = "\033[31m"   # Red color
         GREEN_COLOR = "\033[32m"  # Green color
@@ -80,7 +80,6 @@ class Beetle:
         colors = [BLUE_COLOR, GREEN_COLOR, RED_COLOR]
 
         # ----- DATA COLLECTION -----
-        self.filename = filename
         # self.my_csv = pd.DataFrame(columns=["gesture", "ax", "ay", "az", "gx", "gy", "gz"])
         self.my_csv = pd.DataFrame()
         self.ax = []
@@ -89,9 +88,14 @@ class Beetle:
         self.gx = []
         self.gy = []
         self.gz = []
+        # basket, bowling, reload, volley, rainbomb, shield, logout
+        self.GESTURE = "basket"
+        self.filename = "debug"
         self.EXPECTED_PKTS = 60
         self.CURRENT_PKTS = 0
-        self.ROWS_LEFT= 50 # CONFIGURE ME - THIS CONTROLS HOW MANY ROWS 
+        self.ROWS_TO_COLLECT = 60 # CONFIGURE ME - THIS CONTROLS HOW MANY ROWS  
+        self.ROWS_LEFT = self.ROWS_TO_COLLECT 
+        self.PREV_ADC = -1
 
         self.COLOR = RESET_COLOR if beetle_id is None else colors[beetle_id]
         self.relay_seq_num = 0
@@ -170,6 +174,9 @@ class Beetle:
 
                 if pkt.packet_type == PACKET_DATA_IMU:
                     # TODO do work
+                    if pkt.adc == self.PREV_ADC:
+                        print("Previous ADC detected, continuing...")
+                        continue
                     print(f"RX {pkt.seq_num}: {pkt.to_bytearray().hex()}")
                     self.CURRENT_PKTS += 1
                     ax = int.from_bytes(pkt.accelX, byteorder='little', signed=True)  # Convert first 2 bytes to signed int
@@ -187,7 +194,8 @@ class Beetle:
                     self.gz.append(gz)
 
                     if self.CURRENT_PKTS == self.EXPECTED_PKTS:
-                        print(f"row found, #{51-self.ROWS_LEFT}")
+                        print(f"Row found, #{self.ROWS_TO_COLLECT-self.ROWS_LEFT}")
+                        self.PREV_ADC = pkt.adc
                         self.ROWS_LEFT -= 1
                         # Reset the packet count
                         self.CURRENT_PKTS = 0
@@ -195,7 +203,7 @@ class Beetle:
                         # Create a new row (as a dictionary) for the CSV data
                         # basket, bowling, reload, volley, rainbomb, shield, logout
                         row = {
-                            "gesture": "logout",
+                            "gesture": self.GESTURE,
                             "ax": self.ax.copy(),
                             "ay": self.ay.copy(),
                             "az": self.az.copy(),
@@ -221,7 +229,7 @@ class Beetle:
                         if self.ROWS_LEFT == 0:
                             # Save the DataFrame to a CSV file
                             print("done!")
-                            file_path = f"{self.filename}_my_data.csv"
+                            file_path = f"{self.filename}.csv"
                             # Check if the file exists
                             if os.path.exists(file_path):
                                 # Append without header if file exists
@@ -419,7 +427,7 @@ class Beetle:
 def main():
     # Create Beetle instances
     # beetle0 = Beetle(BLUNO_RED_MAC_ADDRESS, 0, "red")
-    beetle0 = Beetle(BLUNO_RED_MAC_ADDRESS, 0, "red_nich")
+    beetle0 = Beetle(BLUNO_RED_MAC_ADDRESS, 0)
     beetle0.run()
 
 if __name__ == "__main__":
