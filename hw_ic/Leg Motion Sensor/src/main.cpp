@@ -100,7 +100,10 @@ void loop()
   // ensure that we are connected even when no kick is being done
   // WARN: might cause a spinlock.
   // @wanlin
-  communicate();
+  if (communicate())
+  {
+    playBLEFeedback();
+  }
 
   detectKick();
 
@@ -109,7 +112,10 @@ void loop()
     // push boolean kick detected to the server
     // @wanlin
     ic_push_kick();
-    communicate();
+    if (communicate())
+    {
+      playBLEFeedback();
+    }
     playMotionFeedback();
     playingFeedback = true;
     isKickDetected = false;
