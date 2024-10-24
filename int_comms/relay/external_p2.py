@@ -16,32 +16,8 @@ from int_comms.relay.packet import PACKET_DATA_IMU, PACKET_DATA_BULLET, PACKET_D
 
 ext_logger = logging.getLogger("External2")
 
-RELAY_NODE_PLAYER = -1
+RELAY_NODE_PLAYER = 2
 PLAYER_NUMBER = 2
-
-def get_user_input(from_beetles_queue1 : Queue, from_beetles_queue2 : Queue, from_beetles_queue3 : Queue):
-    IMU_Bullet_beetle = from_beetles_queue1
-    Health_beetle = from_beetles_queue2
-    Kick_beetle = from_beetles_queue3
-    while True:
-        user_input = input("\nEnter packet type to send: ")
-        # Map user input to packet types
-        packet_type = user_input.strip().upper()
-        if packet_type == 'IMU':
-            packet = sim_get_packet(PACKET_DATA_IMU)
-            IMU_Bullet_beetle.put(packet)
-        elif packet_type == 'BULLET':
-            packet = sim_get_packet(PACKET_DATA_BULLET)
-            IMU_Bullet_beetle.put(packet)
-        elif packet_type == 'HEALTH':
-            packet = sim_get_packet(PACKET_DATA_HEALTH)
-            Health_beetle.put(packet)
-        elif packet_type == 'KICK':
-            packet = sim_get_packet(PACKET_DATA_KICK)
-            Kick_beetle.put(packet)
-        else:
-            print("Invalid packet type.")
-            continue
 
 def receive_queue_handler_integrated(tcpController: TCPC_Controller_Sync, receive_queues):
     """Receives gamestate from game engine. Packs it into PacketGamestate, sends to int-comms.
@@ -198,62 +174,48 @@ def begin_external(sendToGameServerQueue:Queue, receiveFromGameServerQueue0:Queu
     send_thread.join()
     receive_thread.join()
 
+
+def get_user_input(sendToGameServerQueue: Queue):
+    while True:
+        user_input = input("\nEnter packet type to send: ")
+        # Map user input to packet types
+        packet_type = user_input.strip().upper()
+        if packet_type == 'IMU':
+            packet = sim_get_packet(PACKET_DATA_IMU)
+        elif packet_type == 'BULLET':
+            packet = sim_get_packet(PACKET_DATA_BULLET)
+        elif packet_type == 'HEALTH':
+            packet = sim_get_packet(PACKET_DATA_HEALTH)
+        elif packet_type == 'KICK':
+            packet = sim_get_packet(PACKET_DATA_KICK)
+        else:
+            print("Invalid packet type.")
+            continue
+        for i in range(60):
+            print(f"Sending {i+1}/60 packet")
+            time.sleep(0.01)
+            sendToGameServerQueue.put(packet)
+
+
+# This is only for testing/simulation purposes. Actual internal comms side entry point is not here.
 def simulate():
-    print("hello")
-    begin_external(Queue(), Queue(), Queue(), 1)
-    # simulate beetle passing messages
-    # global RELAY_NODE_PLAYER
-    # fromBeetle1 = Queue()
-    # fromBeetle2 = Queue()
-    # fromBeetle3 = Queue()
-    # toBeetle1 = Queue()
-    # toBeetle2 = Queue()
-    # receiveFromGameServerQueue = Queue()
-    # sendToGameServerQueue = Queue()
+    ext_logger.debug("DEV: SIMULATION STARTED. NOT FOR ACTUAL USE.")
+    sendToGameServerQueue, receiveFromGameServerQueue0, receiveFromGameServerQueue1 = Queue(), Queue(), Queue()
+    wsController = TCPC_Controller_Sync(
+        config.TCP_SERVER_HOST, config.TCP_SERVER_PORT, config.TCP_SECRET_KEY
+    )
+    wsController.identify_relay_node(2)
+    ext_logger.debug("External comms liaison connected!")
+    receiveQueues = [receiveFromGameServerQueue0, receiveFromGameServerQueue1]
+    send_thread = Thread(target=send_queue_handler, args=(wsController, sendToGameServerQueue))
+    #receive_thread = Thread(target=receive_queue_handler, args=(wsController, receiveQueues))
+    send_thread.start()
+    #receive_thread.start()
 
-    # from_beetles_queues = [fromBeetle1, fromBeetle2, fromBeetle3]
-    # to_beetles_queues = [toBeetle1, toBeetle2]
-    # while RELAY_NODE_PLAYER != 1 and RELAY_NODE_PLAYER != 2:
-    #     relay_node_id = input("Select Relay Node (1/2): ")
-    #     RELAY_NODE_PLAYER = int(relay_node_id)
+    get_user_input(sendToGameServerQueue)
 
-    # Logger.debug("Establishing connection to TCP server...")
-    # wsController = TCPC_Controller_Sync(
-    #     config.TCP_SERVER_HOST, config.TCP_SERVER_PORT, config.TCP_SECRET_KEY
-    # )
-    # wsController.connect()
-    # wsController.identify_relay_node(RELAY_NODE_PLAYER)
-
-    # agg_thread = Thread(target=aggregator_thread_main, args=(
-    #     sendToGameServerQueue, from_beetles_queues, to_beetles_queues, receiveFromGameServerQueue))
-    # send_thread = Thread(target=send_queue_handler, args=(wsController, sendToGameServerQueue))
-    # receive_thread = Thread(target=receive_queue_handler, args=(wsController, receiveFromGameServerQueue))
-    # # Manual User Input Testing Thread
-    # user_input_thread = Thread(target=get_user_input, args=[fromBeetle1, fromBeetle2, fromBeetle3])
-
-    # agg_thread.start()
-    # send_thread.start()
-    # receive_thread.start()
-    # user_input_thread.start()
-
-    # agg_thread.join()
-    # send_thread.join()
-    # receive_thread.join()
-    # user_input_thread.join()
-
-    # Simulated Input Threads
-    #thread_beetle1 = Thread(target=sim_beetle, args=(1, fromBeetle1, toBeetle1,))
-    #thread_beetle2 = Thread(target=sim_beetle, args=(2, fromBeetle2, toBeetle2,))
-    #thread_beetle3 = Thread(target=sim_beetle, args=(3, fromBeetle3,))
-    # TODO: start the threads
-    #thread_entry.start()
-    # thread_beetle1.start()
-    # thread_beetle2.start()
-    # thread_beetle3.start()
-    #thread_entry.join()
-    # thread_beetle1.join()
-    # thread_beetle2.join()
-    # thread_beetle3.join()
+    send_thread.join()
+    #receive_thread.join()
 
 
 if __name__ == "__main__":

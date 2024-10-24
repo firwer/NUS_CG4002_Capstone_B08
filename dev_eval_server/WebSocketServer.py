@@ -250,6 +250,7 @@ async def handler(websocket):
                 # The websocket is disconnected
                 break
 
+            await ws_send_info(websocket, "------------")
             # Process players' actions
             player_processed = -1
 
@@ -257,19 +258,6 @@ async def handler(websocket):
             for _ in range(num_players):
                 action_match, player_id, message, action_recv, response_time, timeout_remaining, game_state_expected, game_state_received, expected_action, user_action = \
                     await client.handle_a_player(player_processed, timeout_remaining)
-
-                # Send action update with diagnostics
-                await ws_send_action_update(
-                    websocket,
-                    action_match,
-                    player_id,
-                    message,
-                    response_time,
-                    game_state_expected,
-                    game_state_received,
-                    expected_action=expected_action,  # New field
-                    user_action=user_action           # New field
-                )
 
                 player_processed = player_id
 
@@ -290,8 +278,21 @@ async def handler(websocket):
                             num_actions_matched_ai += 1
                             response_time_ai.append(response_time)
 
-                # Send correct game state
-                await client.send_game_state()
+                    # Send action update with diagnostics
+                    await ws_send_action_update(
+                        websocket,
+                        action_match,
+                        player_id,
+                        message,
+                        response_time,
+                        game_state_expected,
+                        game_state_received,
+                        expected_action=expected_action,  # New field
+                        user_action=user_action           # New field
+                    )
+
+                    # Send correct game state
+                    await client.send_game_state()
 
             # After processing all players, extract rainbomb counts
             for player in [client.simulator.game_state.player_1, client.simulator.game_state.player_2]:

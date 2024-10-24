@@ -77,8 +77,9 @@ def run_game_server_on_ultra96(client, remote_port):
     try:
         # Kill any existing active relay node TCP port
         print("Killing any existing process on port 65001...")
-        kill_command = 'fuser -KILL -k -n tcp 65001'
+        kill_command = 'sudo -E fuser -k 65001/tcp'
         kill_stdin, kill_stdout, kill_stderr = client.exec_command(kill_command, timeout=10)
+        kill_stdin.write(f"{config.ssh_password}\n")
         kill_stdout.channel.recv_exit_status()  # Wait for the command to complete
 
         # Prepare the remote command
