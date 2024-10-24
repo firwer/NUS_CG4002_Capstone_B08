@@ -183,7 +183,7 @@ def get_user_input(sendToGameServerQueue: Queue):
         packet_type = user_input.strip().upper()
         if packet_type == 'BASKET':
             pkts = create_imu_packets(basket_packets)
-        elif packet_type == 'BOWLING':
+        elif packet_type == 'BOWL':
             pkts = create_imu_packets(bowling_packets)
         elif packet_type == 'RELOAD':
             pkts = create_imu_packets(reload_packets)
