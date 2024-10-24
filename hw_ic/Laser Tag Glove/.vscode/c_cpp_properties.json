@@ -1,0 +1,70 @@
+//
+// !!! WARNING !!! AUTO-GENERATED FILE!
+// PLEASE DO NOT MODIFY IT AND USE "platformio.ini":
+// https://docs.platformio.org/page/projectconf/section_env_build.html#build-flags
+//
+{
+    "configurations": [
+        {
+            "name": "PlatformIO",
+            "includePath": [
+                "/home/prince/Documents/NUS_CG4002_Capstone_B08/hw_ic/Laser Tag Glove/include",
+                "/home/prince/Documents/NUS_CG4002_Capstone_B08/hw_ic/Laser Tag Glove/src",
+                "/home/prince/.platformio/packages/framework-arduino-avr/libraries/EEPROM/src",
+                "/home/prince/Documents/NUS_CG4002_Capstone_B08/hw_ic/Laser Tag Glove/.pio/libdeps/uno/ArduinoQueue",
+                "/home/prince/Documents/NUS_CG4002_Capstone_B08/hw_ic/Laser Tag Glove/.pio/libdeps/uno/ToneLibrary/src",
+                "/home/prince/Documents/NUS_CG4002_Capstone_B08/hw_ic/Laser Tag Glove/.pio/libdeps/uno/IRremote/src",
+                "/home/prince/Documents/NUS_CG4002_Capstone_B08/hw_ic/Laser Tag Glove/.pio/libdeps/uno/MPU6050/src",
+                "/home/prince/.platformio/packages/framework-arduino-avr/libraries/Wire/src",
+                "/home/prince/Documents/NUS_CG4002_Capstone_B08/int_comms/beetle",
+                "/home/prince/.platformio/packages/framework-arduino-avr/cores/arduino",
+                "/home/prince/.platformio/packages/framework-arduino-avr/variants/standard",
+                "/home/prince/Documents/NUS_CG4002_Capstone_B08/int_comms/relay",
+                "/home/prince/Documents/NUS_CG4002_Capstone_B08/int_comms/scripts",
+                "/home/prince/.platformio/packages/framework-arduino-avr/libraries/HID/src",
+                "/home/prince/.platformio/packages/framework-arduino-avr/libraries/SPI/src",
+                "/home/prince/.platformio/packages/framework-arduino-avr/libraries/SoftwareSerial/src",
+                ""
+            ],
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true,
+                "path": [
+                    "/home/prince/Documents/NUS_CG4002_Capstone_B08/hw_ic/Laser Tag Glove/include",
+                    "/home/prince/Documents/NUS_CG4002_Capstone_B08/hw_ic/Laser Tag Glove/src",
+                    "/home/prince/.platformio/packages/framework-arduino-avr/libraries/EEPROM/src",
+                    "/home/prince/Documents/NUS_CG4002_Capstone_B08/hw_ic/Laser Tag Glove/.pio/libdeps/uno/ArduinoQueue",
+                    "/home/prince/Documents/NUS_CG4002_Capstone_B08/hw_ic/Laser Tag Glove/.pio/libdeps/uno/ToneLibrary/src",
+                    "/home/prince/Documents/NUS_CG4002_Capstone_B08/hw_ic/Laser Tag Glove/.pio/libdeps/uno/IRremote/src",
+                    "/home/prince/Documents/NUS_CG4002_Capstone_B08/hw_ic/Laser Tag Glove/.pio/libdeps/uno/MPU6050/src",
+                    "/home/prince/.platformio/packages/framework-arduino-avr/libraries/Wire/src",
+                    "/home/prince/Documents/NUS_CG4002_Capstone_B08/int_comms/beetle",
+                    "/home/prince/.platformio/packages/framework-arduino-avr/cores/arduino",
+                    "/home/prince/.platformio/packages/framework-arduino-avr/variants/standard",
+                    "/home/prince/Documents/NUS_CG4002_Capstone_B08/int_comms/relay",
+                    "/home/prince/Documents/NUS_CG4002_Capstone_B08/int_comms/scripts",
+                    "/home/prince/.platformio/packages/framework-arduino-avr/libraries/HID/src",
+                    "/home/prince/.platformio/packages/framework-arduino-avr/libraries/SPI/src",
+                    "/home/prince/.platformio/packages/framework-arduino-avr/libraries/SoftwareSerial/src",
+                    ""
+                ]
+            },
+            "defines": [
+                "PLATFORMIO=60116",
+                "ARDUINO_AVR_UNO",
+                "F_CPU=16000000L",
+                "ARDUINO_ARCH_AVR",
+                "ARDUINO=10808",
+                "__AVR_ATmega328P__",
+                ""
+            ],
+            "cStandard": "gnu11",
+            "cppStandard": "gnu++11",
+            "compilerPath": "/home/prince/.platformio/packages/toolchain-atmelavr/bin/avr-gcc",
+            "compilerArgs": [
+                "-mmcu=atmega328p",
+                ""
+            ]
+        }
+    ],
+    "version": 4
+}

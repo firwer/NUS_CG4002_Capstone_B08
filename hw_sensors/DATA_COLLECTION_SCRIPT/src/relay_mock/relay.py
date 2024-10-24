@@ -50,6 +50,7 @@ class NotifyDelegate(btle.DefaultDelegate):
         if len(data) < 20: # data is fragmented
             print(f"Fragmentation: {len(data)}: {data.hex()}")
             self.fragmented_packets += 1
+            # self.reset_buffer()
 
     def has_packet(self) -> bool:
         return len(self.buffer) >= 20 and len(self.buffer) % 20 == 0
