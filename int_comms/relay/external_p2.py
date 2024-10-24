@@ -177,7 +177,7 @@ def display_menu():
     """Display the interactive menu for packet selection"""
     print("\nSelect packet type to send:")
     print("1. Basket")
-    print("2. Bowling")
+    print("2. Bowl")
     print("3. Reload")
     print("4. Volley")
     print("5. Bomb (Rainbomb)")
