@@ -269,6 +269,13 @@ function startConnection() {
                 updateRainbombCounts("p1", data.rainbomb_p1);
                 updateRainbombCounts("p2", data.rainbomb_p2);
                 break;
+            case "statistics":
+                // Update mean and median response times for gun and ai actions
+                document.getElementById("mean_response_time_gun").textContent = data.mean_response_time_gun.toFixed(3);
+                document.getElementById("median_response_time_gun").textContent = data.median_response_time_gun.toFixed(3);
+                document.getElementById("mean_response_time_ai").textContent = data.mean_response_time_ai.toFixed(3);
+                document.getElementById("median_response_time_ai").textContent = data.median_response_time_ai.toFixed(3);
+                break;
             default:
                 updateInfoError(`Invalid message type received: ${data.type}`);
         }

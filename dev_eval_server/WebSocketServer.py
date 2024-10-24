@@ -304,6 +304,18 @@ async def handler(websocket):
             # Send rainbomb counts
             await ws_send_rainbomb_counts(websocket, rainbomb_counts_p1, rainbomb_counts_p2)
 
+            # Calculate and send statistics for gun and AI actions
+            mean_gun = statistics.mean(response_time_gun) if response_time_gun else client.timeout
+            median_gun = statistics.median(response_time_gun) if response_time_gun else client.timeout
+
+            mean_ai = statistics.mean(response_time_ai) if response_time_ai else client.timeout
+            median_ai = statistics.median(response_time_ai) if response_time_ai else client.timeout
+
+            # Send the statistics to the frontend
+            await ws_send_statistics(websocket, mean_gun, median_gun, mean_ai, median_ai)
+
+            # Move forward
+
             # Move forward
             client.move_forward()
 
@@ -335,6 +347,19 @@ async def send_stat(accuracy, component, response_times, websocket, timeout):
     message = "{comp}-- accuracy={acc}; Response time (mean):{mean:.2f} (median):{median:.2f}" \
         .format(comp=component, acc=accuracy, mean=mean, median=median)
     await ws_send_info(websocket, message)
+
+async def ws_send_statistics(websocket, mean_gun, median_gun, mean_ai, median_ai):
+    """
+    Send the response time statistics (mean and median) for both gun and AI actions to the web client.
+    """
+    data = {
+        "type": "statistics",  # Add a new type for statistics
+        "mean_response_time_gun": mean_gun,
+        "median_response_time_gun": median_gun,
+        "mean_response_time_ai": mean_ai,
+        "median_response_time_ai": median_ai
+    }
+    await websocket.send(json.dumps(data))
 
 
 async def main():
