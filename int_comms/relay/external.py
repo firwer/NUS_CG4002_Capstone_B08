@@ -176,14 +176,20 @@ def begin_external(sendToGameServerQueue: Queue, receiveFromGameServerQueue0: Qu
     send_thread.join()
     receive_thread.join()
 
+##
+## Simulation Code Below
+##
+##
 
 def get_user_input(sendToGameServerQueue: Queue):
+    adc_counter = 0
     while True:
         user_input = input("\nEnter packet type to send: ")
         # Map user input to packet types
         packet_type = user_input.strip().upper()
         if packet_type == 'IMU':
             packet = sim_get_packet(PACKET_DATA_IMU)
+            packet.adc = adc_counter
         elif packet_type == 'BULLET':
             packet = sim_get_packet(PACKET_DATA_BULLET)
         elif packet_type == 'HEALTH':
@@ -197,6 +203,7 @@ def get_user_input(sendToGameServerQueue: Queue):
             print(f"Sending {i+1}/60 packet")
             time.sleep(0.01)
             sendToGameServerQueue.put(packet)
+        adc_counter += 1
 
 
 # This is only for testing/simulation purposes. Actual internal comms side entry point is not here.
@@ -210,15 +217,15 @@ def simulate():
     ext_logger.debug("External comms liaison connected!")
     receiveQueues = [receiveFromGameServerQueue0, receiveFromGameServerQueue1]
     send_thread = Thread(target=send_queue_handler, args=(wsController, sendToGameServerQueue))
-    receive_thread = Thread(target=receive_queue_handler, args=(wsController, receiveQueues))
+    #receive_thread = Thread(target=receive_queue_handler, args=(wsController, receiveQueues))
 
     send_thread.start()
-    receive_thread.start()
+    #receive_thread.start()
 
     get_user_input(sendToGameServerQueue)
 
     send_thread.join()
-    receive_thread.join()
+    #receive_thread.join()
 
 
 

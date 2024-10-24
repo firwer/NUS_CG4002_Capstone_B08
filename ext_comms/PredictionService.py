@@ -93,7 +93,7 @@ class PredictionServiceProcess:
 
                 # Collect remaining packets with timeout
                 while len(dataBuf) < config.GAME_AI_PACKET_COUNT:
-                    imu_packet_new = await asyncio.wait_for(input_queue.get(), timeout=30)
+                    imu_packet_new = await asyncio.wait_for(input_queue.get(), timeout=15)
                     curr_imu_count = imu_packet_new.adc
                     dataBuf.append(imu_packet_new)
                     print(f"Player {player_id}: Collected {len(dataBuf)}/{config.GAME_AI_PACKET_COUNT} IMU packets.")
@@ -120,7 +120,6 @@ class PredictionServiceProcess:
                     print(f"Player {player_id}: Sent prediction to output queue.")
 
                     prev_imu_count = curr_imu_count
-
             except asyncio.TimeoutError:
                 print(f"Player {player_id}: Timeout while waiting for IMU packets. Clearing buffer.")
             except Exception as e:
