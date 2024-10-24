@@ -21,9 +21,6 @@
 #define MPU_SAMPLING_RATE 40
 #define NUM_RECORDED_POINTS 64
 
-const uint8_t PLAYER_1_ADDRESS = 0x23; // 8-bits, no need for 16-bits
-const uint8_t PLAYER_2_ADDRESS = 0x77;
-
 // Queue reduced to save memory
 ArduinoQueue<uint16_t> soundQueue(10); // Tones are now stored in 16-bit integers
 
@@ -81,8 +78,16 @@ struct CalibrationData
   int16_t zgoffset;
 };
 
+struct PlayerInfo
+{
+  uint8_t player_address;
+};
+
+PlayerInfo playerInfo;
+const uint8_t PLAYER_ADDRESS = EEPROM.get(0, playerInfo.player_address);
+
 CalibrationData calibrationData;
-uint8_t recordedPoints = 0; // Max 40, 8-bits is enough
+uint8_t recordedPoints = 0;
 
 void motionDetected();
 void sendIMUData();
@@ -102,24 +107,8 @@ void setup()
     while (1)
       ;
   }
-  // THIS IS RED GLOVE CALIBRATION DATA
-  calibrationData.xoffset = -1021;
-  calibrationData.yoffset = -898;
-  calibrationData.zoffset = 1591;
-  calibrationData.xgoffset = 6;
-  calibrationData.ygoffset = -38;
-  calibrationData.zgoffset = 31;
-  // THIS IS GREEN GLOVE CALIBRATION DATA the one with the capacitor
-  //  calibrationData.xoffset = -2322 ;
-  //  calibrationData.yoffset = -1300;
-  //  calibrationData.zoffset = 981;
-  //  calibrationData.xgoffset = 103;
-  //  calibrationData.ygoffset = -27;
-  //  calibrationData.zgoffset = 3;
 
-  // EEPROM.put(0, PLAYER_1_ADDRESS); //TODO: Store in EEPROM
-  // EEPROM.put(0, PLAYER_2_ADDRESS); //TODO: Store in EEPROM
-  // EEPROM.put(1, calibrationData); //TODO: Store in EEPROM
+  EEPROM.get(1, calibrationData); // TODO: Store in EEPROM
 
   mpu.setXAccelOffset(calibrationData.xoffset);
   mpu.setYAccelOffset(calibrationData.yoffset);
@@ -145,8 +134,6 @@ void setup()
   pinMode(FLEX_SENSOR_PIN, INPUT);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
 
-  // Serial.print(F("Send IR signals at pin "));
-  Serial.println(IR_SEND_PIN);
   IrSender.begin(IR_SEND_PIN);
 
   // COMMUNICATION @wanlin
@@ -199,7 +186,7 @@ void loop()
   {
     if (curr_bulletsLeft > 0)
     {
-      IrSender.sendNEC2(PLAYER_1_ADDRESS, 0x23, 0);
+      IrSender.sendNEC2(PLAYER_ADDRESS, 0x23, 0);
       curr_bulletsLeft--;
       soundQueue.enqueue(soundList[curr_bulletsLeft]);
       // @wanlin
@@ -243,7 +230,7 @@ void loop()
       // @wanlin
       ic_push_imu(mpuData, actionCounter);
       ic_udp_quicksend();
-     // communicate();
+      // communicate();
 
       lastSampleTime = millis();
       recordedPoints++;
