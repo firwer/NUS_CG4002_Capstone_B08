@@ -3,7 +3,7 @@
 #include <Tone.h>
 #include <cppQueue.h>
 #include <ArduinoQueue.h>
-
+#include <EEPROM.h>
 // Include communication logic
 #include "internal.hpp"
 #include "packet.h"
@@ -18,8 +18,8 @@
 #define MAX_HEALTH 100
 #define MAX_SHIELD_VALUE 30
 
-const uint16_t PLAYER_1_ADDRESS = 0x23; // Address of player 1
-const uint16_t PLAYER_2_ADDRESS = 0x77; // Address of player 2 <--
+
+// const uint16_t PLAYER_2_ADDRESS = 0x77; // Address of player 2 <--
 
 bool isShot = false;    // to send to game engine
 bool isRespawn = false; // to integrate with game engine
@@ -95,10 +95,15 @@ const int shieldNotes[7][3] = {
     {NOTE_F4, NOTE_A4, NOTE_C5},
     {NOTE_G4, NOTE_B4, NOTE_D5},
     {NOTE_A4, NOTE_C5, NOTE_E5},
-    {NOTE_B4, NOTE_D5, NOTE_FS5}}
+    {NOTE_B4, NOTE_D5, NOTE_FS5}};
 
-void
-playHealthDecrementTune(uint8_t health);
+struct OppPlayerInfo{
+    int8_t oppPlayerAddress;
+};
+OppPlayerInfo opponent;
+const uint16_t OPP_PLAYER_ADDRESS = EEPROM.get(0,opponent.oppPlayerAddress); 
+
+void playHealthDecrementTune(uint8_t health);
 void playStartupTune();
 void playDeathTune();
 
@@ -115,6 +120,8 @@ void setup()
         ; // Wait for Serial to become available.
 
     // Start the receiver and enable feedback on the built-in LED
+
+    
     melody.begin(BUZZER_PIN);
     IrReceiver.begin(IR_RECEIVE_PIN, ENABLE_LED_FEEDBACK);
     pinMode(LED_BUILTIN, OUTPUT);
@@ -183,7 +190,7 @@ void loop()
     //==========================IR Receiver SubRoutine ==========================
     if (IrReceiver.decode())
     {
-        if (IrReceiver.decodedIRData.address == PLAYER_1_ADDRESS)
+        if (IrReceiver.decodedIRData.address == OPP_PLAYER_ADDRESS)
         {
 
             if (curr_shieldValue > 0)
