@@ -89,12 +89,12 @@ class Beetle:
         self.gx = []
         self.gy = []
         self.gz = []
-        # basket, bowling, reload, volley, rainbomb, shield, logout
-        self.GESTURE = "basket"
-        self.filename = "debug"
+        # basket, bowling, reload, volley, rainbomb, shield, logout,invalid
+        self.GESTURE = "invalid"
+        self.filename = "nich_red"
         self.EXPECTED_PKTS = 60
         self.CURRENT_PKTS = 0
-        self.ROWS_TO_COLLECT = 60 # CONFIGURE ME - THIS CONTROLS HOW MANY ROWS  
+        self.ROWS_TO_COLLECT = 10 # CONFIGURE ME - THIS CONTROLS HOW MANY ROWS  
         self.ROWS_LEFT = self.ROWS_TO_COLLECT 
         self.PREV_ADC = -1
 
