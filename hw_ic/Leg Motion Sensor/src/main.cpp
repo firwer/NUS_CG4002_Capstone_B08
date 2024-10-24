@@ -3,7 +3,6 @@
 #include <EEPROM.h>
 #include "internal.hpp"
 #include "packet.h"
-#include <MPU6050.h>
 #include <Kalman.h>
 #include <ArduinoQueue.h>
 #include <Tone.h>
@@ -169,10 +168,6 @@ void detectKick()
       movingAverage -= movingAverageQueue.dequeue();
       movingAverageQueue.enqueue(accelZReal);
       movingAverage += accelZReal;
-      Serial.print("Moving Average: ");
-      Serial.println(movingAverage / MOVING_AVERAGE_SIZE);
-      Serial.print("Pitch: ");
-      Serial.println(pitch);
       if ((accelZReal / MOVING_AVERAGE_SIZE) < ACCEL_THRESHOLD && pitch < KICK_ANGLE)
       {
         // Debounce to avoid multiple detections
