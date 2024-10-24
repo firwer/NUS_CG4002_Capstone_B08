@@ -1,4 +1,5 @@
 import json
+import struct
 from logging import Logger
 import logging
 import os
@@ -9,6 +10,8 @@ from queue import Queue
 from threading import Thread
 
 import config
+from int_comms.hardcoded_imu import basket_packets, bowling_packets, reload_packets, volley_packets, rainbomb_packets, \
+    shield_packets, logout_packets
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from comms.TCPC_Controller_Sync import TCPC_Controller_Sync
@@ -97,7 +100,6 @@ def begin_external(sendToGameServerQueue: Queue, receiveFromGameServerQueue0: Qu
 ## HW Simulator Code Below
 ##
 ##
-
 def sim_get_packet(type):
     """Chooses a packet to send to the external comms side."""
     if type == PACKET_DATA_IMU:
@@ -127,28 +129,85 @@ def sim_get_packet(type):
     assert False  # this should never trigger!
 
 
+# Function to convert IMU data into byte array for PacketImu
+def create_packet_from_imu_data(imu_data):
+    # Convert IMU data to a byte array (each sensor value is 2 bytes - 16-bit signed integer)
+    byte_array = bytearray()
+
+    # Add the packet type (for simplicity, we'll assume it's 1 byte; you can adjust as needed)
+    byte_array.append(PACKET_DATA_IMU)
+
+    # Seq_num and adc are placeholders (assuming 1 byte each)
+    byte_array.append(0)  # Placeholder for seq_num
+    byte_array.append(0)  # Placeholder for adc
+
+    # Convert each IMU value into 2 bytes (16-bit signed integer) and append to the byte array
+    byte_array.extend(struct.pack('<h', imu_data['ax']))  # Convert ax to 2 bytes
+    byte_array.extend(struct.pack('<h', imu_data['ay']))  # Convert ay to 2 bytes
+    byte_array.extend(struct.pack('<h', imu_data['az']))  # Convert az to 2 bytes
+    byte_array.extend(struct.pack('<h', imu_data['gx']))  # Convert gx to 2 bytes
+    byte_array.extend(struct.pack('<h', imu_data['gy']))  # Convert gy to 2 bytes
+    byte_array.extend(struct.pack('<h', imu_data['gz']))  # Convert gz to 2 bytes
+
+    # Add 4 bytes of padding
+    byte_array.extend(bytearray(4))
+
+    # Add a placeholder for CRC8 (1 byte)
+    byte_array.append(0)  # Placeholder for CRC8
+
+    # Ensure the byte array has a total of 20 bytes (if something is missing, add padding)
+    while len(byte_array) < 20:
+        byte_array.append(0)
+
+    return byte_array
+
+
+def create_imu_packets(imu_data_list):
+    packets = []
+
+    for imu_data in imu_data_list:
+        byte_array = create_packet_from_imu_data(imu_data)
+        packet = PacketImu(byteArray=byte_array)  # Create a PacketImu instance with the byte array
+        packets.append(packet)
+
+    return packets
+
+
 def get_user_input(sendToGameServerQueue: Queue):
     adc_counter = 0
+    pkts = []
     while True:
         user_input = input("\nEnter packet type to send: ")
         # Map user input to packet types
         packet_type = user_input.strip().upper()
-        if packet_type == 'IMU':
-            packet = sim_get_packet(PACKET_DATA_IMU)
-            packet.adc = adc_counter
-        elif packet_type == 'BULLET':
-            packet = sim_get_packet(PACKET_DATA_BULLET)
+        if packet_type == 'BASKET':
+            pkts = create_imu_packets(basket_packets)
+        elif packet_type == 'BOWLING':
+            pkts = create_imu_packets(bowling_packets)
+        elif packet_type == 'RELOAD':
+            pkts = create_imu_packets(reload_packets)
+        elif packet_type == 'VOLLEY':
+            pkts = create_imu_packets(volley_packets)
+        elif packet_type == 'BOMB':
+            pkts = create_imu_packets(rainbomb_packets)
+        elif packet_type == 'SHIELD':
+            pkts = create_imu_packets(shield_packets)
+        elif packet_type == 'LOGOUT':
+            pkts = create_imu_packets(logout_packets)
+        elif packet_type == 'GUN':
+            pkts = [sim_get_packet(PACKET_DATA_BULLET)]
         elif packet_type == 'HEALTH':
-            packet = sim_get_packet(PACKET_DATA_HEALTH)
-        elif packet_type == 'KICK':
-            packet = sim_get_packet(PACKET_DATA_KICK)
+            pkts = [sim_get_packet(PACKET_DATA_HEALTH)]
+        elif packet_type == 'SOCCER':
+            pkts = [sim_get_packet(PACKET_DATA_KICK)]
         else:
             print("Invalid packet type.")
             continue
-        for i in range(60):
+        for i, n in enumerate(pkts):
+            n.adc = adc_counter
             print(f"Sending {i + 1}/60 packet")
             time.sleep(0.01)
-            sendToGameServerQueue.put(packet)
+            sendToGameServerQueue.put(n)
         adc_counter += 1
 
 
@@ -164,6 +223,7 @@ def start_simulate():
     receiveQueues = [receiveFromGameServerQueue0, receiveFromGameServerQueue1]
     send_thread = Thread(target=send_queue_handler, args=(wsController, sendToGameServerQueue))
     #receive_thread = Thread(target=receive_queue_handler, args=(wsController, receiveQueues))
+
     send_thread.start()
     #receive_thread.start()
 

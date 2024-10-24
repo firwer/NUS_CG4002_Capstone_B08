@@ -227,11 +227,10 @@ async def handler(websocket):
         num_actions_matched_gun = 0
         num_actions_matched_ai  = 0
 
-        # Initialize rainbomb counts
-        rainbomb_counts_p1 = {quadrant: 0 for quadrant in range(1, 5)}
-        rainbomb_counts_p2 = {quadrant: 0 for quadrant in range(1, 5)}
-
         while client.is_running:
+            # Initialize rainbomb counts
+            rainbomb_counts_p1 = {quadrant: 0 for quadrant in range(1, 5)}
+            rainbomb_counts_p2 = {quadrant: 0 for quadrant in range(1, 5)}
             # Display positions
             pos_1, pos_2 = client.current_positions()
             await ws_send_positions(websocket, pos_1, pos_2)

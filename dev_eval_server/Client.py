@@ -241,7 +241,6 @@ class Client:
             # check if the action and game state match
         else:
             message = "Timeout"
-
         return action_match, player_id, message, action, response_time, timeout, game_state_expected, game_state_received, expected_action, user_action
 
     def move_forward (self):

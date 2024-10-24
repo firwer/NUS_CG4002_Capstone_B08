@@ -9,7 +9,7 @@ from bluepy import btle
 from packet import * 
 from checksum import *
 import threading
-import external
+import external_p1
 import external_p2
 # RED == PLAYER 1
 BLUNO_P1_GLOVE_MAC = "F4:B8:5E:42:6D:49" # TO BE USED FOR EVAL

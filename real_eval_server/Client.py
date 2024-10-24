@@ -220,6 +220,8 @@ class Client:
                                                   game_state_received=received_game_state,
                                                   game_state_expected=self.simulator.get_game_state_dict())
 
+                    print(
+                        f"Expected: {current_action}\nActual: {action}\nResponse time for player {player_id} : {response_time}\n")
             except (ValueError, TypeError):  # includes simplejson.decoder.JSONDecodeError
                 message = 'Decoding JSON has failed'
                 ice_print_group_name(self.group_name, "handle_a_player: " + message)
@@ -227,7 +229,6 @@ class Client:
             # check if the action and game state match
         else:
             message = "Timeout"
-
         return action_match, player_id, message, action, response_time, timeout
 
     def move_forward (self):
