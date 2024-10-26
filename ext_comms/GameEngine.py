@@ -4,6 +4,7 @@ import json
 import config
 from EvaluationProcess import start_evaluation_process
 from GameLogicProcess import game_state_manager
+from GameLogicProcess import getVState
 from PredictionService import PredictionServiceProcess
 from comms.AsyncMQTTController import AsyncMQTTController
 from comms.TCPS_Controller import TCPS_Controller
@@ -265,6 +266,9 @@ class GameEngine:
             start_evaluation_process(eval_server_port=self.eval_server_port,
                                      receive_queue=self.evaluation_server_to_engine_queue,
                                      send_queue=self.engine_to_evaluation_server_queue),
+                                     
+            getVState(visualizer_receive_queue=self.visualizer_to_engine_queue_p1),
+            getVState(visualizer_receive_queue=self.visualizer_to_engine_queue_p2),
 
             self.game_data_process(1),
             self.game_data_process(2)
@@ -292,7 +296,6 @@ class GameEngine:
             # Verify FOV with visualizer and update game state
             await game_state_manager(currGameData=self.currGameData, attacker_id=player_id,
                                      pred_output_queue=pred_output_queue,
-                                     visualizer_receive_queue=visualizer_receive_queue,
                                      visualizer_send_queue=visualizer_send_queue,
                                      gun_state_queue=gun_state_queue)
             print("EVALUATING...")
