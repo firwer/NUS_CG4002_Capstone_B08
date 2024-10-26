@@ -10,7 +10,8 @@ from queue import Queue
 from threading import Thread
 
 import config
-from int_comms.hardcoded_imu import basket_packets, bowling_packets, reload_packets, volley_packets, rainbomb_packets, \
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from hardcoded_imu import basket_packets, bowling_packets, reload_packets, volley_packets, rainbomb_packets, \
     shield_packets, logout_packets
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
