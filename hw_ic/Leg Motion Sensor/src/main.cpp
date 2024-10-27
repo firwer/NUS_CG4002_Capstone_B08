@@ -175,7 +175,6 @@ void detectKick()
         {
           isKickDetected = true;
           lastKickTime = millis();
-          Serial.println("Kick Detected");
         }
       }
     }

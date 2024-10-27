@@ -18,7 +18,6 @@
 #define MAX_HEALTH 100
 #define MAX_SHIELD_VALUE 30
 
-
 // const uint16_t PLAYER_2_ADDRESS = 0x77; // Address of player 2 <--
 
 bool isShot = false;    // to send to game engine
@@ -97,11 +96,12 @@ const int shieldNotes[7][3] = {
     {NOTE_A4, NOTE_C5, NOTE_E5},
     {NOTE_B4, NOTE_D5, NOTE_FS5}};
 
-struct OppPlayerInfo{
+struct OppPlayerInfo
+{
     int8_t oppPlayerAddress;
 };
 OppPlayerInfo opponent;
-const uint16_t OPP_PLAYER_ADDRESS = EEPROM.get(0,opponent.oppPlayerAddress); 
+const uint16_t OPP_PLAYER_ADDRESS = EEPROM.get(0, opponent.oppPlayerAddress);
 
 void playHealthDecrementTune(uint8_t health);
 void playStartupTune();
@@ -112,6 +112,7 @@ void playCriticalHealthTune();                            // TODO: Integrate wit
 void playVibration(uint16_t duration);
 void playShieldTunes(uint8_t incoming_shieldState);
 void shieldHealthSync(uint8_t incoming_shieldState);
+void playBLEFeedback();
 
 void setup()
 {
@@ -121,7 +122,6 @@ void setup()
 
     // Start the receiver and enable feedback on the built-in LED
 
-    
     melody.begin(BUZZER_PIN);
     IrReceiver.begin(IR_RECEIVE_PIN, ENABLE_LED_FEEDBACK);
     pinMode(LED_BUILTIN, OUTPUT);
@@ -136,17 +136,20 @@ packet_gamestate_t pkt;
 void loop()
 {
     //==========================Game Engine SubRoutine =====================
-    //@wanlin
-    communicate();
+    // @nichyjt
+    if (communicate())
+    {
+        playBLEFeedback();
+    }
     pkt = ic_get_state();
     if (pkt.packet_type == PACKET_DATA_GAMESTATE && pkt.health_num != curr_healthValue)
     {
         healthSynchronisation(pkt.health_num);
     }
-    // if (pkt.packet_type == PACKET_DATA_GAMESTATE && pkt.shield_health != curr_shieldValue)
-    // {
-    //     shieldHealthSync(pkt.shield_health);
-    // }
+    if (pkt.packet_type == PACKET_DATA_GAMESTATE && pkt.shield_num != curr_shieldValue)
+    {
+        shieldHealthSync(pkt.shield_num);
+    }
 
     //==========================Buzzer and Health Update SubRoutine ==========================
     if (millis() - lastSoundTime > NOTE_DELAY)
@@ -197,7 +200,8 @@ void loop()
             {
                 curr_shieldValue -= BULLET_DAMAGE;
                 playShieldTunes(curr_shieldValue);
-                // ic_push_shieldHealth(curr_shieldValue);
+                // @nichyjt
+                ic_push_shieldHealth(curr_shieldValue); // do we need this?
                 playVibration(500);
                 communicate();
             }
@@ -278,6 +282,13 @@ void playCriticalHealthTune()
     noteQueue.enqueue(NOTE_D6);
     noteQueue.enqueue(NOTE_A5);
     noteQueue.enqueue(NOTE_REST);
+}
+
+void playBLEFeedback()
+{
+    noteQueue.enqueue(NOTE_F6);
+    noteQueue.enqueue(NOTE_G6);
+    noteQueue.enqueue(NOTE_A6);
 }
 
 /*

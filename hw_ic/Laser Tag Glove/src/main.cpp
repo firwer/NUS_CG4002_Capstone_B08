@@ -96,7 +96,7 @@ void playNoBulletsLeftTone();
 void playFullMagazineTone();
 void playMotionFeedback();
 void playMotionEndFeedback();
-
+void playBLEFeedback();
 void setup()
 {
   Serial.begin(115200);
@@ -147,7 +147,10 @@ void loop()
 {
   // @wanlin
   // Synchronize the bullet state
-  communicate();
+  if (communicate())
+  {
+    playBLEFeedback();
+  }
   pkt = ic_get_state();
   if (pkt.packet_type == PACKET_DATA_GAMESTATE)
   {
@@ -219,13 +222,13 @@ void loop()
       // then multiply by 9.81 to get m/s^2
       // multiply by 100 to get integers
       // CHANGE THIS SHIT TODO TODO CHANGE CHANGE
-      mpuData.ax = (((mpuData.ax) / 32767.0) * 8.0 * 9.81) * 100;
-      mpuData.ay = (((mpuData.ay) / 32767.0) * 8.0 * 9.81) * 100;
-      mpuData.az = (((mpuData.az) / 32767.0) * 8.0 * 9.81) * 100;
+      mpuData.ax = (((mpuData.ax) / 32767.0) * 4.0 * 9.81) * 100;
+      mpuData.ay = (((mpuData.ay) / 32767.0) * 4.0 * 9.81) * 100;
+      mpuData.az = (((mpuData.az) / 32767.0) * 4.0 * 9.81) * 100;
       // same for gyroscope scaling
-      mpuData.gx = (((mpuData.gx) / 32767.0) * 500.0) * 100;
-      mpuData.gy = (((mpuData.gy) / 32767.0) * 500.0) * 100;
-      mpuData.gz = (((mpuData.gz) / 32767.0) * 500.0) * 100;
+      mpuData.gx = (((mpuData.gx) / 32767.0) * 250.0) * 100;
+      mpuData.gy = (((mpuData.gy) / 32767.0) * 250.0) * 100;
+      mpuData.gz = (((mpuData.gz) / 32767.0) * 250.0) * 100;
 
       // @wanlin
       ic_push_imu(mpuData, actionCounter);
@@ -274,6 +277,13 @@ void playFullMagazineTone()
   soundQueue.enqueue(NOTE_C5);
   soundQueue.enqueue(NOTE_A5);
   soundQueue.enqueue(NOTE_C6);
+}
+
+void playBLEFeedback()
+{
+  noteQueue.enqueue(NOTE_F6);
+  noteQueue.enqueue(NOTE_G6);
+  noteQueue.enqueue(NOTE_A6);
 }
 
 void motionDetected()
