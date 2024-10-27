@@ -298,23 +298,13 @@ class GameEngine:
             ).run(),
 
             # Start Evaluation Server Process
-            start_evaluation_process(
-                eval_server_port=self.eval_server_port,
-                receive_queue=self.evaluation_server_to_engine_queue,
-                send_queue=self.engine_to_evaluation_server_queue
-            ),
+            start_evaluation_process(eval_server_port=self.eval_server_port,
+                                     receive_queue=self.evaluation_server_to_engine_queue,
+                                     send_queue=self.engine_to_evaluation_server_queue),
 
-            # Start Visualizer State Handlers
-            getVState(
-                visualizer_receive_queue=self.visualizer_to_engine_queue_p1,
-                player_id=1
-            ),
-            getVState(
-                visualizer_receive_queue=self.visualizer_to_engine_queue_p2,
-                player_id=2
-            ),
+            getVState(visualizer_receive_queue=self.visualizer_to_engine_queue_p1, player_id=1),
+            getVState(visualizer_receive_queue=self.visualizer_to_engine_queue_p2, player_id=2),
 
-            # Start Game Data Processes for Both Players
             self.game_data_process(1),
             self.game_data_process(2)
         ]
@@ -342,20 +332,17 @@ class GameEngine:
         while True:
             try:
                 # Verify FOV with visualizer and update game state
-                await game_state_manager(
-                    currGameData=self.currGameData,
-                    attacker_id=player_id,
-                    pred_output_queue=pred_output_queue,
-                    visualizer_send_queue=visualizer_send_queue,
-                    gun_state_queue=gun_state_queue
-                )
+                await game_state_manager(currGameData=self.currGameData, attacker_id=player_id,
+                                         pred_output_queue=pred_output_queue,
+                                         gun_state_queue=gun_state_queue)
                 # Send updated game state to evaluation server
-                await evaluation_server_job(
-                    curr_game_data=self.currGameData,
-                    player_id=player_id,
-                    eval_input_queue=self.engine_to_evaluation_server_queue,
-                    eval_output_queue=self.evaluation_server_to_engine_queue
-                )
+                await evaluation_server_job(curr_game_data=self.currGameData,
+                                            player_id=player_id,
+                                            eval_input_queue=self.engine_to_evaluation_server_queue,
+                                            eval_output_queue=self.evaluation_server_to_engine_queue)
+
+                # Send updated game state to visualizer
+                await visualizer_send_queue.put("gs_" + self.currGameData.to_json(player_id))  # Add gs_ prefix to indicate game
 
                 logger.info(f"[P{player_id}] Returning Game State To Relay Node: {self.currGameData.to_json(player_id)}")
                 # Send validated/verified game state to relay node
