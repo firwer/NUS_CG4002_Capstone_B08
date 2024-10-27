@@ -1,15 +1,19 @@
+# PredictionService.py
 import asyncio
 import os
-import random
 import sys
-import time
 
+from logger_config import setup_logger
 import config
-from int_comms.relay.packet import PacketImu
 
+# Ensure correct path
 sys.path.append('/home/xilinx/IP')
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+import int_comms.relay.packet
 from AIClass import AI
+
+logger = setup_logger(__name__)
 
 
 def assemble_data(buffer):
@@ -37,7 +41,7 @@ def assemble_data(buffer):
 
     # Combine all sensor readings
     combined_input = ax_list + ay_list + az_list + gx_list + gy_list + gz_list
-
+    logger.debug(f"Assembled data from buffer with {len(buffer)} packets.")
     return combined_input
 
 
@@ -55,11 +59,18 @@ class PredictionServiceProcess:
         self.lock = asyncio.Lock()  # To synchronize AI access
 
     async def initialize_ai(self):
-        self.ai_inference = AI()
+        try:
+            self.ai_inference = AI()
+            logger.info("AI Inference engine initialized successfully.")
+        except Exception as e:
+            logger.exception(f"Failed to initialize AI Inference engine: {e}")
 
     async def run(self):
         await self.initialize_ai()
-        print("Prediction Service initialized.")
+        if self.ai_inference is None:
+            logger.critical("AI Inference engine not initialized. Exiting PredictionServiceProcess.")
+            return
+        logger.info("Prediction Service started.")
 
         task_p1 = asyncio.create_task(self.process_player(player_id=1))
         task_p2 = asyncio.create_task(self.process_player(player_id=2))
@@ -70,6 +81,7 @@ class PredictionServiceProcess:
         """
         Process IMU packets for a specific player.
         """
+        logger.debug(f"[P{player_id}] Starting prediction processing service")
         curr_imu_count = -1
         prev_imu_count = -1
         dataBuf = []
@@ -80,7 +92,7 @@ class PredictionServiceProcess:
             input_queue = self.predict_input_queue_p2
             output_queue = self.predict_output_queue_p2
         else:
-            print(f"Invalid player_id: {player_id}")
+            logger.error(f"Invalid player_id: {player_id}")
             return
         while True:
             try:
@@ -88,39 +100,42 @@ class PredictionServiceProcess:
                 # Wait for the first packet from stream
                 imu_packet = await input_queue.get()
                 if imu_packet.adc == prev_imu_count:
+                    logger.debug(f"[P{player_id}] Duplicate IMU packet detected. Skipping.")
                     continue
                 dataBuf.append(imu_packet)
+                logger.debug(f"[P{player_id}] Collected 1/{config.GAME_AI_PACKET_COUNT} IMU packets.")
 
                 # Collect remaining packets with timeout
                 while len(dataBuf) < config.GAME_AI_PACKET_COUNT:
                     imu_packet_new = await asyncio.wait_for(input_queue.get(), timeout=15)
                     curr_imu_count = imu_packet_new.adc
                     dataBuf.append(imu_packet_new)
-                    print(f"Player {player_id}: Collected {len(dataBuf)}/{config.GAME_AI_PACKET_COUNT} IMU packets.")
+                    logger.debug(
+                        f"[P{player_id}] Collected {len(dataBuf)}/{config.GAME_AI_PACKET_COUNT} IMU packets.")
 
                 if len(dataBuf) == config.GAME_AI_PACKET_COUNT:
                     # Assemble data for AI
                     combined_input = assemble_data(dataBuf)
-                    print(f"Player {player_id}: Assembled {len(combined_input)} data points for AI prediction.")
+                    logger.info(f"[P{player_id}] Assembled {len(combined_input)} data points for AI prediction.")
 
                     # Acquire lock to perform AI prediction
                     async with self.lock:
-                        print(f"Player {player_id}: Acquired AI lock. Performing prediction.")
+                        logger.debug(f"[P{player_id}] Acquired AI lock. Performing prediction.")
                         # Offload AI prediction to a separate thread
                         prediction_index = await asyncio.to_thread(self.ai_inference.predict, combined_input)
-                        print(f"Player {player_id}: AI Prediction index: {prediction_index}")
+                        logger.info(f"[P{player_id}] AI Prediction index: {prediction_index}")
 
                     # Map prediction index to action
                     action_names = ["basket", "bowl", "logout", "bomb", "reload", "shield", "volley"]
                     action = action_names[prediction_index] if 0 <= prediction_index < len(action_names) else "unknown"
-                    print(f"Player {player_id}: AI Prediction: {action}")
+                    logger.info(f"[P{player_id}] AI Prediction: {action}")
 
                     # Send prediction to the respective output queue
                     await output_queue.put(action)
-                    print(f"Player {player_id}: Sent prediction to output queue.")
+                    logger.debug(f"[P{player_id}] Sent prediction to output queue.")
 
                     prev_imu_count = curr_imu_count
             except asyncio.TimeoutError:
-                print(f"Player {player_id}: Timeout while waiting for IMU packets. Clearing buffer.")
+                logger.warning(f"[P{player_id}] Timeout while waiting for IMU packets. Clearing buffer.")
             except Exception as e:
-                print(f"Player {player_id}: Error processing IMU packets: {e}")
+                logger.exception(f"[P{player_id}] Error processing IMU packets: {e}")
