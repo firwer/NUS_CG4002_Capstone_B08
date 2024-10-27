@@ -24,12 +24,12 @@ unsigned long playingFeedbackTime = 0;
 bool isKickDetected = false;
 bool playingFeedback = false;
 
-#define MPU_SAMPLE_RATE 20     // CONFIG ME
-#define MOVING_AVERAGE_SIZE 10 // CONFIG ME
+#define MPU_SAMPLE_RATE 70    // CONFIG ME
+#define MOVING_AVERAGE_SIZE 7 // CONFIG ME
 ArduinoQueue<float> movingAverageQueue(MOVING_AVERAGE_SIZE);
 float movingAverage = 0;
 const unsigned long SAMPLING_DELAY = 1000 / MPU_SAMPLE_RATE;
-const float ACCEL_THRESHOLD = -5.0; // CONFIG ME (ALSO IN M/S^2)
+const float ACCEL_THRESHOLD = -7.0; // CONFIG ME (ALSO IN M/S^2)
 const float KICK_ANGLE = 65;        // CONFIG ME
 Kalman kalmanY;                     // Kalman filter for Y (pitch)
 
@@ -75,7 +75,7 @@ void setup()
   mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_500);
 
   mpu.setDHPFMode(MPU6050_DHPF_5);
-  mpu.setDLPFMode(MPU6050_DLPF_BW_256);
+  mpu.setDLPFMode(MPU6050_DLPF_BW_98);
 
   calibration = EEPROM.get(0, calibration);
   mpu.setXAccelOffset(calibration.xoffset);
@@ -170,7 +170,7 @@ void detectKick()
       movingAverage -= movingAverageQueue.dequeue();
       movingAverageQueue.enqueue(accelZReal);
       movingAverage += accelZReal;
-      if ((accelZReal / MOVING_AVERAGE_SIZE) < ACCEL_THRESHOLD && pitch < KICK_ANGLE)
+      if ((accelZReal / MOVING_AVERAGE_SIZE) < ACCEL_THRESHOLD && pitch < KICK_ANGLE && pitch >= 0)
       {
         // Debounce to avoid multiple detections
         if (millis() - lastKickTime > KICK_DEBOUNCE_TIME)
