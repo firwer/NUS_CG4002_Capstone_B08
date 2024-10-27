@@ -9,7 +9,7 @@
 
 #define LED_OUTPUT_PIN 5
 #define IMU_INTERRUPT_PIN 2
-#define MPU_SAMPLE_RATE 50
+
 #define VIBRATOR_PIN 4
 #define FEEDBACK_PLAY_TIME 750
 #define KICK_DEBOUNCE_TIME 1000
@@ -18,17 +18,19 @@
 
 MPU6050 mpu;
 ArduinoQueue<uint16_t> noteQueue(20);
-#define MOVING_AVERAGE_SIZE 10
-ArduinoQueue<float> movingAverageQueue(MOVING_AVERAGE_SIZE);
-float movingAverage = 0;
 
 unsigned long lastSoundTime = 0;
 unsigned long playingFeedbackTime = 0;
 bool isKickDetected = false;
 bool playingFeedback = false;
 
-const float ACCEL_THRESHOLD = -5.0; // should be in terms of m/s^2
-const float KICK_ANGLE = 65;        // should be y-axis
+#define MPU_SAMPLE_RATE 20     // CONFIG ME
+#define MOVING_AVERAGE_SIZE 10 // CONFIG ME
+ArduinoQueue<float> movingAverageQueue(MOVING_AVERAGE_SIZE);
+float movingAverage = 0;
+const unsigned long SAMPLING_DELAY = 1000 / MPU_SAMPLE_RATE;
+const float ACCEL_THRESHOLD = -5.0; // CONFIG ME (ALSO IN M/S^2)
+const float KICK_ANGLE = 65;        // CONFIG ME
 Kalman kalmanY;                     // Kalman filter for Y (pitch)
 
 Tone melody;
@@ -161,7 +163,7 @@ void detectKick()
 
   pitch = kalmanY.getAngle(pitchAcc, gyroY, dt);
 
-  if (millis() - lastSampleTime >= MPU_SAMPLE_RATE)
+  if (millis() - lastSampleTime >= SAMPLING_DELAY)
   {
     if (movingAverageQueue.itemCount() == MOVING_AVERAGE_SIZE)
     {
