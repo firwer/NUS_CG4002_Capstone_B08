@@ -9,6 +9,7 @@ numOfRain_p1 = 0
 targetInFOV_p2 = False
 numOfRain_p2 = 0
 
+
 async def reduce_health(targetGameState: dict, hp_reduction: int):
     print(f"Reducing health by {hp_reduction}")
     # use the shield to protect the player
@@ -67,55 +68,44 @@ async def bomb_player(targetGameState: dict, opponentGameState: dict, can_see: b
     if can_see:
         await reduce_health(opponentGameState, config.GAME_BOMB_DMG)
 
+
 """
     This function is used to get the visualizer response which indicates whether the target is in the FOV of the attacker
     and the number of rain bombs the target is currently in
 """
+
+
 async def getVState(visualizer_receive_queue: asyncio.Queue, player_id: int):
     global targetInFOV_p1, numOfRain_p1, targetInFOV_p2, numOfRain_p2
     while True:
-        try:
-            msg = await visualizer_receive_queue.get()
-            msgStr = msg.decode()
-            if msgStr.startswith('vstate_fov_'):
-                parts = msgStr.split('_')
-                fov_bool = parts[2]
-                num_of_rain = int(parts[4])
-
-                # Update variables based on player ID
-                if player_id == 1:
-                    if fov_bool == "True":
-                        targetInFOV_p1 = True
-                    else:
-                        targetInFOV_p1 = False
-                    numOfRain_p1 = num_of_rain
-                    print(f"Updated Player 1 FOV to {targetInFOV_p1} and numOfRain to {numOfRain_p1}")
-
-                elif player_id == 2:
-                    if fov_bool == "True":
-                        targetInFOV_p2 = True
-                    else:
-                        targetInFOV_p2 = False
-                    numOfRain_p2 = num_of_rain
-                    print(f"Updated Player 2 FOV to {targetInFOV_p2} and numOfRain to {numOfRain_p2}")
-
-
+        msg = await visualizer_receive_queue.get()
+        msgStr = msg.decode()
+        if msgStr.startswith('vstate_fov_'):
+            parts = msgStr.split('_')
+            fov_bool = parts[2]
+            num_of_rain = int(parts[4])
+            # Update variables based on player ID
+            if player_id == 1:
                 if fov_bool == "True":
-                    print("Target is in FOV, Valid attack")
-                    targetInFOV = True
-                elif fov_bool == "False":
-                    print("Target is not in FOV, Invalid attack")
-                    targetInFOV = False
-        except asyncio.TimeoutError:
-            print("Visualizer did not respond in time. Default True")
-            targetInFOV = True
+                    targetInFOV_p1 = True
+                else:
+                    targetInFOV_p1 = False
+                numOfRain_p1 = num_of_rain
+                print(f"Player 1: Opponent P2 FOV - {targetInFOV_p1} and numOfRain to {numOfRain_p1}")
+
+            elif player_id == 2:
+                if fov_bool == "True":
+                    targetInFOV_p2 = True
+                else:
+                    targetInFOV_p2 = False
+                numOfRain_p2 = num_of_rain
+                print(f"Player 2: Opponent P1 FOV - {targetInFOV_p2} and numOfRain to {numOfRain_p2}")
 
 
 async def game_state_manager(currGameData, attacker_id: int,
                              pred_output_queue: asyncio.Queue,
                              visualizer_send_queue: asyncio.Queue,
                              gun_state_queue: asyncio.Queue):
-    
     global targetInFOV_p1, numOfRain_p1, targetInFOV_p2, numOfRain_p2
 
     prediction_action = await pred_output_queue.get()
@@ -133,7 +123,7 @@ async def game_state_manager(currGameData, attacker_id: int,
         currGameData.p2.action = prediction_action
         targetPlayerData = currGameData.p2.game_state
         OpponentPlayerData = currGameData.p1.game_state
-    
+
     # Handle rain bomb damage
     if targetInFOV:
         for _ in range(numOfRain):
@@ -161,7 +151,6 @@ async def game_state_manager(currGameData, attacker_id: int,
         if targetInFOV:
             await reduce_health(OpponentPlayerData, config.GAME_AI_DMG)
     elif prediction_action == "logout":
-        # TODO: Implement logout action
         print("User logout")
     else:
         print("Invalid action received. Doing nothing.")
