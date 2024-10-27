@@ -267,8 +267,8 @@ class GameEngine:
                                      receive_queue=self.evaluation_server_to_engine_queue,
                                      send_queue=self.engine_to_evaluation_server_queue),
                                      
-            getVState(visualizer_receive_queue=self.visualizer_to_engine_queue_p1),
-            getVState(visualizer_receive_queue=self.visualizer_to_engine_queue_p2),
+            getVState(visualizer_receive_queue=self.visualizer_to_engine_queue_p1, player_id=1),
+            getVState(visualizer_receive_queue=self.visualizer_to_engine_queue_p2, player_id=2),
 
             self.game_data_process(1),
             self.game_data_process(2)
