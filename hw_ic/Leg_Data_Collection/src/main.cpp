@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <IRremote.hpp>
 #include <MPU6050.h>
 #include <Tone.h>
 #include <ArduinoQueue.h>
@@ -9,45 +8,16 @@
 #include "internal.hpp"
 #include "packet.h"
 
-// Define I/O pins
 #define IMU_INTERRUPT_PIN 2
-#define IR_SEND_PIN 5
-#define BUTTON_PIN 4
 #define BUZZER_PIN 3
-#define FLEX_SENSOR_PIN A0
-#define FLEX_THRESHOLD 500
 #define NOTE_DELAY 100
-#define DEBOUNCE_DELAY 50
+
 #define MPU_SAMPLING_RATE 40
 #define NUM_RECORDED_POINTS 64
 
-// Queue reduced to save memory
-ArduinoQueue<uint16_t> soundQueue(10); // Tones are now stored in 16-bit integers
-
-// Updated to uint16_t to support values up to 1000
-uint16_t soundList[10] = {
-    NOTE_C5,
-    NOTE_D5,
-    NOTE_E5,
-    NOTE_F5,
-    NOTE_G5,
-    NOTE_A5,
-    NOTE_B5,
-    NOTE_C6,
-    NOTE_D6,
-    NOTE_E6};
-
-// For gun shot
-bool isReloaded = false;
-uint8_t curr_bulletsLeft = 6;
-uint16_t flexValue = 0;
-bool isButtonPressed = false;
-bool shotBeenFired = false;
-uint8_t buttonState = HIGH;
-unsigned long lastDebounceTime = 0;
+ArduinoQueue<uint16_t> noteQueue(10); // Tones are now stored in 16-bit integers
 unsigned long lastSoundTime = 0;
-
-Tone shotFired;
+Tone melody;
 
 MPU6050 mpu;
 const unsigned long SAMPLING_DELAY = 1000 / MPU_SAMPLING_RATE;
@@ -69,24 +39,15 @@ struct CalibrationData
   int16_t zgoffset;
 };
 
-struct PlayerInfo
-{
-  uint8_t player_address;
-};
-
-PlayerInfo playerInfo;
-const uint8_t PLAYER_ADDRESS = EEPROM.get(0, playerInfo.player_address);
+uint8_t actionCounter = 0;
 
 CalibrationData calibrationData;
 uint8_t recordedPoints = 0;
-
 void motionDetected();
-void detectReloadAndSynchronise(uint8_t incoming_bulletState);
-void playNoBulletsLeftTone();
-void playFullMagazineTone();
+void playBLEFeedback();
 void playMotionFeedback();
 void playMotionEndFeedback();
-void playBLEFeedback();
+
 void setup()
 {
   Serial.begin(115200);
@@ -98,7 +59,7 @@ void setup()
       ;
   }
 
-  EEPROM.get(1, calibrationData); // TODO: Store in EEPROM
+  EEPROM.get(0, calibrationData); // TODO: Store in EEPROM
 
   mpu.setXAccelOffset(calibrationData.xoffset);
   mpu.setYAccelOffset(calibrationData.yoffset);
@@ -112,7 +73,7 @@ void setup()
 
   mpu.setDHPFMode(MPU6050_DHPF_1P25);
   mpu.setDLPFMode(MPU6050_DLPF_BW_20);
-  mpu.setMotionDetectionThreshold(60);
+  mpu.setMotionDetectionThreshold(80);
   mpu.setMotionDetectionDuration(5);
 
   mpu.setIntMotionEnabled(true);
@@ -120,81 +81,26 @@ void setup()
   pinMode(IMU_INTERRUPT_PIN, INPUT);
   attachInterrupt(digitalPinToInterrupt(IMU_INTERRUPT_PIN), motionDetected, RISING);
   pinMode(BUZZER_PIN, OUTPUT);
-  shotFired.begin(BUZZER_PIN);
-  pinMode(FLEX_SENSOR_PIN, INPUT);
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
-
-  IrSender.begin(IR_SEND_PIN);
+  melody.begin(BUZZER_PIN);
 
   // COMMUNICATION @wanlin
   while (!ic_connect())
     ;
-  playFullMagazineTone();
+  playBLEFeedback();
 }
 
-packet_gamestate_t pkt;
 void loop()
 {
-  // @wanlin
-  // Synchronize the bullet state
-  if (communicate())
-  {
-    playBLEFeedback();
-  }
-  pkt = ic_get_state();
-  if (pkt.packet_type == PACKET_DATA_GAMESTATE)
-  {
-    detectReloadAndSynchronise(pkt.bullet_num); // TODO integrate with game engine
-  }
-
-  //==================== GUN SHOT SUBROUTINE ====================
-
-  flexValue = analogRead(FLEX_SENSOR_PIN);
-  buttonState = digitalRead(BUTTON_PIN);
-  if (millis() - lastDebounceTime > DEBOUNCE_DELAY)
-  {
-    if (buttonState == LOW)
-    {
-      isButtonPressed = true;
-    }
-    else
-    {
-      isButtonPressed = false;
-      shotBeenFired = false;
-    }
-    lastDebounceTime = millis();
-  }
 
   if (millis() - lastSoundTime > NOTE_DELAY)
   {
-    if (soundQueue.itemCount() > 0)
+    if (noteQueue.itemCount() > 0)
     {
-      uint16_t note = soundQueue.dequeue();
-      shotFired.play(note, 100); // Play note for 50ms
+      uint16_t note = noteQueue.dequeue();
+      melody.play(note, 100); // Play note for 50ms
     }
     lastSoundTime = millis();
   }
-
-  if (isButtonPressed && !shotBeenFired && flexValue >= FLEX_THRESHOLD)
-  {
-    if (curr_bulletsLeft > 0)
-    {
-      IrSender.sendNEC2(PLAYER_ADDRESS, 0x23, 0);
-      curr_bulletsLeft--;
-      soundQueue.enqueue(soundList[curr_bulletsLeft]);
-      // @wanlin
-    }
-    else
-    {
-      playNoBulletsLeftTone();
-    }
-    // push bullet packet for any gun action attempted, regardless of num bullets
-    ic_push_bullet(curr_bulletsLeft);
-    communicate();
-    shotBeenFired = true;
-  }
-
-  //==================== MPU6050 SUBROUTINE====================
 
   if (isRecording)
   {
@@ -242,40 +148,6 @@ void loop()
   }
 }
 
-void detectReloadAndSynchronise(uint8_t incoming_bulletState)
-{
-  if (curr_bulletsLeft == 0 && incoming_bulletState == 6)
-  {
-    playFullMagazineTone();
-    curr_bulletsLeft = 6;
-  }
-  else if (curr_bulletsLeft != incoming_bulletState)
-  {
-    curr_bulletsLeft = incoming_bulletState;
-  }
-}
-
-void playNoBulletsLeftTone()
-{
-  soundQueue.enqueue(NOTE_C6);
-  soundQueue.enqueue(NOTE_A5);
-  soundQueue.enqueue(NOTE_C5);
-}
-
-void playFullMagazineTone()
-{
-  soundQueue.enqueue(NOTE_C5);
-  soundQueue.enqueue(NOTE_A5);
-  soundQueue.enqueue(NOTE_C6);
-}
-
-void playBLEFeedback()
-{
-  noteQueue.enqueue(NOTE_F6);
-  noteQueue.enqueue(NOTE_G6);
-  noteQueue.enqueue(NOTE_A6);
-}
-
 void motionDetected()
 {
   if (!isRecording)
@@ -285,15 +157,21 @@ void motionDetected()
   }
 }
 
+void playBLEFeedback()
+{
+  noteQueue.enqueue(NOTE_F6);
+  noteQueue.enqueue(NOTE_G6);
+  noteQueue.enqueue(NOTE_A6);
+}
 void playMotionFeedback()
 {
-  soundQueue.enqueue(NOTE_CS6);
-  soundQueue.enqueue(NOTE_D6);
-  soundQueue.enqueue(NOTE_E6);
+  noteQueue.enqueue(NOTE_CS6);
+  noteQueue.enqueue(NOTE_D6);
+  noteQueue.enqueue(NOTE_E6);
 }
 void playMotionEndFeedback()
 {
-  soundQueue.enqueue(NOTE_E6);
-  soundQueue.enqueue(NOTE_D6);
-  soundQueue.enqueue(NOTE_CS6);
+  noteQueue.enqueue(NOTE_E6);
+  noteQueue.enqueue(NOTE_D6);
+  noteQueue.enqueue(NOTE_CS6);
 }
