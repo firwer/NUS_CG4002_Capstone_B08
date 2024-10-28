@@ -144,7 +144,7 @@ async def game_state_manager(currGameData, attacker_id: int,
         # Handle rain bomb damage
         if targetInFOV:
             for _ in range(numOfRain):
-                logger.info("-5 HP RAIN BOMB")
+                logger.info(f"[P{attacker_id}] -5 HP RAIN BOMB")
                 await reduce_health(OpponentPlayerData, config.GAME_RAIN_DMG)
 
         if prediction_action == "gun":
@@ -158,7 +158,7 @@ async def game_state_manager(currGameData, attacker_id: int,
                 # Only deduct bullet
                 if targetPlayerData["bullets"] > 0:
                     targetPlayerData["bullets"] -= 1
-                    logger.info(f"Player {attacker_id}: Shot missed. Bullets left: {targetPlayerData['bullets']}")
+                    logger.info(f"[P{attacker_id}] Shot missed. Bullets left: {targetPlayerData['bullets']}")
         elif prediction_action == "shield":
             await shield(targetPlayerData)
         elif prediction_action == "reload":
@@ -169,7 +169,7 @@ async def game_state_manager(currGameData, attacker_id: int,
             if targetInFOV:
                 await reduce_health(OpponentPlayerData, config.GAME_AI_DMG)
         elif prediction_action == "logout":
-            logger.info("User logout")
+            logger.info(f"[P{attacker_id}] User logout")
         else:
             logger.warning(f"[P{attacker_id}] Invalid action received: {prediction_action}. Doing nothing.")
     except Exception as e:
