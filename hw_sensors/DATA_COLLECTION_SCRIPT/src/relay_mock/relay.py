@@ -29,6 +29,7 @@ class NotifyDelegate(btle.DefaultDelegate):
         self.buffer = bytearray()
         self.buffer_len = len(self.buffer)
         self.fragmented_packets = 0
+        self.previous_fragmentation = 0
         self.total_packets = 0
         self.throughputStartTime = millis()
         self.bitsReceived = 0
@@ -62,7 +63,7 @@ class NotifyDelegate(btle.DefaultDelegate):
                 self.buffer += data
         else:
             self.buffer += data
-            
+
     def has_packet(self) -> bool:
         return len(self.buffer) >= 20
 
