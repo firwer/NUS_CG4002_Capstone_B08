@@ -60,9 +60,9 @@ class NotifyDelegate(btle.DefaultDelegate):
                 print(f"Mismatched fragment pair! Discarding...")
                 self.previous_fragmentation = 0
                 self.buffer += data
-                
+
     def has_packet(self) -> bool:
-        return len(self.buffer) >= 20 and len(self.buffer) % 20 == 0
+        return len(self.buffer) >= 20
 
     def get_packet_bytes(self) -> bytearray | None:
         """returns a 20B bytearray representing a packet from the buffer. else, None"""
