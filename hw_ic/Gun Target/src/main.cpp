@@ -136,19 +136,19 @@ packet_gamestate_t pkt;
 void loop()
 {
     //==========================Game Engine SubRoutine =====================
-    // @nichyjt
+    // @T-Wan-Lin
     if (communicate())
     {
         playBLEFeedback();
     }
     pkt = ic_get_state();
-    if (pkt.packet_type == PACKET_DATA_GAMESTATE && pkt.health_num != curr_healthValue)
-    {
-        healthSynchronisation(pkt.health_num);
-    }
     if (pkt.packet_type == PACKET_DATA_GAMESTATE && pkt.shield_num != curr_shieldValue)
     {
         shieldHealthSync(pkt.shield_num);
+    }
+    if (pkt.packet_type == PACKET_DATA_GAMESTATE && pkt.health_num != curr_healthValue)
+    {
+        healthSynchronisation(pkt.health_num);
     }
 
     //==========================Buzzer and Health Update SubRoutine ==========================
@@ -162,7 +162,6 @@ void loop()
         else if (noteQueue.itemCount() == 0)
         {
             IrReceiver.restartTimer();
-            communicate();
         }
         lastSoundTime = millis();
     }
@@ -195,24 +194,20 @@ void loop()
     {
         if (IrReceiver.decodedIRData.address == OPP_PLAYER_ADDRESS)
         {
-
+            //@T-Wan-Lin
             if (curr_shieldValue > 0)
             {
                 curr_shieldValue -= BULLET_DAMAGE;
                 playShieldTunes(curr_shieldValue);
-                // @nichyjt
-                ic_push_shieldHealth(curr_shieldValue); // do we need this?
                 playVibration(500);
-                communicate();
             }
 
             curr_healthValue -= BULLET_DAMAGE;
             isFullHealthplayed = false;
             // @wanlin
-            ic_push_health(curr_healthValue);
+            ic_push_health(curr_healthValue, curr_shieldValue);
             playHealthDecrementTune(curr_healthValue);
             playVibration(800);
-            communicate();
         }
         IrReceiver.resume(); // Receive the next value
     }
