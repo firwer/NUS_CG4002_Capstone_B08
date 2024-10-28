@@ -10,8 +10,8 @@ from checksum import *
 import threading
 import pandas as pd
 
-BLUNO_RED_MAC_ADDRESS = "F4:B8:5E:42:6D:49"
-# BLUNO_RED_MAC_ADDRESS = "F4:B8:5E:42:4C:BB" #actually green
+#BLUNO_RED_MAC_ADDRESS = "F4:B8:5E:42:6D:49"
+BLUNO_RED_MAC_ADDRESS = "F4:B8:5E:42:4C:BB" #actually green
 
 #FIXME: if we get 59 and then we get 61, ignore the first packet
 CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"
@@ -46,12 +46,21 @@ class NotifyDelegate(btle.DefaultDelegate):
         self.num = 0
 
     def handleNotification(self, cHandle, data: bytes):
-        self.buffer += bytearray(data)
-        if len(data) < 20: # data is fragmented
-            print(f"Fragmentation: {len(data)}: {data.hex()}")
-            self.fragmented_packets += 1
-            # self.reset_buffer()
-
+        if len(data) < 20:
+            print(f"Fragmentatation: {len(data)}, {data.hex()}")
+            if self.previous_fragmentation == 0:
+                self.previous_fragmentation = len(data)
+                self.buffer += data
+            elif self.previous_fragmentation + len(data) == 20:
+                self.buffer += data
+                self.previous_fragmentation = 0
+            else: 
+                # remove the previous fragmented buffer - its corresponding pair has been lost.
+                self.buffer = self.buffer[:-self.previous_fragmentation]
+                print(f"Mismatched fragment pair! Discarding...")
+                self.previous_fragmentation = 0
+                self.buffer += data
+                
     def has_packet(self) -> bool:
         return len(self.buffer) >= 20 and len(self.buffer) % 20 == 0
 
@@ -89,12 +98,12 @@ class Beetle:
         self.gx = []
         self.gy = []
         self.gz = []
-        # basket, bowling, reload, volley, rainbomb, shield, logout,invalid
+        # basket, bowling, reload, volley, rainbomb, shield, logout, invalid
         self.GESTURE = "invalid"
-        self.filename = "nich_red"
-        self.EXPECTED_PKTS = 60
+        self.filename = "nich_green_50"
+        self.EXPECTED_PKTS = 50
         self.CURRENT_PKTS = 0
-        self.ROWS_TO_COLLECT = 10 # CONFIGURE ME - THIS CONTROLS HOW MANY ROWS  
+        self.ROWS_TO_COLLECT = 20 # CONFIGURE ME - THIS CONTROLS HOW MANY ROWS  
         self.ROWS_LEFT = self.ROWS_TO_COLLECT 
         self.PREV_ADC = -1
 
