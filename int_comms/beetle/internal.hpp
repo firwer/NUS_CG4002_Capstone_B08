@@ -41,7 +41,7 @@ bool ic_push_imu(MPUData data, uint8_t action_count);
 bool ic_connect();
 bool ic_push_imu(MPUData data);
 bool ic_push_bullet(uint8_t bullets);
-bool ic_push_health(uint8_t health);
+bool ic_push_health(uint8_t health, uint8_t shield);
 bool ic_push_kick();
 packet_gamestate_t ic_get_state();
 bool communicate();

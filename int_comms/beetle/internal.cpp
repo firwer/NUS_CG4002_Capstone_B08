@@ -292,13 +292,14 @@ bool ic_push_bullet(uint8_t bullets)
 
 // Queue the health data to be sent when communicate() is called
 // Returns true if data has been successfully put in the todo bufer
-bool ic_push_health(uint8_t health)
+bool ic_push_health(uint8_t health, uint8_t shield)
 {
   if (reliable_buffer_filled)
     return false;
   reliable_buffer.packet_type = PACKET_DATA_HEALTH;
   packet_health_t *pkt = (packet_health_t *)&reliable_buffer;
   pkt->health_count = health;
+  pkt->shield_count = shield;
   reliable_buffer_filled = true;
   return true;
 }
