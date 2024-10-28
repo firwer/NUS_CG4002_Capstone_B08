@@ -89,6 +89,9 @@ class AI:
       predicted_gesture = gesture_mapping[max_idx]
       print(f"Predicted Gesture: {predicted_gesture} with confidence: {confidence:.2f}")
 
+      if confidence < 0.9:
+         predicted_gesture = 'invalid'
+
       # Clean up
       input_buffer.close()
       output_buffer.close()

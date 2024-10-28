@@ -149,6 +149,16 @@ input_data_list = [
        'gy': [-5587, 0, -4099, -7079, -7843, -3358, 2428, 3807, 1404, -1573, -2708, -1994, -680, 251, 486, 446, 594, 653, 524, 427, 196, 44, 22, 86, 39, -45, -94, -60, -20, 19, 108, 62, -116, -80, -77, -96, -61, -128, -155, -149, -131, -79, 31, 202, 232, 231, 74, -96, -80, 10],
        'gz': [-25000, 0, -25000, -22698, -15440, -8144, -730, 1754, 2097, 1882, 1357, 804, 1134, 2375, 3162, 3730, 3911, 3303, 2616, 1853, 1240, 589, -47, -627, -1039, -1467, -1601, -1715, -1631, -1110, -445, -138, -91, -205, -132, 39, 105, 325, 572, 734, 629, 355, 143, 108, 216, 226, 172, 82, -170, -370]
    },
+   #fake
+   {
+      'ax': [100]*50, 
+      'ay': [100]*50,
+      'az': [100]*50,
+      'gx': [100]*50,
+      'gy': [100]*50,
+      'gz': [100]*50,
+       
+   },
 ]
 
 # Allocate input and output buffers
@@ -198,6 +208,10 @@ for index, hard_coded_data in enumerate(input_data_list):
 
     gesture_mapping = ['basket', 'bowling', 'invalid', 'invalid', 'logout', 'rainbomb', 'reload', 'invalid', 'shield', 'invalid', 'volley']
     predicted_gesture = gesture_mapping[max_idx]
+    
+    if confidence < 0.9:
+        predicted_gesture = 'invalid'
+
     print(f"Predicted Gesture: {predicted_gesture} with confidence: {confidence:.2f}")
 
 
