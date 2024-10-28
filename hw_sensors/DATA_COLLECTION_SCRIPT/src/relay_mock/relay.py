@@ -47,22 +47,9 @@ class NotifyDelegate(btle.DefaultDelegate):
         self.num = 0
 
     def handleNotification(self, cHandle, data: bytes):
+        self.buffer += data
         if len(data) < 20:
             print(f"Fragmentatation: {len(data)}, {data.hex()}")
-            if self.previous_fragmentation == 0:
-                self.previous_fragmentation = len(data)
-                self.buffer += data
-            elif self.previous_fragmentation + len(data) == 20:
-                self.buffer += data
-                self.previous_fragmentation = 0
-            else: 
-                # remove the previous fragmented buffer - its corresponding pair has been lost.
-                self.buffer = self.buffer[:-self.previous_fragmentation]
-                print(f"Mismatched fragment pair! Discarding...")
-                self.previous_fragmentation = 0
-                self.buffer += data
-        else:
-            self.buffer += data
 
     def has_packet(self) -> bool:
         return len(self.buffer) >= 20
@@ -139,7 +126,7 @@ class Beetle:
         while not self.killThread:
             shouldAck = False
             # STEP 1. Handle reconnections if applicable
-            if not self.connected or self.errors > 10 or self.reliableRetransmissions > 5:
+            if not self.connected or self.errors > 2 or self.reliableRetransmissions > 5:
                 print(f"{self.COLOR}Restarting connection: isConnected={self.connected}, errors={self.errors}, retx={self.reliableRetransmissions}")
                 self.receiver.reset_buffer()
                 self.connect_to_beetle()
@@ -169,8 +156,9 @@ class Beetle:
                     continue
                 # verify the checksum - if fail, process the next packet
                 if not verify_checksum(data):
-                    # print(f"{self.COLOR}Error: checksum failed for this PKT {data.hex()}")
-                    print(f"{self.COLOR}Error: checksum failed! Moving to next packet in buffer...")
+                    print(f"{self.COLOR}Error: checksum failed for this PKT {data.hex()}")
+                    self.receiver.reset_buffer()
+                    # print(f"{self.COLOR}Error: checksum failed! Moving to next packet in buffer...")
                     self.errors += 1
                     # print(f"{self.COLOR}Moving to next packet in buffer...")
                     continue
