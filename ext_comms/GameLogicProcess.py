@@ -104,7 +104,6 @@ async def getVState(visualizer_receive_queue: asyncio.Queue, player_id: int):
 
 async def game_state_manager(currGameData, attacker_id: int,
                              pred_output_queue: asyncio.Queue,
-                             visualizer_send_queue: asyncio.Queue,
                              gun_state_queue: asyncio.Queue):
     global targetInFOV_p1, numOfRain_p1, targetInFOV_p2, numOfRain_p2
 
@@ -154,6 +153,3 @@ async def game_state_manager(currGameData, attacker_id: int,
         print("User logout")
     else:
         print("Invalid action received. Doing nothing.")
-
-    # Send updated game state to visualizer
-    await visualizer_send_queue.put("gs_" + currGameData.to_json(attacker_id))  # Add gs_ prefix to indicate game

@@ -296,7 +296,6 @@ class GameEngine:
             # Verify FOV with visualizer and update game state
             await game_state_manager(currGameData=self.currGameData, attacker_id=player_id,
                                      pred_output_queue=pred_output_queue,
-                                     visualizer_send_queue=visualizer_send_queue,
                                      gun_state_queue=gun_state_queue)
             print("EVALUATING...")
             # Send updated game state to evaluation server
@@ -304,6 +303,9 @@ class GameEngine:
                                         player_id=player_id,
                                         eval_input_queue=self.engine_to_evaluation_server_queue,
                                         eval_output_queue=self.evaluation_server_to_engine_queue)
+
+            # Send updated game state to visualizer
+            await visualizer_send_queue.put("gs_" + self.currGameData.to_json(player_id))  # Add gs_ prefix to indicate game
 
             print(f"SENDING TO RELAY: {self.currGameData.to_json(player_id)}")
             # Send validated/verified game state to relay node
