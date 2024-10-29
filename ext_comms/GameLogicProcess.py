@@ -100,11 +100,10 @@ async def getVState(visualizer_receive_queue: asyncio.Queue, player_id: int):
     while True:
         try:
             msg = await visualizer_receive_queue.get()
-            msgStr = msg.decode()
-            if msgStr.startswith('vstate_fov_'):
-                parts = msgStr.split('_')
+            if msg.startswith('vstate_fov_'):
+                parts = msg.split('_')
                 if len(parts) < 5:
-                    logger.warning(f"Malformed vstate_fov message: {msgStr}")
+                    logger.warning(f"Malformed vstate_fov message: {msg}")
                     continue
                 fov_bool = parts[2]
                 num_of_rain = int(parts[4])
@@ -112,11 +111,11 @@ async def getVState(visualizer_receive_queue: asyncio.Queue, player_id: int):
                 if player_id == 1:
                     targetInFOV_p1 = fov_bool == "True"
                     numOfRain_p1 = num_of_rain
-                    logger.info(f"Player 1: Opponent P2 FOV - {targetInFOV_p1} and numOfRain to {numOfRain_p1}")
+                    logger.info(f"[P1] Opponent FOV Update: {targetInFOV_p1} and numOfRain to {numOfRain_p1}")
                 elif player_id == 2:
                     targetInFOV_p2 = fov_bool == "True"
                     numOfRain_p2 = num_of_rain
-                    logger.info(f"Player 2: Opponent P1 FOV - {targetInFOV_p2} and numOfRain to {numOfRain_p2}")
+                    logger.info(f"[P2] Opponent FOV Update: {targetInFOV_p2} and numOfRain to {numOfRain_p2}")
         except Exception as e:
             logger.exception(f"Error in getVState for player {player_id}: {e}")
 

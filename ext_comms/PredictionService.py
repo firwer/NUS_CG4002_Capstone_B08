@@ -11,7 +11,7 @@ sys.path.append('/home/xilinx/IP')
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import int_comms.relay.packet
-from AIClass import AI
+from AI50Class import AI
 
 logger = setup_logger(__name__)
 
@@ -122,16 +122,12 @@ class PredictionServiceProcess:
                     async with self.lock:
                         logger.debug(f"[P{player_id}] Acquired AI lock. Performing prediction.")
                         # Offload AI prediction to a separate thread
-                        prediction_index = await asyncio.to_thread(self.ai_inference.predict, combined_input)
-                        logger.info(f"[P{player_id}] AI Prediction index: {prediction_index}")
+                        predicted_action = await asyncio.to_thread(self.ai_inference.predict, combined_input)
 
-                    # Map prediction index to action
-                    action_names = ["basket", "bowl", "logout", "bomb", "reload", "shield", "volley"]
-                    action = action_names[prediction_index] if 0 <= prediction_index < len(action_names) else "unknown"
-                    logger.info(f"[P{player_id}] AI Prediction: {action}")
+                    logger.info(f"[P{player_id}] AI Prediction: {predicted_action}")
 
                     # Send prediction to the respective output queue
-                    await output_queue.put(action)
+                    await output_queue.put(predicted_action)
                     logger.debug(f"[P{player_id}] Sent prediction to output queue.")
 
                     prev_imu_count = curr_imu_count

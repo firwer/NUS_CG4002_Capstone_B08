@@ -66,13 +66,14 @@ class AsyncMQTTController:
         await self.mqttc.subscribe(topic_receive_p1)
         await self.mqttc.subscribe(topic_receive_p2)
         logger.info("Subscribed to MQTT topics. Listening for messages...")
-
+        logger.info(f"p1: {topic_receive_p1} p2: {topic_receive_p2}")
         async for message in self.mqttc.messages:
                 try:
-                    if message.topic == topic_receive_p1:
+                    logger.info(f"Received message on topic {message.topic}: {message.payload.decode()}")
+                    if message.topic.matches(topic_receive_p1):
                         await self.receive_data_queue_p1.put(message.payload.decode())
                         logger.debug(f"Received message on {topic_receive_p1}: {message.payload.decode()}")
-                    elif message.topic == topic_receive_p2:
+                    elif message.topic.matches(topic_receive_p2):
                         await self.receive_data_queue_p2.put(message.payload.decode())
                         logger.debug(f"Received message on {topic_receive_p2}: {message.payload.decode()}")
                     else:
