@@ -31,11 +31,7 @@ using uPLibrary.Networking.M2Mqtt;
 using uPLibrary.Networking.M2Mqtt.Messages;
 using Newtonsoft.Json;
 using M2MqttUnity;
-using Newtonsoft.Json.Bson;
 using GameDataNameSpace;
-using System.Linq;
-using UnityEngine.Windows;
-using System.Net.Configuration;
 
 /// <summary>
 /// Examples for the M2MQTT library (https://github.com/eclipse/paho.mqtt.m2mqtt),
@@ -50,7 +46,6 @@ namespace M2MqttUnity.Examples
 
         public MsgHandler msgHandlerGameObject;
         public UIHandler uiHandlerGameObject;
-        public CollisionHandler collisionHandlerGameObject;
 
         [Tooltip("Set this to true to perform a testing cycle automatically on startup")]
         public bool autoTest = false;
@@ -59,15 +54,12 @@ namespace M2MqttUnity.Examples
         public Button disconnectButton;
 
         private List<string> eventMessages = new List<string>();
-        
-        private int tempPlayerDeath = 0;
-        private int tempBombAmmo = 2;
-        private int tempBulletAmmo = 6;
-        private int tempEnemyDeath = 0;
-        private int tempShieldHpEquipped = 0;
 
-        // Define a list of actions that do not require ammo
-        private string[] noAmmoActions = { "reload", "shield", "volley", "basket", "soccer", "bowl", "logout" };
+        private int tempPlayerDeath = 0;
+        private int tempEnemyDeath = 0;
+        private bool tempInFOV = false;
+        private int tempInRain = 0;
+
         public void PublishState(int player_id, bool FOVmsg, int inRainNumber)
         {
             string msgToSend = "vstate_fov_" + FOVmsg.ToString() + "_inbomb_" + inRainNumber.ToString();
@@ -79,7 +71,6 @@ namespace M2MqttUnity.Examples
             }
 
             Debug.Log("CAPSTONE: " + msgToSend);
-
         }
 
         public void SetPlayerMode(bool isP1)
@@ -181,129 +172,68 @@ namespace M2MqttUnity.Examples
             tempEnemyDeath = opponent.game_state.deaths;
         }
 
-        public void ProcessPlayerAction(int attackerID, string action, bool targetInFOV)
-        {
-            switch (action)
-            {
-                case "gun":
-                    msgHandlerGameObject.HandleAIAction(action, attackerID);
-                    break;
+        //public void ProcessPlayerAction(int attackerID, string action)
+  //      {
+        //	switch (action)
+  //          {
+  //              case "gun":
+        //		case "shield":
+        //		case "reload":
+        //		case "basket":
+        //		case "soccer":
+        //		case "volley":
+        //		case "bowl":
+        //		case "bomb":
+        //			msgHandlerGameObject.HandleAIAction(action, attackerID);
+        //			break;
 
-                case "shield":
-                    msgHandlerGameObject.HandleAIAction(action, attackerID);
-                    break;
+  //              case "logout":
+  //                  //Disconnect();
+        //			break;
 
-                case "reload":
-                    msgHandlerGameObject.HandleAIAction(action, attackerID);
-                    break;
-
-                case "bomb":
-                    if (targetInFOV)
-                    {
-                        msgHandlerGameObject.HandleAIAction(action, attackerID);
-                    }
-                    break;
-
-                case "basket":
-                case "soccer":
-                case "volley":
-                case "bowl":
-                    if (targetInFOV)
-                    {
-                        msgHandlerGameObject.HandleAIAction(action, attackerID);
-                    }
-                    break;
-
-                case "logout":
-                    //Disconnect();
-                    break;
-
-                default:
-                    // No action or unknown action
-                    break;
-            }
+  //              default:
+  //                  // No action or unknown action
+  //                  break;
+  //          }
             
-        }
+  //      }
         public void ProcessPlayerState(PlayerData attacker, PlayerData opponent, bool targetInFOV)
         {
             string action = attacker.action;
-            GameState attackerState = attacker.game_state;
-            GameState opponentState = opponent.game_state;
 
             if (isP1)
             {
                 // If player is 1 and attacker id is 1
                 if (attacker.player_id == 1)
                 {
-                    tempBombAmmo = attacker.game_state.bombs;
-                    tempBulletAmmo = attacker.game_state.bullets;
-                    tempShieldHpEquipped = attacker.game_state.shield_hp;
-                    Debug.Log("CAPSTONE: Bomb ammo temp: " + tempBombAmmo);
-                    Debug.Log("CAPSTONE: Bullet ammo temp: " + tempBulletAmmo);
+                    msgHandlerGameObject.ActionChecker(action, attacker);
                     CheckAndHandleDeath(attacker, opponent);
                 }
+                // Player is 1, attacker id is 2
                 else if (opponent.player_id == 1)
                 {
-                    CheckAndHandleDeath(attacker, opponent);
+                    CheckAndHandleDeath(opponent, attacker);
+                    msgHandlerGameObject.HandleAction(action, attacker);
                 }
             }
             else
             {
+                // Player is 2, attacker id is 2
                 if (attacker.player_id == 2)
                 {
-                    tempBombAmmo = attacker.game_state.bombs;
-                    tempBulletAmmo = attacker.game_state.bullets;
-                    tempShieldHpEquipped = attacker.game_state.shield_hp;
+                    msgHandlerGameObject.ActionChecker(action, attacker);
                     CheckAndHandleDeath(attacker, opponent);
                 }
+                // Player is 2, attacker id is 1
                 else if (opponent.player_id == 2)
                 {
-                    CheckAndHandleDeath(attacker, opponent);
+                    CheckAndHandleDeath(opponent, attacker);
+                    msgHandlerGameObject.HandleAction(action, attacker);
                 }
             }
 
             // Updates opponent health no matter what happens (might be due to rain dmg)
             msgHandlerGameObject.HandleReduceHealth(opponent);
-
-            switch (action)
-            {
-                case "gun":
-                    msgHandlerGameObject.HandleState(action, attacker, opponent);
-                    break;
-
-                case "shield":
-                    msgHandlerGameObject.HandleState(action, attacker, opponent);
-                    break;
-
-                case "reload":
-                    msgHandlerGameObject.HandleState(action, attacker, opponent);
-                    break;
-
-                case "bomb":
-                    if (targetInFOV)
-                    {
-                        msgHandlerGameObject.HandleState(action, attacker, opponent);
-                    }
-                    break;
-
-                case "basket":
-                case "soccer":
-                case "volley":
-                case "bowl":
-                    if (targetInFOV)
-                    {
-                        msgHandlerGameObject.HandleState(action, attacker, opponent);
-                    }
-                    break;
-
-                case "logout":
-                    break;
-
-                default:
-                    // No action or unknown action
-                    break;
-            }
-
         }
 
         protected override void Start()
@@ -344,60 +274,42 @@ namespace M2MqttUnity.Examples
             PlayerData player2 = JsonConvert.DeserializeObject<PlayerData>(rootObject.p2);
 
             // Process game state based on who is the attacker
-            if (dataOriginPlayerId == "1") {
+            if (dataOriginPlayerId == "1")
+            {
                 ProcessPlayerState(player1, player2, inSight);
-            } else {
+            }
+            else
+            {
                 ProcessPlayerState(player2, player1, inSight);
             }
-
-            string formattedMsg = FormatPlayerData(player1, player2, inSight, dataOriginPlayerId);
+            //string formattedMsg = FormatPlayerData(player1, player2, inSight, dataOriginPlayerId);
         }
 
-        // Helper function to format player data into a string
-        private string FormatPlayerData(PlayerData player1, PlayerData player2, bool in_sight_msg, string dataOriginPlayerId)
-        {
-            // Format Player 1 data
-            string player1Data =$"  Health: {player1.game_state.hp}\n" +
-                                $"  Bullets: {player1.game_state.bullets}\n" +
-                                $"  Bombs: {player1.game_state.bombs}\n" +
-                                $"  Shield HP: {player1.game_state.shield_hp}\n" +
-                                $"  Deaths: {player1.game_state.deaths}\n" +
-                                $"  Shields: {player1.game_state.shields}\n";
-
-            // Format Player 2 data
-            string player2Data = $"  Health: {player2.game_state.hp}\n" +
-                                $"  Bullets: {player2.game_state.bullets}\n" +
-                                $"  Bombs: {player2.game_state.bombs}\n" +
-                                $"  Shield HP: {player2.game_state.shield_hp}\n" +
-                                $"  Deaths: {player2.game_state.deaths}\n" +
-                                $"  Shields: {player2.game_state.shields}\n";
-
-            if (dataOriginPlayerId == "1") {
-                player1Data = $"  Action: {player1.action}\n" + player1Data;
-            } else if (dataOriginPlayerId == "2") {
-                player2Data = $"  Action: {player2.action}\n" + player2Data;
-
-            }
-            
-            // Combine both players' data
-            if (this.isP1) {
-                if (dataOriginPlayerId == "1" && player1.action != "logout" && player1.action != "gun" && player1.action != "reload" && player1.action != "shield") {
-                    return $"Your Statistics (P1): \n{player1Data}\nOpponent Statistics (P2): \n{player2Data}\nP2 in FOV: {in_sight_msg}";
-                } else {
-                    return $"Your Statistics (P1): \n{player1Data}\nOpponent Statistics (P2): \n{player2Data}\n";
-                }
-            } else {
-                if (dataOriginPlayerId == "2" && player2.action != "logout" &&  player2.action != "gun" &&  player2.action != "reload" &&  player2.action != "shield") {
-                    return $"Your Statistics (P2): \n{player2Data}\nOpponent Statistics (P1): \n{player1Data}\nP1 in FOV: {in_sight_msg}";
-                } else {
-                    return $"Your Statistics (P2): \n{player2Data}\nOpponent Statistics (P1): \n{player1Data}\n";
-                }
-            }
-        }
         protected override void Update()
         {
-            base.Update(); // call ProcessMqttEvents()
+            // call ProcessMqttEvents()
+            base.Update(); 
 
+            // Check if enemy still in FOV/Rain
+            var (isInFOV, rainCount) = msgHandlerGameObject.FovAndRainChecker();
+            if (tempInFOV != isInFOV || tempInRain != rainCount)
+            {
+                //Publish w.r.t. player number
+                if (isP1)
+                {
+                    Debug.Log("CAPSTONE: Publishing");
+                    PublishState(1, isInFOV, rainCount);
+                }
+                else
+                {
+                    Debug.Log("CAPSTONE: Publishing");
+                    PublishState(2, isInFOV, rainCount);
+                }
+                tempInFOV = isInFOV;
+                tempInRain = rainCount;
+            }
+
+            // Handles message coming in
             if (eventMessages.Count > 0)
             {
                 foreach (string msg in eventMessages)
@@ -406,66 +318,11 @@ namespace M2MqttUnity.Examples
                     string[] parts = msg.Split(new char[] { '_' }, 2); // Split into 2 parts
                     string keyword = parts[0];
 
-                    // Checks if Enemy is in FOV
-                    bool in_sight_msg = uiHandlerGameObject.GetEnemyFOV();
-                    Debug.Log("CAPSTONE: DEBUG IN FOV: " + in_sight_msg);
-                    int in_rainbombs_number = collisionHandlerGameObject.GetInRainNumber();
-                    Debug.Log("CAPSTONE: DEBUG IN RAIN NUMBER: " + in_rainbombs_number);
-
-                    // action msg in format: action_<playerID>_<action>
-                    if (keyword == "action")
-                    {
-                        string[] tempArr = parts[1].Split(new char[] { '_' }, 2);
-                        string playerID = tempArr[0];
-                        string action = tempArr[1];
-                        if (this.isP1 && playerID == "1")
-                        {
-                            Debug.Log("CAPSTONE: Publishing");
-                            PublishState(1, in_sight_msg, in_rainbombs_number);
-                            Debug.Log("CAPSTONE: Action received: " + action);
-
-                            if (action == "bomb" && tempBombAmmo <= 0)
-                            {
-                                uiHandlerGameObject.DisplayErrorBombText();
-                            }
-                            else if (action == "gun" && tempBulletAmmo <= 0)
-                            {
-                                uiHandlerGameObject.DisplayErrorGunText();
-                            }
-                            else if (action == "reload" && tempBulletAmmo > 0)
-                            {
-                                uiHandlerGameObject.DisplayErrorReloadText();
-                            }
-                            else if (action == "shield" && tempShieldHpEquipped > 0)
-                            {
-                                uiHandlerGameObject.DisplayErrorShieldText();
-                            }
-                            else if ((action == "bomb" && tempBombAmmo >= 1) || (action == "gun" && tempBulletAmmo >= 1) || noAmmoActions.Contains(action))
-                            {
-                                Debug.Log("CAPSTONE: Processing player 1 action");
-                                ProcessPlayerAction(1, action, in_sight_msg);
-                            }
-                            else
-                            {
-                                Debug.Log("CAPSTONE: Unable to ProcessPlayerAction");
-                            }
-                        }
-                        else if (!this.isP1 && playerID == "2")
-                        {
-                            PublishState(2, in_sight_msg, in_rainbombs_number);
-                            if ((action == "bomb" && tempBombAmmo >= 1) || (action == "gun" && tempBulletAmmo >= 1))
-                            {
-                                Debug.Log("Processing player 2 action");
-                                ProcessPlayerAction(2, action, in_sight_msg);
-                            }
-                        }
-                    }
                     // game state msg in format: gs_<gameStateMessage>
-                    else if (keyword == "gs")
+                    if (keyword == "gs")
                     {
                         Debug.Log("CAPSTONE: Processing GS msg");
-
-                        ProcessMessage(parts[1], in_sight_msg);
+                        ProcessMessage(parts[1], tempInFOV);
                     }
                     else
                     {
@@ -486,6 +343,60 @@ namespace M2MqttUnity.Examples
             if (autoTest)
             {
                 autoConnect = true;
+            }
+        }
+
+        // Helper function to format player data into a string
+        private string FormatPlayerData(PlayerData player1, PlayerData player2, bool in_sight_msg, string dataOriginPlayerId)
+        {
+            // Format Player 1 data
+            string player1Data = $"  Health: {player1.game_state.hp}\n" +
+                                $"  Bullets: {player1.game_state.bullets}\n" +
+                                $"  Bombs: {player1.game_state.bombs}\n" +
+                                $"  Shield HP: {player1.game_state.shield_hp}\n" +
+                                $"  Deaths: {player1.game_state.deaths}\n" +
+                                $"  Shields: {player1.game_state.shields}\n";
+
+            // Format Player 2 data
+            string player2Data = $"  Health: {player2.game_state.hp}\n" +
+                                $"  Bullets: {player2.game_state.bullets}\n" +
+                                $"  Bombs: {player2.game_state.bombs}\n" +
+                                $"  Shield HP: {player2.game_state.shield_hp}\n" +
+                                $"  Deaths: {player2.game_state.deaths}\n" +
+                                $"  Shields: {player2.game_state.shields}\n";
+
+            if (dataOriginPlayerId == "1")
+            {
+                player1Data = $"  Action: {player1.action}\n" + player1Data;
+            }
+            else if (dataOriginPlayerId == "2")
+            {
+                player2Data = $"  Action: {player2.action}\n" + player2Data;
+
+            }
+
+            // Combine both players' data
+            if (this.isP1)
+            {
+                if (dataOriginPlayerId == "1" && player1.action != "logout" && player1.action != "gun" && player1.action != "reload" && player1.action != "shield")
+                {
+                    return $"Your Statistics (P1): \n{player1Data}\nOpponent Statistics (P2): \n{player2Data}\nP2 in FOV: {in_sight_msg}";
+                }
+                else
+                {
+                    return $"Your Statistics (P1): \n{player1Data}\nOpponent Statistics (P2): \n{player2Data}\n";
+                }
+            }
+            else
+            {
+                if (dataOriginPlayerId == "2" && player2.action != "logout" && player2.action != "gun" && player2.action != "reload" && player2.action != "shield")
+                {
+                    return $"Your Statistics (P2): \n{player2Data}\nOpponent Statistics (P1): \n{player1Data}\nP1 in FOV: {in_sight_msg}";
+                }
+                else
+                {
+                    return $"Your Statistics (P2): \n{player2Data}\nOpponent Statistics (P1): \n{player1Data}\n";
+                }
             }
         }
     }

@@ -13,16 +13,17 @@ import config
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from hardcoded_imu import basket_packets, bowling_packets, reload_packets, volley_packets, rainbomb_packets, \
     shield_packets, logout_packets
+from relay.external_p2 import sim_get_packet
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from comms.TCPC_Controller_Sync import TCPC_Controller_Sync
 from int_comms.relay.packet import PACKET_DATA_IMU, PACKET_DATA_BULLET, PACKET_DATA_HEALTH, PACKET_DATA_KICK, PacketImu, \
     PacketBullet, PacketHealth, PacketKick, PacketGamestate, get_packet
 
-ext_logger = logging.getLogger("External2")
+ext_logger = logging.getLogger("External")
 
-RELAY_NODE_PLAYER = 2
-PLAYER_NUMBER = 2
+RELAY_NODE_PLAYER = -1
+PLAYER_NUMBER = 1
 
 
 def receive_queue_handler_integrated(tcpController: TCPC_Controller_Sync, receive_queues):
@@ -51,6 +52,7 @@ def receive_queue_handler_integrated(tcpController: TCPC_Controller_Sync, receiv
                 pkt.bullet = player["game_state"]["bullets"]
                 pkt.health = player["game_state"]["hp"]
                 ext_logger.info(f"P2 getting {pkt.bullet} bullets, {pkt.health} health")
+
             # broadcast the queues 
             for receive_queue in receive_queues:
                 receive_queue.put(pkt)
@@ -75,32 +77,6 @@ def send_queue_handler(tcpController: TCPC_Controller_Sync, send_queue: Queue):
         tcpController.send(message.to_bytearray())
 
 
-def begin_external(sendToGameServerQueue: Queue, receiveFromGameServerQueue0: Queue, receiveFromGameServerQueue1,
-                   player_num):
-    global RELAY_NODE_PLAYER
-    RELAY_NODE_PLAYER = player_num
-    ext_logger.debug("Controller sync begin...")
-    wsController = TCPC_Controller_Sync(
-        config.TCP_SERVER_HOST, config.TCP_SERVER_PORT, config.TCP_SECRET_KEY
-    )
-    ext_logger.debug("External comms liaison starting...")
-    wsController.connect()
-    wsController.identify_relay_node(RELAY_NODE_PLAYER)
-    receiveQueues = [receiveFromGameServerQueue0, receiveFromGameServerQueue1]
-    ext_logger.debug("External comms liaison connected!")
-    # start the input thread
-    send_thread = Thread(target=send_queue_handler, args=(wsController, sendToGameServerQueue))
-    receive_thread = Thread(target=receive_queue_handler_integrated, args=(wsController, receiveQueues))
-    send_thread.start()
-    receive_thread.start()
-    send_thread.join()
-    receive_thread.join()
-
-
-##
-## HW Simulator Code Below
-##
-##
 def sim_get_packet(type):
     """Chooses a packet to send to the external comms side."""
     if type == PACKET_DATA_IMU:
@@ -129,6 +105,33 @@ def sim_get_packet(type):
         return pkt
     assert False  # this should never trigger!
 
+
+def begin_external(sendToGameServerQueue: Queue, receiveFromGameServerQueue0: Queue, receiveFromGameServerQueue1,
+                   player_num):
+    global RELAY_NODE_PLAYER
+    RELAY_NODE_PLAYER = player_num
+    ext_logger.debug("Controller sync begin...")
+    wsController = TCPC_Controller_Sync(
+        config.TCP_SERVER_HOST, config.TCP_SERVER_PORT, config.TCP_SECRET_KEY
+    )
+    ext_logger.debug("External comms liaison starting...")
+    wsController.connect()
+    wsController.identify_relay_node(RELAY_NODE_PLAYER)
+    receiveQueues = [receiveFromGameServerQueue0, receiveFromGameServerQueue1]
+    ext_logger.debug("External comms liaison connected!")
+    # start the input thread
+    send_thread = Thread(target=send_queue_handler, args=(wsController, sendToGameServerQueue))
+    receive_thread = Thread(target=receive_queue_handler_integrated, args=(wsController, receiveQueues))
+    send_thread.start()
+    receive_thread.start()
+    send_thread.join()
+    receive_thread.join()
+
+
+##
+## Simulation Code Below
+##
+##
 
 # Function to convert IMU data into byte array for PacketImu
 def create_packet_from_imu_data(imu_data):
@@ -162,7 +165,6 @@ def create_packet_from_imu_data(imu_data):
 
     return byte_array
 
-
 def create_imu_packets(imu_data_list):
     packets = []
 
@@ -172,7 +174,6 @@ def create_imu_packets(imu_data_list):
         packets.append(packet)
 
     return packets
-
 
 def display_menu():
     """Display the interactive menu for packet selection"""
@@ -239,6 +240,7 @@ def get_user_input(sendToGameServerQueue: Queue):
         else:
             print("Invalid selection. Please choose a valid option.")
 
+
 # This is only for testing/simulation purposes. Actual internal comms side entry point is not here.
 def start_simulate():
     ext_logger.debug("DEV: SIMULATION STARTED. NOT FOR ACTUAL USE.")
@@ -246,7 +248,7 @@ def start_simulate():
     wsController = TCPC_Controller_Sync(
         config.TCP_SERVER_HOST, config.TCP_SERVER_PORT, config.TCP_SECRET_KEY
     )
-    wsController.identify_relay_node(2)
+    wsController.identify_relay_node(1)
     ext_logger.debug("External comms liaison connected!")
     receiveQueues = [receiveFromGameServerQueue0, receiveFromGameServerQueue1]
     send_thread = Thread(target=send_queue_handler, args=(wsController, sendToGameServerQueue))

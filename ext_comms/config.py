@@ -10,12 +10,12 @@ EVAL_SERVER_HOST = '127.0.0.1'
 EVAL_SECRET_KEY = "bitcoingoingmoon"
 
 # Ultra96 TCP Server Configuration
-TCP_SERVER_HOST = "172.26.190.199"
+TCP_SERVER_HOST = "makerslab-fpga-29.d2.comp.nus.edu.sg"
 TCP_SERVER_PORT = 65001
 TCP_SECRET_KEY = "ethgoingmoonsoon"
 
 # Ultra96 SSH Credentials
-ssh_host = "172.26.190.199"
+ssh_host = "makerslab-fpga-29.d2.comp.nus.edu.sg"
 ssh_user = "xilinx"
 ssh_password = "leonardo"  # pushing password up to git, excellent swe practice
 
@@ -59,5 +59,4 @@ GAME_RAIN_DMG = 5
 
 # Game Configurations
 GAME_HEALTH_PKT_TIMEOUT = 0.5  # Time to wait for health packet to arrive before timeout
-GAME_AI_PACKET_COUNT = 60  # Desired number of packets to collect
-GAME_AI_BUFFER_ACCUMULATION_TIMEOUT = 5  # Timeout in seconds
+GAME_AI_PACKET_COUNT = 50  # Desired number of packets to collect

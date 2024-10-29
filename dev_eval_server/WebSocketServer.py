@@ -227,11 +227,10 @@ async def handler(websocket):
         num_actions_matched_gun = 0
         num_actions_matched_ai  = 0
 
-        # Initialize rainbomb counts
-        rainbomb_counts_p1 = {quadrant: 0 for quadrant in range(1, 5)}
-        rainbomb_counts_p2 = {quadrant: 0 for quadrant in range(1, 5)}
-
         while client.is_running:
+            # Initialize rainbomb counts
+            rainbomb_counts_p1 = {quadrant: 0 for quadrant in range(1, 5)}
+            rainbomb_counts_p2 = {quadrant: 0 for quadrant in range(1, 5)}
             # Display positions
             pos_1, pos_2 = client.current_positions()
             await ws_send_positions(websocket, pos_1, pos_2)
@@ -250,6 +249,7 @@ async def handler(websocket):
                 # The websocket is disconnected
                 break
 
+            await ws_send_info(websocket, "------------")
             # Process players' actions
             player_processed = -1
 
@@ -257,19 +257,6 @@ async def handler(websocket):
             for _ in range(num_players):
                 action_match, player_id, message, action_recv, response_time, timeout_remaining, game_state_expected, game_state_received, expected_action, user_action = \
                     await client.handle_a_player(player_processed, timeout_remaining)
-
-                # Send action update with diagnostics
-                await ws_send_action_update(
-                    websocket,
-                    action_match,
-                    player_id,
-                    message,
-                    response_time,
-                    game_state_expected,
-                    game_state_received,
-                    expected_action=expected_action,  # New field
-                    user_action=user_action           # New field
-                )
 
                 player_processed = player_id
 
@@ -290,8 +277,21 @@ async def handler(websocket):
                             num_actions_matched_ai += 1
                             response_time_ai.append(response_time)
 
-                # Send correct game state
-                await client.send_game_state()
+                    # Send action update with diagnostics
+                    await ws_send_action_update(
+                        websocket,
+                        action_match,
+                        player_id,
+                        message,
+                        response_time,
+                        game_state_expected,
+                        game_state_received,
+                        expected_action=expected_action,  # New field
+                        user_action=user_action           # New field
+                    )
+
+                    # Send correct game state
+                    await client.send_game_state()
 
             # After processing all players, extract rainbomb counts
             for player in [client.simulator.game_state.player_1, client.simulator.game_state.player_2]:
@@ -303,6 +303,18 @@ async def handler(websocket):
 
             # Send rainbomb counts
             await ws_send_rainbomb_counts(websocket, rainbomb_counts_p1, rainbomb_counts_p2)
+
+            # Calculate and send statistics for gun and AI actions
+            mean_gun = statistics.mean(response_time_gun) if response_time_gun else client.timeout
+            median_gun = statistics.median(response_time_gun) if response_time_gun else client.timeout
+
+            mean_ai = statistics.mean(response_time_ai) if response_time_ai else client.timeout
+            median_ai = statistics.median(response_time_ai) if response_time_ai else client.timeout
+
+            # Send the statistics to the frontend
+            await ws_send_statistics(websocket, mean_gun, median_gun, mean_ai, median_ai)
+
+            # Move forward
 
             # Move forward
             client.move_forward()
@@ -335,6 +347,19 @@ async def send_stat(accuracy, component, response_times, websocket, timeout):
     message = "{comp}-- accuracy={acc}; Response time (mean):{mean:.2f} (median):{median:.2f}" \
         .format(comp=component, acc=accuracy, mean=mean, median=median)
     await ws_send_info(websocket, message)
+
+async def ws_send_statistics(websocket, mean_gun, median_gun, mean_ai, median_ai):
+    """
+    Send the response time statistics (mean and median) for both gun and AI actions to the web client.
+    """
+    data = {
+        "type": "statistics",  # Add a new type for statistics
+        "mean_response_time_gun": mean_gun,
+        "median_response_time_gun": median_gun,
+        "mean_response_time_ai": mean_ai,
+        "median_response_time_ai": median_ai
+    }
+    await websocket.send(json.dumps(data))
 
 
 async def main():

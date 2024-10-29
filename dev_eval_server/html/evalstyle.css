@@ -1,5 +1,55 @@
 /* evalstyle.css */
 
+/* General box styling for the statistics box */
+.statistics_box {
+    background-color: #f9f9f9;
+    border: 1px solid #ccc;
+    padding: 2px;
+    margin-bottom: 10px;
+    text-align: center;
+    width: 60%;
+    margin-left: auto;
+    margin-right: auto;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+}
+
+.statistics_box h2 {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.statistics_box table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 auto;
+}
+
+.statistics_box table th,
+.statistics_box table td {
+    padding: 8px;
+    text-align: center;
+    border-bottom: 1px solid #ddd;
+}
+
+.statistics_box table th {
+    background-color: #f1f1f1;
+    font-weight: bold;
+}
+
+.statistics_box table td {
+    font-size: 16px;
+}
+
+.statistics_box table tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.statistics_box table tr:nth-child(odd) {
+    background-color: #ffffff;
+}
+
 /* Body Background */
 body {
     background-image: url('images/76_touched.jpg');

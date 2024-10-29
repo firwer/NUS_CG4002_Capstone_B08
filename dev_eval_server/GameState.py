@@ -240,7 +240,9 @@ class Player:
 
             opponent.reduce_health(self.hp_bomb)
             # start a rain in the quadrant of the opponent
+            print("Starting rain in quadrant ", opponent_position)
             self.rain_list.append(opponent_position)
+            print("Rain list ", self.rain_list)
             break
 
     def rain_damage(self, opponent, opponent_position, can_see):

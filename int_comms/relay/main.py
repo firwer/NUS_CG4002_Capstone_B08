@@ -9,7 +9,7 @@ from bluepy import btle
 from packet import * 
 from checksum import *
 import threading
-import external
+import external_p1
 import external_p2
 # RED == PLAYER 1
 BLUNO_P1_GLOVE_MAC = "F4:B8:5E:42:6D:49" # TO BE USED FOR EVAL
@@ -423,7 +423,7 @@ def main():
         beetle0 = Beetle(BLUNO_P1_GLOVE_MAC, 0, sendToGameServerQueue, receiveFromGameServerQueue0)
         #beetle1 = Beetle(BLUNO_P1_CHEST_MAC, 1, sendToGameServerQueue, receiveFromGameServerQueue1)
         #beetle2 = Beetle(BLUNO_P2_LEG_MAC, 2, sendToGameServerQueue)
-        externalThread = threading.Thread(target=external.begin_external, args=(sendToGameServerQueue, receiveFromGameServerQueue0, receiveFromGameServerQueue1, 1,), name="External")
+        externalThread = threading.Thread(target=external_p1.begin_external, args=(sendToGameServerQueue, receiveFromGameServerQueue0, receiveFromGameServerQueue1, 1,), name="External")
         t0 = threading.Thread(target=run_beetle, args=(beetle0,), name="Beetle0")
         #t1 = threading.Thread(target=run_beetle, args=(beetle1,), name=f"Beetle1")
         #t2 = threading.Thread(target=run_beetle, args=(beetle2,), name=f"Beetle2")
