@@ -127,6 +127,7 @@ async def game_state_manager(currGameData, attacker_id: int,
 
     try:
         prediction_action = await pred_output_queue.get()
+
         if attacker_id == 1:
             targetInFOV = targetInFOV_p1
             numOfRain = numOfRain_p1
@@ -139,6 +140,10 @@ async def game_state_manager(currGameData, attacker_id: int,
             currGameData.p2.action = prediction_action
             targetPlayerData = currGameData.p2.game_state
             OpponentPlayerData = currGameData.p1.game_state
+
+        if prediction_action == "invalid":
+            logger.warning(f"[P{attacker_id}] Invalid action received: {prediction_action}. Doing nothing.")
+            return "invalid"
 
         # Handle rain bomb damage
         if targetInFOV:
@@ -170,6 +175,7 @@ async def game_state_manager(currGameData, attacker_id: int,
         elif prediction_action == "logout":
             logger.info(f"[P{attacker_id}] User logout")
         else:
-            logger.warning(f"[P{attacker_id}] Invalid action received: {prediction_action}. Doing nothing.")
+            logger.warning(f"[P{attacker_id}] Unknown action received: {prediction_action}. Doing nothing.")
+        return prediction_action
     except Exception as e:
         logger.exception(f"[P{attacker_id}] Error in game_state_manager: {e}")

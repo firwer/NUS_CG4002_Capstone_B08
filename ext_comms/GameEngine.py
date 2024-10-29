@@ -84,6 +84,7 @@ async def evaluation_server_job(curr_game_data: GameData, player_id: int, eval_i
         }
     }
     try:
+
         # Send updated game state to evaluation server
         await eval_input_queue.put(json.dumps(EvalGameData))
         logger.info(f"[P{player_id}] Sent game data to evaluation server.")
@@ -332,14 +333,17 @@ class GameEngine:
         while True:
             try:
                 # Verify FOV with visualizer and update game state
-                await game_state_manager(currGameData=self.currGameData, attacker_id=player_id,
+                predicted_action = await game_state_manager(currGameData=self.currGameData, attacker_id=player_id,
                                          pred_output_queue=pred_output_queue,
                                          gun_state_queue=gun_state_queue)
-                # Send updated game state to evaluation server
-                await evaluation_server_job(curr_game_data=self.currGameData,
-                                            player_id=player_id,
-                                            eval_input_queue=self.engine_to_evaluation_server_queue,
-                                            eval_output_queue=self.evaluation_server_to_engine_queue)
+
+                # Only send game state to evaluation server if the action is a valid one
+                if predicted_action in ['gun', 'bomb', 'shield', 'rain', 'logout', 'reload', "basket", "soccer", "volley", "bowl"]:
+                    # Send updated game state to evaluation server
+                    await evaluation_server_job(curr_game_data=self.currGameData,
+                                                player_id=player_id,
+                                                eval_input_queue=self.engine_to_evaluation_server_queue,
+                                                eval_output_queue=self.evaluation_server_to_engine_queue)
 
                 # Send updated game state to visualizer
                 await visualizer_send_queue.put("gs_" + self.currGameData.to_json(player_id))  # Add gs_ prefix to indicate game
