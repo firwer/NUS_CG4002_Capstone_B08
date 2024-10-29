@@ -123,7 +123,6 @@ async def getVState(visualizer_receive_queue: asyncio.Queue, player_id: int):
 
 async def game_state_manager(currGameData, attacker_id: int,
                              pred_output_queue: asyncio.Queue,
-                             visualizer_send_queue: asyncio.Queue,
                              gun_state_queue: asyncio.Queue):
     global targetInFOV_p1, numOfRain_p1, targetInFOV_p2, numOfRain_p2
 
@@ -145,7 +144,7 @@ async def game_state_manager(currGameData, attacker_id: int,
         # Handle rain bomb damage
         if targetInFOV:
             for _ in range(numOfRain):
-                logger.info("-5 HP RAIN BOMB")
+                logger.info(f"[P{attacker_id}] -5 HP RAIN BOMB")
                 await reduce_health(OpponentPlayerData, config.GAME_RAIN_DMG)
 
         if prediction_action == "gun":
@@ -159,7 +158,7 @@ async def game_state_manager(currGameData, attacker_id: int,
                 # Only deduct bullet
                 if targetPlayerData["bullets"] > 0:
                     targetPlayerData["bullets"] -= 1
-                    logger.info(f"Player {attacker_id}: Shot missed. Bullets left: {targetPlayerData['bullets']}")
+                    logger.info(f"[P{attacker_id}] Shot missed. Bullets left: {targetPlayerData['bullets']}")
         elif prediction_action == "shield":
             await shield(targetPlayerData)
         elif prediction_action == "reload":
@@ -170,12 +169,8 @@ async def game_state_manager(currGameData, attacker_id: int,
             if targetInFOV:
                 await reduce_health(OpponentPlayerData, config.GAME_AI_DMG)
         elif prediction_action == "logout":
-            logger.info("User logout")
+            logger.info(f"[P{attacker_id}] User logout")
         else:
-            logger.warning(f"Invalid action received: {prediction_action}. Doing nothing.")
-
-        # Send updated game state to visualizer
-        await visualizer_send_queue.put("gs_" + currGameData.to_json(attacker_id))  # Add gs_ prefix to indicate game
-        logger.debug(f"Sent updated game state to visualizer for player {attacker_id}")
+            logger.warning(f"[P{attacker_id}] Invalid action received: {prediction_action}. Doing nothing.")
     except Exception as e:
-        logger.exception(f"Error in game_state_manager for player {attacker_id}: {e}")
+        logger.exception(f"[P{attacker_id}] Error in game_state_manager: {e}")

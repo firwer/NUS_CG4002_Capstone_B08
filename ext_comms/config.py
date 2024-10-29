@@ -59,4 +59,4 @@ GAME_RAIN_DMG = 5
 
 # Game Configurations
 GAME_HEALTH_PKT_TIMEOUT = 0.5  # Time to wait for health packet to arrive before timeout
-GAME_AI_PACKET_COUNT = 60  # Desired number of packets to collect
+GAME_AI_PACKET_COUNT = 50  # Desired number of packets to collect
