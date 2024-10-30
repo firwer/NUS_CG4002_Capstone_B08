@@ -3,6 +3,7 @@ import asyncio
 import json
 
 import config
+from ActionCooldownManager import ActionCooldownManager
 from logger_config import setup_logger
 from EvaluationProcess import start_evaluation_process
 from GameLogicProcess import game_state_manager
@@ -206,10 +207,10 @@ async def start_relay_node_data_handler(src_input_queue_p1: asyncio.Queue,
                 try:
                     # Wait for corresponding health packet from the opponent
                     await asyncio.wait_for(opponent_health_queue.get(), timeout=config.GAME_HEALTH_PKT_TIMEOUT)
-                    logger.info(f"[P{player_id}] Shot hit the opponent")
+                    logger.info(f"[P{player_id}] Received health packet from Opponent's IR sensor")
                     output_gun_state_queue.put_nowait("hit")
                 except asyncio.TimeoutError:
-                    logger.info(f"[P{player_id}] Shot missed the opponent")
+                    logger.info(f"[P{player_id}] Did not receive health packet from Opponent's IR sensor")
                     output_gun_state_queue.put_nowait("miss")
             except Exception as e:
                 logger.exception(f"[P{player_id}] Error in sync_gun_action: {e}")
@@ -255,6 +256,9 @@ class GameEngine:
         self.gun_state_queue_p2 = asyncio.Queue()
 
         self.currGameData = GameData()
+
+        self.cooldown_manager = ActionCooldownManager(cooldown_period=config.GAME_ACTION_COOLDOWN)
+        logger.info("Game Engine Initialized.")
 
     async def start_game(self):
         logger.info("Initializing game engine tasks.")
@@ -334,11 +338,15 @@ class GameEngine:
             try:
                 # Verify FOV with visualizer and update game state
                 predicted_action = await game_state_manager(currGameData=self.currGameData, attacker_id=player_id,
-                                         pred_output_queue=pred_output_queue,
-                                         gun_state_queue=gun_state_queue)
+                                                            pred_output_queue=pred_output_queue,
+                                                            gun_state_queue=gun_state_queue,
+                                                            cooldown_manager=self.cooldown_manager)
+                if predicted_action == "invalid-cooldown":
+                    logger.warning(f"[P{player_id}] Duplicate action received during cooldown period. Discarding action.")
 
                 # Only send game state to evaluation server if the action is a valid one
-                if predicted_action in ['gun', 'bomb', 'shield', 'rain', 'logout', 'reload', "basket", "soccer", "volley", "bowl"]:
+                if predicted_action in ['gun', 'bomb', 'shield', 'rain', 'logout', 'reload', "basket", "soccer",
+                                        "volley", "bowl"]:
                     # Send updated game state to evaluation server
                     await evaluation_server_job(curr_game_data=self.currGameData,
                                                 player_id=player_id,
@@ -346,9 +354,11 @@ class GameEngine:
                                                 eval_output_queue=self.evaluation_server_to_engine_queue)
 
                 # Send updated game state to visualizer
-                await visualizer_send_queue.put("gs_" + self.currGameData.to_json(player_id))  # Add gs_ prefix to indicate game
+                await visualizer_send_queue.put(
+                    "gs_" + self.currGameData.to_json(player_id))  # Add gs_ prefix to indicate game
 
-                logger.info(f"[P{player_id}] Returning Game State To Relay Node: {self.currGameData.to_json(player_id)}")
+                logger.info(
+                    f"[P{player_id}] Returning Game State To Relay Node: {self.currGameData.to_json(player_id)}")
                 # Send validated/verified game state to relay node
                 await relay_node_input_queue.put(f"{self.currGameData.to_json(player_id)}")
             except Exception as e:

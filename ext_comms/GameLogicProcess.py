@@ -1,6 +1,7 @@
 # gamelogicprocess.py
 import asyncio
 
+from ActionCooldownManager import ActionCooldownManager
 from logger_config import setup_logger
 import config
 
@@ -122,9 +123,9 @@ async def getVState(visualizer_receive_queue: asyncio.Queue, player_id: int):
 
 async def game_state_manager(currGameData, attacker_id: int,
                              pred_output_queue: asyncio.Queue,
-                             gun_state_queue: asyncio.Queue):
+                             gun_state_queue: asyncio.Queue,
+                             cooldown_manager: ActionCooldownManager):
     global targetInFOV_p1, numOfRain_p1, targetInFOV_p2, numOfRain_p2
-
     try:
         prediction_action = await pred_output_queue.get()
 
@@ -145,6 +146,14 @@ async def game_state_manager(currGameData, attacker_id: int,
             logger.warning(f"[P{attacker_id}] Invalid action received: {prediction_action}. Doing nothing.")
             return "invalid"
 
+        logger.debug(f"[P{attacker_id}] Attempting to acquire cooldown slot.")
+        can_process = await cooldown_manager.acquire_action_slot(attacker_id)
+        if not can_process:
+            logger.warning(f"[P{attacker_id}] Action '{prediction_action}' discarded due to cooldown.")
+            return "invalid-cooldown"
+
+        logger.debug(f"[P{attacker_id}] Action '{prediction_action}' accepted and being processed.")
+
         # Handle rain bomb damage
         if targetInFOV:
             for _ in range(numOfRain):
@@ -156,6 +165,7 @@ async def game_state_manager(currGameData, attacker_id: int,
             will_hit = False
 
             if not config.FREEPLAY_MODE and targetInFOV:
+                logger.info(f"[P{attacker_id}] Opponent in FOV, Shot HIT regardless of IR sensor.")
                 will_hit = True
             else:
                 # Drain the queue to get the latest result
@@ -165,11 +175,11 @@ async def game_state_manager(currGameData, attacker_id: int,
                     result = await gun_state_queue.get()
                 if result == "hit":
                     will_hit = True
-                    logger.info(f"[P{attacker_id}] Shot HIT. Bullets left: {targetPlayerData['bullets']}")
                 elif result == "miss" and targetPlayerData["bullets"] > 0:
                     targetPlayerData["bullets"] -= 1
                     logger.info(f"[P{attacker_id}] Shot MISS. Bullets left: {targetPlayerData['bullets']}")
             if will_hit:
+                logger.info(f"[P{attacker_id}] Gun shot HIT Opponent.")
                 await gun_shoot(targetPlayerData, OpponentPlayerData)
         elif prediction_action == "shield":
             await shield(targetPlayerData)
