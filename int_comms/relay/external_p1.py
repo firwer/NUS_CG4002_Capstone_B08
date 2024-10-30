@@ -45,12 +45,14 @@ def receive_queue_handler_integrated(tcpController: TCPC_Controller_Sync, receiv
                 player = json.loads(root['p1'])
                 pkt.bullet = player["game_state"]["bullets"]
                 pkt.health = player["game_state"]["hp"]
-                ext_logger.info(f"P1 getting {pkt.bullet} bullets, {pkt.health} health")
+                pkt.shield = player["game_state"]["shield_hp"]
+                ext_logger.info(f"P1 getting {pkt.bullet} bullets, {pkt.health} health, {pkt.shield} shield")
             else:
                 player = json.loads(root['p2'])
                 pkt.bullet = player["game_state"]["bullets"]
                 pkt.health = player["game_state"]["hp"]
-                ext_logger.info(f"P2 getting {pkt.bullet} bullets, {pkt.health} health")
+                pkt.shield = player["game_state"]["shield_hp"]
+                ext_logger.info(f"P2 getting {pkt.bullet} bullets, {pkt.health} health, {pkt.shield} shield")
 
             # broadcast the queues 
             for receive_queue in receive_queues:
