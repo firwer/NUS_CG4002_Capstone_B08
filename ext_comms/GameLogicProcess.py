@@ -151,18 +151,26 @@ async def game_state_manager(currGameData, attacker_id: int,
                 logger.info(f"[P{attacker_id}] -5 HP RAIN BOMB")
                 await reduce_health(OpponentPlayerData, config.GAME_RAIN_DMG)
 
+        # Handle other generic actions
         if prediction_action == "gun":
-            result = await gun_state_queue.get()
-            # Empty out gun_state_queue and get the last item to prevent accumulation
-            while not gun_state_queue.empty():
+            will_hit = False
+
+            if not config.FREEPLAY_MODE and targetInFOV:
+                will_hit = True
+            else:
+                # Drain the queue to get the latest result
                 result = await gun_state_queue.get()
-            if result == "hit":
-                await gun_shoot(targetPlayerData, OpponentPlayerData)
-            elif result == "miss":
-                # Only deduct bullet
-                if targetPlayerData["bullets"] > 0:
+                # Empty out gun_state_queue and get the last item to prevent accumulation
+                while not gun_state_queue.empty():
+                    result = await gun_state_queue.get()
+                if result == "hit":
+                    will_hit = True
+                    logger.info(f"[P{attacker_id}] Shot HIT. Bullets left: {targetPlayerData['bullets']}")
+                elif result == "miss" and targetPlayerData["bullets"] > 0:
                     targetPlayerData["bullets"] -= 1
-                    logger.info(f"[P{attacker_id}] Shot missed. Bullets left: {targetPlayerData['bullets']}")
+                    logger.info(f"[P{attacker_id}] Shot MISS. Bullets left: {targetPlayerData['bullets']}")
+            if will_hit:
+                await gun_shoot(targetPlayerData, OpponentPlayerData)
         elif prediction_action == "shield":
             await shield(targetPlayerData)
         elif prediction_action == "reload":

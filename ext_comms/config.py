@@ -1,6 +1,7 @@
 # Game Mode Configurations
 PLAYER_MODE = 1  # 1 for single player, 2 for multiplayer
 VISUALIZER_ENABLED = False  # KIV
+FREEPLAY_MODE = False
 
 # Relay Node Configuration
 RELAY_NODE_LOCAL_TEST = False  # Set to True for local env relay node testing
