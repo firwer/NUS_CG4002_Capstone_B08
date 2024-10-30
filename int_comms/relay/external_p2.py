@@ -1,4 +1,5 @@
 import json
+import struct
 from logging import Logger
 import logging
 import os
@@ -9,38 +10,20 @@ from queue import Queue
 from threading import Thread
 
 import config
+from int_comms.hardcoded_imu import basket_packets, bowling_packets, reload_packets, volley_packets, rainbomb_packets, \
+    shield_packets, logout_packets
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from comms.TCPC_Controller_Sync import TCPC_Controller_Sync
 from int_comms.relay.packet import PACKET_DATA_IMU, PACKET_DATA_BULLET, PACKET_DATA_HEALTH, PACKET_DATA_KICK, PacketImu, \
     PacketBullet, PacketHealth, PacketKick, PacketGamestate, get_packet
 
-RELAY_NODE_PLAYER = -1
+ext_logger = logging.getLogger("External2")
+
+RELAY_NODE_PLAYER = 2
 PLAYER_NUMBER = 2
 ext_logger = logging.getLogger(f"Extern{PLAYER_NUMBER}")
 
-def get_user_input(from_beetles_queue1 : Queue, from_beetles_queue2 : Queue, from_beetles_queue3 : Queue):
-    IMU_Bullet_beetle = from_beetles_queue1
-    Health_beetle = from_beetles_queue2
-    Kick_beetle = from_beetles_queue3
-    while True:
-        user_input = input("\nEnter packet type to send: ")
-        # Map user input to packet types
-        packet_type = user_input.strip().upper()
-        if packet_type == 'IMU':
-            packet = sim_get_packet(PACKET_DATA_IMU)
-            IMU_Bullet_beetle.put(packet)
-        elif packet_type == 'BULLET':
-            packet = sim_get_packet(PACKET_DATA_BULLET)
-            IMU_Bullet_beetle.put(packet)
-        elif packet_type == 'HEALTH':
-            packet = sim_get_packet(PACKET_DATA_HEALTH)
-            Health_beetle.put(packet)
-        elif packet_type == 'KICK':
-            packet = sim_get_packet(PACKET_DATA_KICK)
-            Kick_beetle.put(packet)
-        else:
-            print("Invalid packet type.")
-            continue
 
 def receive_queue_handler_integrated(tcpController: TCPC_Controller_Sync, receive_queues):
     """Receives gamestate from game engine. Packs it into PacketGamestate, sends to int-comms.
@@ -49,7 +32,7 @@ def receive_queue_handler_integrated(tcpController: TCPC_Controller_Sync, receiv
     prev_err = None
     while True:
         try:
-            msg = tcpController.recv_decrypt() # this is blocking?
+            msg = tcpController.recv_decrypt()  # this is blocking?
             if msg is None:
                 # ext_logger.info("msg is none, continuing..")
                 continue
@@ -79,6 +62,7 @@ def receive_queue_handler_integrated(tcpController: TCPC_Controller_Sync, receiv
                 prev_err = e
                 # ext_logger.debug(f"Error receiving message: {e}")
 
+
 def receive_queue_handler(tcpController: TCPC_Controller_Sync, receive_queue: Queue):
     while True:
         try:
@@ -94,25 +78,32 @@ def send_queue_handler(tcpController: TCPC_Controller_Sync, send_queue: Queue):
         tcpController.send(message.to_bytearray())
 
 
-def aggregator_thread_main(sendToGameServerQueue: Queue, from_beetles_queue, to_beetles_queues,
-                           receiveFromGameServerQueue: Queue):
-    """Aggregates the beetles' data"""
-    while True:
-        # Use a combined list of queues to wait on
-        for from_queue in from_beetles_queue:
-            try:
-                data = from_queue.get(timeout=0.1)
-                sendToGameServerQueue.put(data)
-            except Exception as error:
-                continue
-        try:
-            data = receiveFromGameServerQueue.get(timeout=0.1)
-            for to_queue in to_beetles_queues:
-                to_queue.put(data)
-        except Exception as error:
-            continue
+def begin_external(sendToGameServerQueue: Queue, receiveFromGameServerQueue0: Queue, receiveFromGameServerQueue1,
+                   player_num):
+    global RELAY_NODE_PLAYER
+    RELAY_NODE_PLAYER = player_num
+    ext_logger.debug("Controller sync begin...")
+    wsController = TCPC_Controller_Sync(
+        config.TCP_SERVER_HOST, config.TCP_SERVER_PORT, config.TCP_SECRET_KEY
+    )
+    ext_logger.debug("External comms liaison starting...")
+    wsController.connect()
+    wsController.identify_relay_node(RELAY_NODE_PLAYER)
+    receiveQueues = [receiveFromGameServerQueue0, receiveFromGameServerQueue1]
+    ext_logger.debug("External comms liaison connected!")
+    # start the input thread
+    send_thread = Thread(target=send_queue_handler, args=(wsController, sendToGameServerQueue))
+    receive_thread = Thread(target=receive_queue_handler_integrated, args=(wsController, receiveQueues))
+    send_thread.start()
+    receive_thread.start()
+    send_thread.join()
+    receive_thread.join()
 
 
+##
+## HW Simulator Code Below
+##
+##
 def sim_get_packet(type):
     """Chooses a packet to send to the external comms side."""
     if type == PACKET_DATA_IMU:
@@ -142,121 +133,136 @@ def sim_get_packet(type):
     assert False  # this should never trigger!
 
 
-def sim_beetle(id, toExternal: Queue, fromExternal: Queue = None):
-    if id == 1:  # IMU, Bullet
-        print(f"Starting IMU, Bullet Mock beetle{id}")
-        packets = []
-        while True:
-            coin_flip = random.randrange(0, 2)
-            if coin_flip == 1:
-                for _ in range(60):
-                    packets.append(get_packet(PACKET_DATA_IMU))
-                # Send the packets in a period of 0.5s
-                for packet in packets:
-                    toExternal.put(packet)
-                    time.sleep(0.5 / len(packets))  # distribute the packets over 0.5s
-                packets.clear()  # Clear the packet list after sending them
+# Function to convert IMU data into byte array for PacketImu
+def create_packet_from_imu_data(imu_data):
+    # Convert IMU data to a byte array (each sensor value is 2 bytes - 16-bit signed integer)
+    byte_array = bytearray()
+
+    # Add the packet type (for simplicity, we'll assume it's 1 byte; you can adjust as needed)
+    byte_array.append(PACKET_DATA_IMU)
+
+    # Seq_num and adc are placeholders (assuming 1 byte each)
+    byte_array.append(0)  # Placeholder for seq_num
+    byte_array.append(0)  # Placeholder for adc
+
+    # Convert each IMU value into 2 bytes (16-bit signed integer) and append to the byte array
+    byte_array.extend(struct.pack('<h', imu_data['ax']))  # Convert ax to 2 bytes
+    byte_array.extend(struct.pack('<h', imu_data['ay']))  # Convert ay to 2 bytes
+    byte_array.extend(struct.pack('<h', imu_data['az']))  # Convert az to 2 bytes
+    byte_array.extend(struct.pack('<h', imu_data['gx']))  # Convert gx to 2 bytes
+    byte_array.extend(struct.pack('<h', imu_data['gy']))  # Convert gy to 2 bytes
+    byte_array.extend(struct.pack('<h', imu_data['gz']))  # Convert gz to 2 bytes
+
+    # Add 4 bytes of padding
+    byte_array.extend(bytearray(4))
+
+    # Add a placeholder for CRC8 (1 byte)
+    byte_array.append(0)  # Placeholder for CRC8
+
+    # Ensure the byte array has a total of 20 bytes (if something is missing, add padding)
+    while len(byte_array) < 20:
+        byte_array.append(0)
+
+    return byte_array
+
+
+def create_imu_packets(imu_data_list):
+    packets = []
+
+    for imu_data in imu_data_list:
+        byte_array = create_packet_from_imu_data(imu_data)
+        packet = PacketImu(byteArray=byte_array)  # Create a PacketImu instance with the byte array
+        packets.append(packet)
+
+    return packets
+
+
+def display_menu():
+    """Display the interactive menu for packet selection"""
+    print("\nSelect packet type to send:")
+    print("1. Basket")
+    print("2. Bowl")
+    print("3. Reload")
+    print("4. Volley")
+    print("5. Bomb (Rainbomb)")
+    print("6. Shield")
+    print("7. Logout")
+    print("8. Gun")
+    print("9. Health")
+    print("10. Soccer (Kick)")
+    print("0. Exit")
+
+
+def get_user_input(sendToGameServerQueue: Queue):
+    adc_counter = 0
+    pkts = []
+
+    # Dictionary to map user selections to packet types and functions
+    packet_options = {
+        '1': ("Basket", create_imu_packets, basket_packets),
+        '2': ("Bowl", create_imu_packets, bowling_packets),
+        '3': ("Reload", create_imu_packets, reload_packets),
+        '4': ("Volley", create_imu_packets, volley_packets),
+        '5': ("Bomb (Rainbomb)", create_imu_packets, rainbomb_packets),
+        '6': ("Shield", create_imu_packets, shield_packets),
+        '7': ("Logout", create_imu_packets, logout_packets),
+        '8': ("Gun", [sim_get_packet], PACKET_DATA_BULLET),
+        '9': ("Health", [sim_get_packet], PACKET_DATA_HEALTH),
+        '10': ("Soccer (Kick)", [sim_get_packet], PACKET_DATA_KICK)
+    }
+
+    while True:
+        display_menu()
+        user_input = input("\nEnter your choice (0 to exit): ").strip()
+
+        if user_input == '0':
+            print("Exiting...")
+            break
+
+        # Get packet type based on user selection
+        if user_input in packet_options:
+            packet_name, packet_function, packet_data = packet_options[user_input]
+            print(f"\nYou selected: {packet_name}")
+
+            # Generate packets based on the selected packet type
+            if packet_name == "Gun" or packet_name == "Health" or packet_name == "Soccer (Kick)":
+                pkts = [sim_get_packet(packet_data)]  # Single packet for Gun, Health, and Kick
             else:
-                packet = get_packet(PACKET_DATA_BULLET)
-                toExternal.put(packet)
-            if not fromExternal.empty():
-                print(f"beetle{id} got: {fromExternal.get_nowait()}")
-    elif id == 2:
-        print(f"Starting Health Mock beetle{id}")
-        task_period_ns = 1000 * 1e6  # ms * ns_offset
-        startTime = time.time_ns()
-        while True:
-            if time.time_ns() - startTime > task_period_ns:
-                packet = get_packet(PACKET_DATA_HEALTH)
-                toExternal.put(packet)
-                startTime = time.time_ns()
-            if not fromExternal.empty():
-                print(f"beetle{id} got: {fromExternal.get_nowait()}")
-    elif id == 3:
-        print(f"Starting Kick Mock beetle{id}")
-        while True:
-            time.sleep(random.randrange(4, 11))
-            packet = get_packet(PACKET_DATA_KICK)
-            toExternal.put(packet)
+                pkts = packet_function(packet_data)  # IMU packets for other options
 
+            # Send packets
+            for i, packet in enumerate(pkts):
+                packet.adc = adc_counter
+                print(f"Sending {i + 1}/60 packet")
+                time.sleep(0.01)  # Delay to simulate real-time packet sending
+                sendToGameServerQueue.put(packet)
 
-def begin_external(sendToGameServerQueue:Queue, receiveFromGameServerQueue0:Queue, receiveFromGameServerQueue1, player_num):
-    global RELAY_NODE_PLAYER
-    RELAY_NODE_PLAYER = player_num
-    ext_logger.debug("Controller sync begin...")
+            adc_counter += 1
+
+        else:
+            print("Invalid selection. Please choose a valid option.")
+
+# This is only for testing/simulation purposes. Actual internal comms side entry point is not here.
+def start_simulate():
+    ext_logger.debug("DEV: SIMULATION STARTED. NOT FOR ACTUAL USE.")
+    sendToGameServerQueue, receiveFromGameServerQueue0, receiveFromGameServerQueue1 = Queue(), Queue(), Queue()
     wsController = TCPC_Controller_Sync(
         config.TCP_SERVER_HOST, config.TCP_SERVER_PORT, config.TCP_SECRET_KEY
     )
-    ext_logger.debug("External comms liaison starting...")
-    wsController.connect()
-    wsController.identify_relay_node(RELAY_NODE_PLAYER)
-    receiveQueues = [receiveFromGameServerQueue0, receiveFromGameServerQueue1]
+    wsController.identify_relay_node(2)
     ext_logger.debug("External comms liaison connected!")
-    # start the input thread
+    receiveQueues = [receiveFromGameServerQueue0, receiveFromGameServerQueue1]
     send_thread = Thread(target=send_queue_handler, args=(wsController, sendToGameServerQueue))
-    receive_thread = Thread(target=receive_queue_handler_integrated, args=(wsController, receiveQueues))    
+    #receive_thread = Thread(target=receive_queue_handler, args=(wsController, receiveQueues))
+
     send_thread.start()
-    receive_thread.start()
+    #receive_thread.start()
+
+    get_user_input(sendToGameServerQueue)
+
     send_thread.join()
-    receive_thread.join()
-
-def simulate():
-    print("hello")
-    begin_external(Queue(), Queue(), Queue(), 1)
-    # simulate beetle passing messages
-    # global RELAY_NODE_PLAYER
-    # fromBeetle1 = Queue()
-    # fromBeetle2 = Queue()
-    # fromBeetle3 = Queue()
-    # toBeetle1 = Queue()
-    # toBeetle2 = Queue()
-    # receiveFromGameServerQueue = Queue()
-    # sendToGameServerQueue = Queue()
-
-    # from_beetles_queues = [fromBeetle1, fromBeetle2, fromBeetle3]
-    # to_beetles_queues = [toBeetle1, toBeetle2]
-    # while RELAY_NODE_PLAYER != 1 and RELAY_NODE_PLAYER != 2:
-    #     relay_node_id = input("Select Relay Node (1/2): ")
-    #     RELAY_NODE_PLAYER = int(relay_node_id)
-
-    # Logger.debug("Establishing connection to TCP server...")
-    # wsController = TCPC_Controller_Sync(
-    #     config.TCP_SERVER_HOST, config.TCP_SERVER_PORT, config.TCP_SECRET_KEY
-    # )
-    # wsController.connect()
-    # wsController.identify_relay_node(RELAY_NODE_PLAYER)
-
-    # agg_thread = Thread(target=aggregator_thread_main, args=(
-    #     sendToGameServerQueue, from_beetles_queues, to_beetles_queues, receiveFromGameServerQueue))
-    # send_thread = Thread(target=send_queue_handler, args=(wsController, sendToGameServerQueue))
-    # receive_thread = Thread(target=receive_queue_handler, args=(wsController, receiveFromGameServerQueue))
-    # # Manual User Input Testing Thread
-    # user_input_thread = Thread(target=get_user_input, args=[fromBeetle1, fromBeetle2, fromBeetle3])
-
-    # agg_thread.start()
-    # send_thread.start()
-    # receive_thread.start()
-    # user_input_thread.start()
-
-    # agg_thread.join()
-    # send_thread.join()
-    # receive_thread.join()
-    # user_input_thread.join()
-
-    # Simulated Input Threads
-    #thread_beetle1 = Thread(target=sim_beetle, args=(1, fromBeetle1, toBeetle1,))
-    #thread_beetle2 = Thread(target=sim_beetle, args=(2, fromBeetle2, toBeetle2,))
-    #thread_beetle3 = Thread(target=sim_beetle, args=(3, fromBeetle3,))
-    # TODO: start the threads
-    #thread_entry.start()
-    # thread_beetle1.start()
-    # thread_beetle2.start()
-    # thread_beetle3.start()
-    #thread_entry.join()
-    # thread_beetle1.join()
-    # thread_beetle2.join()
-    # thread_beetle3.join()
+    #receive_thread.join()
 
 
 if __name__ == "__main__":
-    simulate()
+    start_simulate()

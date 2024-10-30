@@ -61,18 +61,25 @@ namespace M2MqttUnity.Examples
         private List<string> eventMessages = new List<string>();
         
         private int tempPlayerDeath = 0;
+        private int tempBombAmmo = 2;
+        private int tempBulletAmmo = 6;
         private int tempEnemyDeath = 0;
+        private int tempShieldHpEquipped = 0;
 
-        public void PublishState(int player_id, bool FOVmsg, bool inRainMsg, int inRainNumber)
+        // Define a list of actions that do not require ammo
+        private string[] noAmmoActions = { "reload", "shield", "volley", "basket", "soccer", "bowl", "logout" };
+        public void PublishState(int player_id, bool FOVmsg, int inRainNumber)
         {
-            string msgToSend = "vstate_fov_" + FOVmsg.ToString() + "_inbomb_" + inRainMsg.ToString() + "_" + inRainNumber.ToString();
+            string msgToSend = "vstate_fov_" + FOVmsg.ToString() + "_inbomb_" + inRainNumber.ToString();
             // Publish the generated message
             if (player_id == 2) {
                 client.Publish("game_state/visualizer_to_engine/p2", System.Text.Encoding.UTF8.GetBytes(msgToSend), MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, false);
             } else {
                 client.Publish("game_state/visualizer_to_engine/p1", System.Text.Encoding.UTF8.GetBytes(msgToSend), MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, false); 
             }
-            Debug.Log(msgToSend);
+
+            Debug.Log("CAPSTONE: " + msgToSend);
+
         }
 
         public void SetPlayerMode(bool isP1)
@@ -85,28 +92,28 @@ namespace M2MqttUnity.Examples
         {
             string playerMsg;
 
-			if (playerNum == 1)
+            if (playerNum == 1)
             {
                 isP1 = true;
-				playerMsg = "Setting player mode to Player 1";
-			}
+                playerMsg = "Setting player mode to Player 1";
+            }
             else
             {
                 isP1 = false;
-				playerMsg = "Setting player mode to Player 2";
-				
-			}
+                playerMsg = "Setting player mode to Player 2";
+                
+            }
             Debug.Log(playerMsg);
-			uiHandlerGameObject.UpdateSettingsDescription(playerMsg);
-			
-		}
+            uiHandlerGameObject.UpdateSettingsDescription(playerMsg);
+            
+        }
 
         protected override void OnConnecting()
         {
             base.OnConnecting();
-			string connectingDescription = "Connecting to broker on " + brokerAddress + ":" + brokerPort.ToString() + "...\n";
-			uiHandlerGameObject.UpdateSettingsDescription(connectingDescription);
-			Debug.Log(connectingDescription);
+            string connectingDescription = "Connecting to broker on " + brokerAddress + ":" + brokerPort.ToString() + "...\n";
+            uiHandlerGameObject.UpdateSettingsDescription(connectingDescription);
+            Debug.Log(connectingDescription);
         }
 
         protected override void OnConnected()
@@ -114,12 +121,12 @@ namespace M2MqttUnity.Examples
             base.OnConnected();
             string playerView = isP1 ? "Player 1 VIEW" : "Player 2 VIEW";
             string connectedDescription = "Connected to broker on " + brokerAddress + "\n" + " Currently " + playerView + "\n";
-			uiHandlerGameObject.UpdateSettingsDescription(connectedDescription);
-			Debug.Log(connectedDescription);
+            uiHandlerGameObject.UpdateSettingsDescription(connectedDescription);
+            Debug.Log(connectedDescription);
 
             if (autoTest)
             {
-                PublishState(1, true, true, 0);
+                PublishState(1, true, 0);
             }
         }
 
@@ -135,19 +142,19 @@ namespace M2MqttUnity.Examples
 
         protected override void OnConnectionFailed(string errorMessage)
         {
-            Debug.Log("CONNECTION FAILED! " + errorMessage);
+            Debug.Log("CAPSTONE: CONNECTION FAILED! " + errorMessage);
         }
 
         protected override void OnDisconnected()
         {
-            string disconnectedMsg = "Disconnected";
-			uiHandlerGameObject.UpdateSettingsDescription(disconnectedMsg);
-			Debug.Log(disconnectedMsg);
+            string disconnectedMsg = "CAPSTONE: Disconnected";
+            uiHandlerGameObject.UpdateSettingsDescription(disconnectedMsg);
+            Debug.Log(disconnectedMsg);
         }
 
         protected override void OnConnectionLost()
         {
-			Debug.Log("CONNECTION LOST!");
+            Debug.Log("CAPSTONE: CONNECTION LOST!");
         }
 
         public void LogoutPlayer(PlayerData player)
@@ -156,75 +163,45 @@ namespace M2MqttUnity.Examples
             Debug.Log($"Player {player.player_id} has logged out.");
         }
 
-		private void CheckAndHandleDeath(PlayerData player)
-		{
-			if (player.game_state.deaths > tempPlayerDeath)
-			{
-				msgHandlerGameObject.HandleDeath(player);
-                Debug.Log("DIED");
-				
-			}
-			tempPlayerDeath = player.game_state.deaths;
-            Debug.Log("tempPlayerDeath: " + tempPlayerDeath);
-		}
-
-		public void ProcessPlayerAction(PlayerData attacker, PlayerData opponent, bool targetInFOV)
+        private void CheckAndHandleDeath(PlayerData myPlayer, PlayerData opponent)
         {
-            string action = attacker.action;
-            GameState attackerState = attacker.game_state;
-            GameState opponentState = opponent.game_state;
+            if (myPlayer.game_state.deaths > tempPlayerDeath)
+            {
+                msgHandlerGameObject.HandleDeath(myPlayer);
+                Debug.Log("CAPSTONE: I DIED");
+                
+            }
+            if (opponent.game_state.deaths > tempEnemyDeath)
+            {
+                msgHandlerGameObject.HandleDeath(opponent);
+                Debug.Log("CAPSTONE: ENEMY DIED");
 
-            //// Check if action requires Field of View validation
-            //if (new List<string> { "basket", "soccer", "volley", "bowl", "bomb" }.Contains(action))
-            //{
-            //    if (in_sight == "in_sight_False") {
-            //        targetInFOV = false;
-            //    }
-            //}
-			if (isP1)
-			{
-				if (attacker.player_id == 1)
-				{
-					CheckAndHandleDeath(attacker);
-				}
-				else if (opponent.player_id == 1)
-				{
-					CheckAndHandleDeath(opponent);
-				}
-			}
-			else
-			{
-				if (attacker.player_id == 2)
-				{
-					CheckAndHandleDeath(attacker);
-				}
-				else if (opponent.player_id == 2)
-				{
-					CheckAndHandleDeath(opponent);
-				}
-			}
+            }
+            tempPlayerDeath = myPlayer.game_state.deaths;
+            tempEnemyDeath = opponent.game_state.deaths;
+        }
 
-			switch (action)
+        public void ProcessPlayerAction(int attackerID, string action, bool targetInFOV)
+        {
+            switch (action)
             {
                 case "gun":
-                    msgHandlerGameObject.HandleAIAction(action, attacker, opponent);
-					msgHandlerGameObject.HandleReduceHealth(opponent);
-					break;
+                    msgHandlerGameObject.HandleAIAction(action, attackerID);
+                    break;
 
                 case "shield":
-                    msgHandlerGameObject.HandleAIAction(action, attacker, opponent);
+                    msgHandlerGameObject.HandleAIAction(action, attackerID);
                     break;
 
                 case "reload":
-                    msgHandlerGameObject.HandleAIAction(action, attacker, opponent);
+                    msgHandlerGameObject.HandleAIAction(action, attackerID);
                     break;
 
                 case "bomb":
                     if (targetInFOV)
                     {
-						msgHandlerGameObject.HandleAIAction(action, attacker, opponent);
-						msgHandlerGameObject.HandleReduceHealth(opponent);
-					}
+                        msgHandlerGameObject.HandleAIAction(action, attackerID);
+                    }
                     break;
 
                 case "basket":
@@ -233,20 +210,100 @@ namespace M2MqttUnity.Examples
                 case "bowl":
                     if (targetInFOV)
                     {
-						msgHandlerGameObject.HandleAIAction(action, attacker, opponent);
-						msgHandlerGameObject.HandleReduceHealth(opponent);
-					}
+                        msgHandlerGameObject.HandleAIAction(action, attackerID);
+                    }
                     break;
 
                 case "logout":
-                    Disconnect();
-					break;
+                    //Disconnect();
+                    break;
 
                 default:
                     // No action or unknown action
                     break;
             }
             
+        }
+        public void ProcessPlayerState(PlayerData attacker, PlayerData opponent, bool targetInFOV)
+        {
+            string action = attacker.action;
+            GameState attackerState = attacker.game_state;
+            GameState opponentState = opponent.game_state;
+
+            if (isP1)
+            {
+                // If player is 1 and attacker id is 1
+                if (attacker.player_id == 1)
+                {
+                    tempBombAmmo = attacker.game_state.bombs;
+                    tempBulletAmmo = attacker.game_state.bullets;
+                    tempShieldHpEquipped = attacker.game_state.shield_hp;
+                    Debug.Log("CAPSTONE: Bomb ammo temp: " + tempBombAmmo);
+                    Debug.Log("CAPSTONE: Bullet ammo temp: " + tempBulletAmmo);
+                    CheckAndHandleDeath(attacker, opponent);
+                }
+                else if (opponent.player_id == 1)
+                {
+                    CheckAndHandleDeath(attacker, opponent);
+                }
+            }
+            else
+            {
+                if (attacker.player_id == 2)
+                {
+                    tempBombAmmo = attacker.game_state.bombs;
+                    tempBulletAmmo = attacker.game_state.bullets;
+                    tempShieldHpEquipped = attacker.game_state.shield_hp;
+                    CheckAndHandleDeath(attacker, opponent);
+                }
+                else if (opponent.player_id == 2)
+                {
+                    CheckAndHandleDeath(attacker, opponent);
+                }
+            }
+
+            // Updates opponent health no matter what happens (might be due to rain dmg)
+            msgHandlerGameObject.HandleReduceHealth(opponent);
+
+            switch (action)
+            {
+                case "gun":
+                    msgHandlerGameObject.HandleState(action, attacker, opponent);
+                    break;
+
+                case "shield":
+                    msgHandlerGameObject.HandleState(action, attacker, opponent);
+                    break;
+
+                case "reload":
+                    msgHandlerGameObject.HandleState(action, attacker, opponent);
+                    break;
+
+                case "bomb":
+                    if (targetInFOV)
+                    {
+                        msgHandlerGameObject.HandleState(action, attacker, opponent);
+                    }
+                    break;
+
+                case "basket":
+                case "soccer":
+                case "volley":
+                case "bowl":
+                    if (targetInFOV)
+                    {
+                        msgHandlerGameObject.HandleState(action, attacker, opponent);
+                    }
+                    break;
+
+                case "logout":
+                    break;
+
+                default:
+                    // No action or unknown action
+                    break;
+            }
+
         }
 
         protected override void Start()
@@ -286,28 +343,18 @@ namespace M2MqttUnity.Examples
             PlayerData player1 = JsonConvert.DeserializeObject<PlayerData>(rootObject.p1);
             PlayerData player2 = JsonConvert.DeserializeObject<PlayerData>(rootObject.p2);
 
-			// Process game state based on who is the attacker
-			if (dataOriginPlayerId == "1") {
-                ProcessPlayerAction(player1, player2, inSight);
+            // Process game state based on who is the attacker
+            if (dataOriginPlayerId == "1") {
+                ProcessPlayerState(player1, player2, inSight);
             } else {
-                ProcessPlayerAction(player2, player1, inSight);
+                ProcessPlayerState(player2, player1, inSight);
             }
 
             string formattedMsg = FormatPlayerData(player1, player2, inSight, dataOriginPlayerId);
-
-            Debug.Log("FormattedMsg: " + formattedMsg); // PRINTS on console to see if it receives msg properly @Darren
-
-            //if (player1.action == "basket" || player1.action == "soccer" || player1.action == "volley" || player1.action == "bowl" || player1.action == "bomb") {
-            //    if (this.isP1 && dataOriginPlayerId == "1") {
-            //        PublishFOVState(1, in_sight_msg);
-            //    } else if (!this.isP1 && dataOriginPlayerId == "2") {
-            //        PublishFOVState(2, in_sight_msg);
-            //    }
-            //}
         }
 
-		// Helper function to format player data into a string
-		private string FormatPlayerData(PlayerData player1, PlayerData player2, bool in_sight_msg, string dataOriginPlayerId)
+        // Helper function to format player data into a string
+        private string FormatPlayerData(PlayerData player1, PlayerData player2, bool in_sight_msg, string dataOriginPlayerId)
         {
             // Format Player 1 data
             string player1Data =$"  Health: {player1.game_state.hp}\n" +
@@ -349,50 +396,80 @@ namespace M2MqttUnity.Examples
         }
         protected override void Update()
         {
-			base.Update(); // call ProcessMqttEvents()
+            base.Update(); // call ProcessMqttEvents()
 
             if (eventMessages.Count > 0)
             {
                 foreach (string msg in eventMessages)
                 {
-					Debug.Log(msg);
-					string[] parts = msg.Split(new char[] { '_' }, 2); // Split into 2 parts
+                    Debug.Log(msg);
+                    string[] parts = msg.Split(new char[] { '_' }, 2); // Split into 2 parts
                     string keyword = parts[0];
 
-					// Checks if Enemy is in FOV
-					bool in_sight_msg = uiHandlerGameObject.GetEnemyFOV();
-					Debug.Log("DEBUG IN FOV: " + in_sight_msg);
-                    bool in_rain_msg = collisionHandlerGameObject.IsInRain();
-                    Debug.Log("DEBUG IN RAIN: " + in_rain_msg);
+                    // Checks if Enemy is in FOV
+                    bool in_sight_msg = uiHandlerGameObject.GetEnemyFOV();
+                    Debug.Log("CAPSTONE: DEBUG IN FOV: " + in_sight_msg);
                     int in_rainbombs_number = collisionHandlerGameObject.GetInRainNumber();
-					Debug.Log("DEBUG IN RAIN NUMBER: " + in_rainbombs_number);
-					// action msg in format: action_<playerID>_<action>
-					if (keyword == "action")
+                    Debug.Log("CAPSTONE: DEBUG IN RAIN NUMBER: " + in_rainbombs_number);
+
+                    // action msg in format: action_<playerID>_<action>
+                    if (keyword == "action")
                     {
                         string[] tempArr = parts[1].Split(new char[] { '_' }, 2);
                         string playerID = tempArr[0];
                         string action = tempArr[1];
-						if (new[] { "basket", "soccer", "volley", "bowl", "bomb", "gun" }.Contains(action))
-						{
-							if (this.isP1 && playerID == "1")
-							{
-								Debug.Log("Publishing");
-								PublishState(1, in_sight_msg, in_rain_msg, in_rainbombs_number);
-							}
-							else if (!this.isP1 && playerID == "2")
-							{
-								PublishState(2, in_sight_msg, in_rain_msg, in_rainbombs_number);
-							}
-						}
-					}
-					// game state msg in format: gs_<gameStateMessage>
-					else if (keyword == "gs")
+                        if (this.isP1 && playerID == "1")
+                        {
+                            Debug.Log("CAPSTONE: Publishing");
+                            PublishState(1, in_sight_msg, in_rainbombs_number);
+                            Debug.Log("CAPSTONE: Action received: " + action);
+
+                            if (action == "bomb" && tempBombAmmo <= 0)
+                            {
+                                uiHandlerGameObject.DisplayErrorBombText();
+                            }
+                            else if (action == "gun" && tempBulletAmmo <= 0)
+                            {
+                                uiHandlerGameObject.DisplayErrorGunText();
+                            }
+                            else if (action == "reload" && tempBulletAmmo > 0)
+                            {
+                                uiHandlerGameObject.DisplayErrorReloadText();
+                            }
+                            else if (action == "shield" && tempShieldHpEquipped > 0)
+                            {
+                                uiHandlerGameObject.DisplayErrorShieldText();
+                            }
+                            else if ((action == "bomb" && tempBombAmmo >= 1) || (action == "gun" && tempBulletAmmo >= 1) || noAmmoActions.Contains(action))
+                            {
+                                Debug.Log("CAPSTONE: Processing player 1 action");
+                                ProcessPlayerAction(1, action, in_sight_msg);
+                            }
+                            else
+                            {
+                                Debug.Log("CAPSTONE: Unable to ProcessPlayerAction");
+                            }
+                        }
+                        else if (!this.isP1 && playerID == "2")
+                        {
+                            PublishState(2, in_sight_msg, in_rainbombs_number);
+                            if ((action == "bomb" && tempBombAmmo >= 1) || (action == "gun" && tempBulletAmmo >= 1))
+                            {
+                                Debug.Log("Processing player 2 action");
+                                ProcessPlayerAction(2, action, in_sight_msg);
+                            }
+                        }
+                    }
+                    // game state msg in format: gs_<gameStateMessage>
+                    else if (keyword == "gs")
                     {
+                        Debug.Log("CAPSTONE: Processing GS msg");
+
                         ProcessMessage(parts[1], in_sight_msg);
                     }
                     else
                     {
-                        Debug.Log("Invalid Message Format");
+                        Debug.Log("CAPSTONE: Invalid Message Format");
                     }
                 }
                 eventMessages.Clear();
