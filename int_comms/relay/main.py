@@ -54,26 +54,9 @@ class NotifyDelegate(btle.DefaultDelegate):
         self.relayTxNumber = 0
 
     def handleNotification(self, cHandle, data: bytes):
+        self.buffer += PendingDeprecationWarning
         if len(data) < 20:
             logger.info(f"Fragmentatation: {len(data)}, {data.hex()}")
-            if self.previous_fragmentation == 0:
-                self.previous_fragmentation = len(data)
-                self.buffer += data
-            elif self.previous_fragmentation + len(data) == 20:
-                self.buffer += data
-                self.previous_fragmentation = 0
-            else: 
-                # remove the previous fragmented buffer - its corresponding pair has been lost.
-                self.buffer = self.buffer[:-self.previous_fragmentation]
-                logger.error(f"Mismatched fragment pair! Discarding...")
-                self.previous_fragmentation = 0
-                self.buffer += data
-        else:
-            self.buffer += data
-            # if random.randint(1,100) <= 1:
-            #     logger.info(f"Fudging...")
-            #     self.buffer += data[:-1]
-
 
     def has_packet(self) -> bool:
         return len(self.buffer) >= 20
@@ -166,6 +149,7 @@ class Beetle:
                 # verify the checksum - if fail, process the next packet
                 if not verify_checksum(data):
                     logger.error(f"{self.COLOR}Error: checksum failed for this PKT {data.hex()}")
+                    self.receiver.reset_buffer()
                     self.errors += 1
                     continue
                 else:

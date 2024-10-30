@@ -1,24 +1,44 @@
 #include <Wire.h>
 #include <MPU6050.h>
 #include <EEPROM.h>
-#define LED_OUTPUT_PIN 5
-#define IMU_INTERRUPT_PIN 2
-#define MPU_SAMPLE_RATE 20
-#define VIBRATOR_PIN 4
-#define FEEDBACK_PLAY_TIME 750
-
 #include "internal.hpp"
 #include "packet.h"
+#include <Kalman.h>
+#include <ArduinoQueue.h>
+#include <Tone.h>
+
+#define LED_OUTPUT_PIN 5
+#define IMU_INTERRUPT_PIN 2
+
+#define VIBRATOR_PIN 4
+#define FEEDBACK_PLAY_TIME 750
+#define KICK_DEBOUNCE_TIME 1000
+#define NOTE_DELAY 75
+#define BUZZER_PIN 3
 
 MPU6050 mpu;
+ArduinoQueue<uint16_t> noteQueue(20);
 
-const unsigned long SAMPLING_DELAY = 1000 / MPU_SAMPLE_RATE;
-unsigned long lastSampleTime = 0;
+unsigned long lastSoundTime = 0;
 unsigned long playingFeedbackTime = 0;
 bool isKickDetected = false;
 bool playingFeedback = false;
 
+#define MPU_SAMPLE_RATE 70    // CONFIG ME
+#define MOVING_AVERAGE_SIZE 7 // CONFIG ME
+ArduinoQueue<float> movingAverageQueue(MOVING_AVERAGE_SIZE);
+float movingAverage = 0;
+const unsigned long SAMPLING_DELAY = 1000 / MPU_SAMPLE_RATE;
+const float ACCEL_THRESHOLD = -7.0; // CONFIG ME (ALSO IN M/S^2)
+const float KICK_ANGLE = 65;        // CONFIG ME
+Kalman kalmanY;                     // Kalman filter for Y (pitch)
+
+Tone melody;
+
 void motionDetected();
+void detectKick();
+void playMotionFeedback();
+void playBLEFeedback();
 
 struct CalibrationData
 {
@@ -30,9 +50,15 @@ struct CalibrationData
   int16_t zgoffset;
 };
 
+uint32_t timer;
+float accX, accY, accZ, accelZReal;
+float gyroX, gyroY, gyroZ;
+float roll, pitch;
+
 CalibrationData calibration;
 
 volatile unsigned long lastKickTime = 0;
+unsigned long lastSampleTime = 0;
 
 void setup()
 {
@@ -45,25 +71,29 @@ void setup()
     while (1)
       ;
   }
-  mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_16);
+  mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_8);
   mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_500);
 
-  mpu.setDHPFMode(MPU6050_DHPF_1P25);
-  mpu.setDLPFMode(MPU6050_DLPF_BW_20);
-  mpu.setMotionDetectionThreshold(150);
-  mpu.setMotionDetectionDuration(1);
+  mpu.setDHPFMode(MPU6050_DHPF_5);
+  mpu.setDLPFMode(MPU6050_DLPF_BW_98);
 
-  mpu.setIntMotionEnabled(true);
+  calibration = EEPROM.get(0, calibration);
+  mpu.setXAccelOffset(calibration.xoffset);
+  mpu.setYAccelOffset(calibration.yoffset);
+  mpu.setZAccelOffset(calibration.zoffset);
+  mpu.setXGyroOffset(calibration.xgoffset);
+  mpu.setYGyroOffset(calibration.ygoffset);
+  mpu.setZGyroOffset(calibration.zgoffset);
 
-  pinMode(IMU_INTERRUPT_PIN, INPUT);
-  attachInterrupt(digitalPinToInterrupt(IMU_INTERRUPT_PIN), motionDetected, RISING);
+  pinMode(BUZZER_PIN, OUTPUT);
+  melody.begin(BUZZER_PIN);
+
   pinMode(LED_OUTPUT_PIN, OUTPUT);
   pinMode(VIBRATOR_PIN, OUTPUT);
   while (!ic_connect())
     ;
-  digitalWrite(LED_OUTPUT_PIN, HIGH);
-  delay(100);
-  digitalWrite(LED_OUTPUT_PIN, LOW);
+  playBLEFeedback();
+  timer = micros();
 }
 
 void loop()
@@ -71,14 +101,23 @@ void loop()
   // ensure that we are connected even when no kick is being done
   // WARN: might cause a spinlock.
   // @wanlin
-  communicate();
+  if (communicate())
+  {
+    playBLEFeedback();
+  }
+
+  detectKick();
 
   if (isKickDetected)
   {
     // push boolean kick detected to the server
     // @wanlin
     ic_push_kick();
-    communicate();
+    if (communicate())
+    {
+      playBLEFeedback();
+    }
+    playMotionFeedback();
     playingFeedback = true;
     isKickDetected = false;
     playingFeedbackTime = millis();
@@ -92,14 +131,74 @@ void loop()
     digitalWrite(VIBRATOR_PIN, LOW);
     playingFeedback = false;
   }
+  if (millis() - lastSoundTime > NOTE_DELAY)
+  {
+    if (noteQueue.itemCount() > 0)
+    {
+      uint16_t note = noteQueue.dequeue();
+      melody.play(note, 100); // Play note for 50ms
+    }
+    lastSoundTime = millis();
+  }
 }
 
-void motionDetected()
+void detectKick()
 {
+  // Read raw accelerometer and gyroscope data
+  int16_t ax, ay, az;
+  int16_t gx, gy, gz;
+  mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
 
-  if (millis() - lastKickTime > 1500) // 200 ms debounce
+  // Convert to proper units
+  accX = (float)ax / 16384.0 / 4.0;
+  accY = (float)ay / 16384.0 / 4.0;
+  accZ = (float)az / 16384.0 / 4.0;
+  accelZReal = ((az / 32767.0) * 8.0 * 9.81);
+
+  // Calculate the angles from the accelerometer
+  float pitchAcc = atan2(-accX, sqrt(accY * accY + accZ * accZ)) * 180 / PI;
+
+  float dt = (float)(micros() - timer) / 1000000;
+  timer = micros();
+
+  pitch = kalmanY.getAngle(pitchAcc, gyroY, dt);
+
+  if (millis() - lastSampleTime >= SAMPLING_DELAY)
   {
-    isKickDetected = true;
-    lastKickTime = millis();
+    if (movingAverageQueue.itemCount() == MOVING_AVERAGE_SIZE)
+    {
+      movingAverage -= movingAverageQueue.dequeue();
+      movingAverageQueue.enqueue(accelZReal);
+      movingAverage += accelZReal;
+      if ((accelZReal / MOVING_AVERAGE_SIZE) < ACCEL_THRESHOLD && pitch < KICK_ANGLE && pitch >= 0)
+      {
+        // Debounce to avoid multiple detections
+        if (millis() - lastKickTime > KICK_DEBOUNCE_TIME)
+        {
+          isKickDetected = true;
+          lastKickTime = millis();
+        }
+      }
+    }
+    else
+    {
+      movingAverageQueue.enqueue(accelZReal);
+      movingAverage += accelZReal;
+    }
+    lastSampleTime = millis();
   }
+}
+
+void playMotionFeedback()
+{
+  noteQueue.enqueue(NOTE_CS6);
+  noteQueue.enqueue(NOTE_D6);
+  noteQueue.enqueue(NOTE_E6);
+}
+
+void playBLEFeedback()
+{
+  noteQueue.enqueue(NOTE_F6);
+  noteQueue.enqueue(NOTE_G6);
+  noteQueue.enqueue(NOTE_A6);
 }

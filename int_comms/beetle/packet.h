@@ -57,8 +57,11 @@ typedef struct packet_health_t {
     uint8_t packet_type;
     uint8_t seq_num;
     uint8_t health_count;
+    uint8_t shield_count;
     uint64_t pad0;
-    uint64_t pad1;
+    uint32_t pad1;
+    uint16_t pad2;
+    uint8_t pad3;
     uint8_t crc8;
 };
 
@@ -76,10 +79,10 @@ typedef struct packet_gamestate_t {
     uint8_t seq_num;
     uint8_t bullet_num;
     uint8_t health_num;
+    uint8_t shield_num;
     uint64_t pad0;
     uint32_t pad1;
     uint16_t pad2;
-    uint8_t pad3;
     uint8_t crc8;
 };
 

@@ -22,6 +22,7 @@ ext_logger = logging.getLogger("External2")
 
 RELAY_NODE_PLAYER = 2
 PLAYER_NUMBER = 2
+ext_logger = logging.getLogger(f"Extern{PLAYER_NUMBER}")
 
 
 def receive_queue_handler_integrated(tcpController: TCPC_Controller_Sync, receive_queues):
@@ -44,12 +45,15 @@ def receive_queue_handler_integrated(tcpController: TCPC_Controller_Sync, receiv
                 player = json.loads(root['p1'])
                 pkt.bullet = player["game_state"]["bullets"]
                 pkt.health = player["game_state"]["hp"]
+                pkt.shield = player["gamestate"]["shield_hp"]
                 ext_logger.info(f"P1 getting {pkt.bullet} bullets, {pkt.health} health")
             else:
                 player = json.loads(root['p2'])
                 pkt.bullet = player["game_state"]["bullets"]
                 pkt.health = player["game_state"]["hp"]
+                pkt.shield = player["gamestate"]["shield_hp"]
                 ext_logger.info(f"P2 getting {pkt.bullet} bullets, {pkt.health} health")
+                
             # broadcast the queues 
             for receive_queue in receive_queues:
                 receive_queue.put(pkt)

@@ -140,12 +140,14 @@ class PacketHealth():
         if byteArray is None:
             self.seq_num = 0x0
             self.health = 0x0
-            self.padding = bytearray(16)
+            self.shield = 0x0
+            self.padding = bytearray(15)
             self.crc8 = 0x0
         else:
             self.seq_num = byteArray[1]
             self.health = byteArray[2]
-            self.padding = byteArray[3:19]
+            self.shield = byteArray[3]
+            self.padding = byteArray[4:19]
             self.crc8 = byteArray[19]
 
     def to_bytearray(self) -> bytearray:
@@ -252,13 +254,15 @@ class PacketGamestate():
             self.seq_num = 0x0
             self.bullet = 0x0
             self.health = 0x0
-            self.padding = bytearray(15)
+            self.shield = 0x0
+            self.padding = bytearray(14)
             self.crc8 = 0x0
         else:
             self.seq_num = byteArray[1]
             self.bullet = byteArray[2]
             self.health = byteArray[3]
-            self.padding = byteArray[4:20]
+            self.shield = byteArray[4]
+            self.padding = byteArray[5:20]
             self.crc8 = byteArray[19]
 
     def to_bytearray(self) -> bytearray:

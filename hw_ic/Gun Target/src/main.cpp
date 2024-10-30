@@ -3,7 +3,7 @@
 #include <Tone.h>
 #include <cppQueue.h>
 #include <ArduinoQueue.h>
-
+#include <EEPROM.h>
 // Include communication logic
 #include "internal.hpp"
 #include "packet.h"
@@ -16,9 +16,9 @@
 #define VIBRATION_PIN 5
 #define NOTE_REST 0
 #define MAX_HEALTH 100
+#define MAX_SHIELD_VALUE 30
 
-const uint16_t PLAYER_1_ADDRESS = 0x23; // Address of player 1
-const uint16_t PLAYER_2_ADDRESS = 0x77; // Address of player 2 <--
+// const uint16_t PLAYER_2_ADDRESS = 0x77; // Address of player 2 <--
 
 bool isShot = false;    // to send to game engine
 bool isRespawn = false; // to integrate with game engine
@@ -31,6 +31,7 @@ unsigned long lastVibrationTime = 0;
 uint16_t pulseDuration = 100;
 
 uint8_t curr_healthValue = 100; // HARDWARE-side tracker
+uint8_t curr_shieldValue = 0;
 
 Tone melody;
 
@@ -42,8 +43,7 @@ typedef struct
 
 ArduinoQueue<vibrationState> vibrationQueue(10);
 
-ArduinoQueue<uint16_t>
-    noteQueue(20);
+ArduinoQueue<uint16_t> noteQueue(20);
 
 // Define the healthNotes array with 5 notes per tune
 const int healthNotes[19][5] = {
@@ -87,12 +87,32 @@ const int healthNotes[19][5] = {
     {NOTE_REST, NOTE_C7, NOTE_E6, NOTE_F6, NOTE_E6},
 };
 
+const int shieldNotes[7][3] = {
+    {NOTE_C4, NOTE_E4, NOTE_G4},
+    {NOTE_D4, NOTE_F4, NOTE_A4},
+    {NOTE_E4, NOTE_G4, NOTE_B4},
+    {NOTE_F4, NOTE_A4, NOTE_C5},
+    {NOTE_G4, NOTE_B4, NOTE_D5},
+    {NOTE_A4, NOTE_C5, NOTE_E5},
+    {NOTE_B4, NOTE_D5, NOTE_FS5}};
+
+struct OppPlayerInfo
+{
+    int8_t oppPlayerAddress;
+};
+OppPlayerInfo opponent;
+const uint16_t OPP_PLAYER_ADDRESS = EEPROM.get(0, opponent.oppPlayerAddress);
+
 void playHealthDecrementTune(uint8_t health);
 void playStartupTune();
 void playDeathTune();
+
 void healthSynchronisation(uint8_t incoming_healthState); // TODO: Integrate with internal comms
 void playCriticalHealthTune();                            // TODO: Integrate with internal comms
 void playVibration(uint16_t duration);
+void playShieldTunes(uint8_t incoming_shieldState);
+void shieldHealthSync(uint8_t incoming_shieldState);
+void playBLEFeedback();
 
 void setup()
 {
@@ -101,6 +121,7 @@ void setup()
         ; // Wait for Serial to become available.
 
     // Start the receiver and enable feedback on the built-in LED
+
     melody.begin(BUZZER_PIN);
     IrReceiver.begin(IR_RECEIVE_PIN, ENABLE_LED_FEEDBACK);
     pinMode(LED_BUILTIN, OUTPUT);
@@ -115,14 +136,20 @@ packet_gamestate_t pkt;
 void loop()
 {
     //==========================Game Engine SubRoutine =====================
-    //@wanlin
-    communicate();
+    // @T-Wan-Lin
+    if (communicate())
+    {
+        playBLEFeedback();
+    }
     pkt = ic_get_state();
+    if (pkt.packet_type == PACKET_DATA_GAMESTATE && pkt.shield_num != curr_shieldValue)
+    {
+        shieldHealthSync(pkt.shield_num);
+    }
     if (pkt.packet_type == PACKET_DATA_GAMESTATE && pkt.health_num != curr_healthValue)
     {
         healthSynchronisation(pkt.health_num);
     }
-    // digitalWrite(VIBRATION_PIN, HIGH);
 
     //==========================Buzzer and Health Update SubRoutine ==========================
     if (millis() - lastSoundTime > NOTE_DELAY)
@@ -135,7 +162,6 @@ void loop()
         else if (noteQueue.itemCount() == 0)
         {
             IrReceiver.restartTimer();
-            communicate();
         }
         lastSoundTime = millis();
     }
@@ -166,17 +192,22 @@ void loop()
     //==========================IR Receiver SubRoutine ==========================
     if (IrReceiver.decode())
     {
-        if (IrReceiver.decodedIRData.address == PLAYER_1_ADDRESS)
+        if (IrReceiver.decodedIRData.address == OPP_PLAYER_ADDRESS)
         {
-            digitalWrite(LED_BUILTIN, HIGH);
+            //@T-Wan-Lin
+            if (curr_shieldValue > 0)
+            {
+                curr_shieldValue -= BULLET_DAMAGE;
+                playShieldTunes(curr_shieldValue);
+                playVibration(500);
+            }
+
             curr_healthValue -= BULLET_DAMAGE;
             isFullHealthplayed = false;
-
             // @wanlin
-            ic_push_health(curr_healthValue);
+            ic_push_health(curr_healthValue, curr_shieldValue);
             playHealthDecrementTune(curr_healthValue);
-            playVibration(1000);
-            communicate();
+            playVibration(800);
         }
         IrReceiver.resume(); // Receive the next value
     }
@@ -212,6 +243,24 @@ void playHealthDecrementTune(uint8_t health)
     }
 }
 
+void playShieldTunes(uint8_t incoming_shieldState)
+{
+    int8_t index = (30 - incoming_shieldState) / 5;
+    if (index < 0)
+    {
+        index = 0;
+    }
+    if (index > 6)
+    {
+        index = 6;
+    }
+
+    for (int i = 0; i < 3; i++)
+    {
+        noteQueue.enqueue(shieldNotes[index][i]);
+    }
+}
+
 void playStartupTune()
 {
 
@@ -222,23 +271,19 @@ void playStartupTune()
     noteQueue.enqueue(NOTE_D6);
     noteQueue.enqueue(NOTE_G6);
 }
-void playDeathTune()
-{
-    noteQueue.enqueue(NOTE_C5);
-    noteQueue.enqueue(NOTE_B4);
-    noteQueue.enqueue(NOTE_A4);
-    noteQueue.enqueue(NOTE_G4);
-    noteQueue.enqueue(NOTE_F4);
-    noteQueue.enqueue(NOTE_E4);
-    noteQueue.enqueue(NOTE_D4);
-    noteQueue.enqueue(NOTE_C4);
-}
 
 void playCriticalHealthTune()
 {
     noteQueue.enqueue(NOTE_D6);
     noteQueue.enqueue(NOTE_A5);
     noteQueue.enqueue(NOTE_REST);
+}
+
+void playBLEFeedback()
+{
+    noteQueue.enqueue(NOTE_F6);
+    noteQueue.enqueue(NOTE_G6);
+    noteQueue.enqueue(NOTE_A6);
 }
 
 /*
@@ -268,5 +313,27 @@ void healthSynchronisation(uint8_t incoming_healthState)
             playHealthDecrementTune(incoming_healthState);
         }
     }
+
     curr_healthValue = incoming_healthState;
+}
+
+void shieldHealthSync(uint8_t incoming_shieldState)
+{
+    if (incoming_shieldState < curr_shieldValue)
+    {
+        playShieldTunes(incoming_shieldState);
+    }
+    else if (incoming_shieldState > curr_shieldValue)
+    {
+        if (incoming_shieldState == MAX_SHIELD_VALUE)
+        {
+            playShieldTunes(incoming_shieldState);
+        }
+        else
+        {
+            playShieldTunes(MAX_SHIELD_VALUE);
+            playShieldTunes(incoming_shieldState);
+        }
+    }
+    curr_shieldValue = incoming_shieldState;
 }

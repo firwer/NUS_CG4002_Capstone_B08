@@ -9,7 +9,7 @@
 #define BUZZER_PIN 3
 #define NOTE_DELAY 100
 #define MPU_SAMPLING_RATE 40   // Can be changed to 20. idk what AI model wants.
-#define NUM_RECORDED_POINTS 60 // CAN CHANGE TO 40. idk what AI model wants.
+#define NUM_RECORDED_POINTS 64 // CAN CHANGE TO 40. idk what AI model wants.
 
 // Queue reduced to save memory
 ArduinoQueue<uint16_t> soundQueue(10); // Tones are now stored in 16-bit integers
@@ -156,13 +156,13 @@ void loop()
       // Take the raw 16bit data, divide by 32767 to get the ratio, multiply by 4g to get the real value,
       // then multiply by 9.81 to get m/s^2
       // multiply by 100 to get integers
-      MPUData_FLOAT.accelXreal = (((mpudata.ax) / 32767.0) * 4.0 * 9.81) * 100;
-      MPUData_FLOAT.accelYreal = (((mpudata.ay) / 32767.0) * 4.0 * 9.81) * 100;
-      MPUData_FLOAT.accelZreal = (((mpudata.az) / 32767.0) * 4.0 * 9.81) * 100;
+      MPUData_FLOAT.accelXreal = (((mpudata.ax) / 32767.0) * 8.0 * 9.81) * 100;
+      MPUData_FLOAT.accelYreal = (((mpudata.ay) / 32767.0) * 8.0 * 9.81) * 100;
+      MPUData_FLOAT.accelZreal = (((mpudata.az) / 32767.0) * 8.0 * 9.81) * 100;
       // same for gyroscope scaling
-      MPUData_FLOAT.gyroXreal = (((mpudata.gx) / 32767.0) * 250.0) * 100;
-      MPUData_FLOAT.gyroYreal = (((mpudata.gy) / 32767.0) * 250.0) * 100;
-      MPUData_FLOAT.gyroZreal = (((mpudata.gz) / 32767.0) * 250.0) * 100;
+      MPUData_FLOAT.gyroXreal = (((mpudata.gx) / 32767.0) * 500.0) * 100;
+      MPUData_FLOAT.gyroYreal = (((mpudata.gy) / 32767.0) * 500.0) * 100;
+      MPUData_FLOAT.gyroZreal = (((mpudata.gz) / 32767.0) * 500.0) * 100;
 
       // this is a dirty implementation
       MPUData data;
