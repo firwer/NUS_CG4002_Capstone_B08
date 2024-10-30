@@ -82,7 +82,7 @@ class Beetle:
         BLUE_COLOR = "\033[34m"   # Blue color
         MAGENTA_COLOR = "\033[35m" # Magenta color
         CYAN_COLOR = "\033[36m"   # Cyan color
-        colors = [BLUE_COLOR, GREEN_COLOR, RED_COLOR, MAGENTA_COLOR, CYAN_COLOR, YELLOW_COLOR]
+        colors = [BLUE_COLOR, GREEN_COLOR, RED_COLOR, CYAN_COLOR, GREEN_COLOR, YELLOW_COLOR]
 
         self.sendToGameServerQueue = sendToGameServerQueue
         self.receiveFromGameServerQueue = receiveFromGameServerQueue
@@ -405,30 +405,36 @@ def main():
     # Player 1 process
     if player == 1:
         beetle0 = Beetle(BLUNO_P1_GLOVE_MAC, 0, sendToGameServerQueue, receiveFromGameServerQueue0)
-        #beetle1 = Beetle(BLUNO_P1_CHEST_MAC, 1, sendToGameServerQueue, receiveFromGameServerQueue1)
-        #beetle2 = Beetle(BLUNO_P2_LEG_MAC, 2, sendToGameServerQueue)
-        externalThread = threading.Thread(target=external.begin_external, args=(sendToGameServerQueue, receiveFromGameServerQueue0, receiveFromGameServerQueue1, 1,), name="External")
+        beetle1 = Beetle(BLUNO_P1_CHEST_MAC, 1, sendToGameServerQueue, receiveFromGameServerQueue1)
+        beetle2 = Beetle(BLUNO_P2_LEG_MAC, 2, sendToGameServerQueue)
+        externalThread = threading.Thread(target=external_p1.begin_external, args=(sendToGameServerQueue, receiveFromGameServerQueue0, receiveFromGameServerQueue1, 1,), name="External")
         t0 = threading.Thread(target=run_beetle, args=(beetle0,), name="Beetle0")
-        #t1 = threading.Thread(target=run_beetle, args=(beetle1,), name=f"Beetle1")
-        #t2 = threading.Thread(target=run_beetle, args=(beetle2,), name=f"Beetle2")
+        t1 = threading.Thread(target=run_beetle, args=(beetle1,), name=f"Beetle1")
+        t2 = threading.Thread(target=run_beetle, args=(beetle2,), name=f"Beetle2")
         t0.start()
-        #t1.start()
-        #t2.start()
+        t1.start()
+        t2.start()
         externalThread.start()
         t0.join()
-        #t1.join()
-        #t2.join()
+        t1.join()
+        t2.join()
         externalThread.join()
     elif player == 2:
         # Player 2 Process
-        beetle0 = Beetle(BLUNO_P2_GLOVE_MAC, 0, sendToGameServerQueue, receiveFromGameServerQueue0)
-        #beetle1 = Beetle(BLUNO_P2_CHEST_MAC, 3, sendToGameServerQueue, receiveFromGameServerQueue0)
+        beetle0 = Beetle(BLUNO_P2_GLOVE_MAC, 3, sendToGameServerQueue, receiveFromGameServerQueue0)
+        beetle1 = Beetle(BLUNO_P2_CHEST_MAC, 4, sendToGameServerQueue, receiveFromGameServerQueue0)
+        beetle2 = Beetle(BLUNO_P2_LEG_MAC, 5, sendToGameServerQueue)
         t0 = threading.Thread(target=run_beetle, args=(beetle0,), name="Beetle0")
-        #t1 = threading.Thread(target=run_beetle, args=(beetle1,), name="Beetle1")
+        t1 = threading.Thread(target=run_beetle, args=(beetle1,), name="Beetle1")
+        t2 = threading.Thread(target=run_beetle, args=(beetle2,), name="Beetle2")
         externalThread = threading.Thread(target=external_p2.begin_external, args=(sendToGameServerQueue, receiveFromGameServerQueue0, receiveFromGameServerQueue1, 2,), name="External")
         t0.start()
+        t1.start()
+        t2.start()
         externalThread.start()
         t0.join()
+        t1.join()
+        t2.join()
         externalThread.join()
 
 

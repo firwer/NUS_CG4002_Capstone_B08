@@ -10,11 +10,11 @@ from queue import Queue
 from threading import Thread
 
 import config
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from int_comms.hardcoded_imu import basket_packets, bowling_packets, reload_packets, volley_packets, rainbomb_packets, \
     shield_packets, logout_packets
 from int_comms.relay.external_p2 import sim_get_packet
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from comms.TCPC_Controller_Sync import TCPC_Controller_Sync
 from int_comms.relay.packet import PACKET_DATA_IMU, PACKET_DATA_BULLET, PACKET_DATA_HEALTH, PACKET_DATA_KICK, PacketImu, \
     PacketBullet, PacketHealth, PacketKick, PacketGamestate, get_packet
