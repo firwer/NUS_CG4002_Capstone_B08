@@ -132,7 +132,6 @@ void setup()
     playStartupTune();
 }
 
-packet_gamestate_t pkt;
 void loop()
 {
     //==========================Game Engine SubRoutine =====================
@@ -141,7 +140,7 @@ void loop()
     {
         playBLEFeedback();
     }
-    pkt = ic_get_state();
+    packet_gamestate_t pkt = ic_get_state();
     if (pkt.packet_type == PACKET_DATA_GAMESTATE && pkt.shield_num != curr_shieldValue)
     {
         shieldHealthSync(pkt.shield_num);
@@ -242,6 +241,7 @@ void playHealthDecrementTune(uint8_t health)
         noteQueue.enqueue(healthNotes[index][i]);
     }
 }
+
 
 void playShieldTunes(uint8_t incoming_shieldState)
 {
