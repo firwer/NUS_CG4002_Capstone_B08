@@ -19,7 +19,7 @@
 #define NOTE_DELAY 100
 #define DEBOUNCE_DELAY 50
 #define MPU_SAMPLING_RATE 40
-#define NUM_RECORDED_POINTS 64
+#define NUM_RECORDED_POINTS 54
 
 // Queue reduced to save memory
 ArduinoQueue<uint16_t> soundQueue(10); // Tones are now stored in 16-bit integers
@@ -271,9 +271,9 @@ void playFullMagazineTone()
 
 void playBLEFeedback()
 {
-  noteQueue.enqueue(NOTE_F6);
-  noteQueue.enqueue(NOTE_G6);
-  noteQueue.enqueue(NOTE_A6);
+  soundQueue.enqueue(NOTE_F6);
+  soundQueue.enqueue(NOTE_G6);
+  soundQueue.enqueue(NOTE_A6);
 }
 
 void motionDetected()
