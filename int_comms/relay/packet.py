@@ -155,6 +155,7 @@ class PacketHealth():
         byte_array.append(self.packet_type)
         byte_array.append(self.seq_num)
         byte_array.append(self.health)
+        byte_array.append(self.shield)
         byte_array.extend(self.padding)
         byte_array.append(self.crc8)
         return byte_array
@@ -262,7 +263,7 @@ class PacketGamestate():
             self.bullet = byteArray[2]
             self.health = byteArray[3]
             self.shield = byteArray[4]
-            self.padding = byteArray[5:20]
+            self.padding = byteArray[5:19]
             self.crc8 = byteArray[19]
 
     def to_bytearray(self) -> bytearray:
@@ -271,6 +272,7 @@ class PacketGamestate():
         byte_array.append(self.seq_num)
         byte_array.append(self.bullet)
         byte_array.append(self.health)
+        byte_array.append(self.shield)
         byte_array.extend(self.padding)
         byte_array.append(self.crc8)
         return byte_array
