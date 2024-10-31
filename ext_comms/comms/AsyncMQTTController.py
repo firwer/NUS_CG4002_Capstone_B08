@@ -1,17 +1,14 @@
 import asyncio
-
 import aiomqtt
-
+from logger_config import setup_logger
 import config
 
+logger = setup_logger(__name__)
 
 class AsyncMQTTController:
     """
-        Class to handle asynchronous MQTT communication with the visualizers
+    Class to handle asynchronous MQTT communication with the visualizers.
     """
-
-    mqttc: aiomqtt.Client
-    send_data_queue: asyncio.Queue
 
     def __init__(self, mqtt_port, receive_queue_p1=None, receive_queue_p2=None, send_queue=None):
         self.mqtt_port = mqtt_port
@@ -19,24 +16,30 @@ class AsyncMQTTController:
         self.receive_data_queue_p2 = receive_queue_p2 or asyncio.Queue()
         self.send_data_queue = send_queue or asyncio.Queue()
         self.connected = False
+        self.mqttc = None
 
-    # Async Task Manager
     async def run_tasks(self, receive_topic_p1: str, receive_topic_p2: str, send_topic: str):
         try:
-            async with (aiomqtt.Client(hostname=config.MQTT_BROKER_HOST, port=self.mqtt_port,
-                                       username=config.MQTT_GAME_ENGINE_USER, password=config.MQTT_GAME_ENGINE_PASS)
-                        as client):
+            async with aiomqtt.Client(
+                hostname=config.MQTT_BROKER_HOST,
+                port=self.mqtt_port,
+                username=config.MQTT_GAME_ENGINE_USER,
+                password=config.MQTT_GAME_ENGINE_PASS
+            ) as client:
                 self.mqttc = client
                 self.connected = True
+                logger.info("Connected to MQTT broker.")
+
                 listen_task = asyncio.create_task(self.listen(receive_topic_p1, receive_topic_p2))
                 publish_task = asyncio.create_task(self.publish_loop(send_topic))
                 await asyncio.gather(listen_task, publish_task)
         except (aiomqtt.MqttError, aiomqtt.MqttCodeError) as e:
-            print(f"Error in tasks: {e}")
+            logger.error(f"MQTT error in run_tasks: {e}")
             self.connected = False
-            raise e  # This will break and allow to reconnect
+            raise e  # Allow higher-level handlers to manage reconnection
+        except Exception as e:
+            logger.exception(f"Unexpected error in run_tasks: {e}")
 
-    # Initialisation code for MQTT - Entry Point
     async def start(self, receive_topic_p1: str, receive_topic_p2: str, send_topic: str):
         attempt = 0
         delay = 1  # Start with 1-second delay
@@ -44,40 +47,59 @@ class AsyncMQTTController:
 
         while attempt < max_retries:
             try:
+                logger.info(f"Attempting to connect to MQTT broker (Attempt {attempt + 1}/{max_retries})...")
                 await self.run_tasks(receive_topic_p1, receive_topic_p2, send_topic)
             except (aiomqtt.MqttError, aiomqtt.MqttCodeError) as e:
-                print(f"Error occurred: {e}, retrying connection...")
+                logger.error(f"MQTT connection error: {e}. Retrying in {delay} seconds...")
                 attempt += 1
                 await asyncio.sleep(delay)
                 delay = min(delay * 2, 60)  # Exponential backoff
             except Exception as e:
-                print(f"Unexpected error: {e}")
+                logger.exception(f"Unexpected error in MQTT start: {e}")
                 break
 
-        print("Max retries reached. Could not connect to MQTT broker.")
-        raise ConnectionError("Failed to connect to MQTT broker after retries")
+        logger.critical("Max MQTT connection retries reached. Could not connect to MQTT broker.")
+        raise ConnectionError("Failed to connect to MQTT broker after maximum retries.")
 
-    # Async task - Constantly listen to new MQTT messages and sort them into the corresponding player's queue
     async def listen(self, topic_receive_p1: str, topic_receive_p2: str):
-        print(f"Subscribing to topic: {topic_receive_p1}")
-        print(f"Subscribing to topic: {topic_receive_p2}")
+        logger.info(f"Subscribing to topics: {topic_receive_p1}, {topic_receive_p2}")
         await self.mqttc.subscribe(topic_receive_p1)
         await self.mqttc.subscribe(topic_receive_p2)
-        print("Listening for messages...")
+        logger.info("Subscribed to MQTT topics. Listening for messages...")
+        logger.info(f"p1: {topic_receive_p1} p2: {topic_receive_p2}")
         async for message in self.mqttc.messages:
-            if message.topic.matches(topic_receive_p1):
-                await self.receive_data_queue_p1.put(message.payload)
-            elif message.topic.matches(topic_receive_p2):
-                await self.receive_data_queue_p2.put(message.payload)
+                try:
+                    logger.info(f"Received message on topic {message.topic}: {message.payload.decode()}")
+                    if message.topic.matches(topic_receive_p1):
+                        await self.receive_data_queue_p1.put(message.payload.decode())
+                        logger.debug(f"Received message on {topic_receive_p1}: {message.payload.decode()}")
+                    elif message.topic.matches(topic_receive_p2):
+                        await self.receive_data_queue_p2.put(message.payload.decode())
+                        logger.debug(f"Received message on {topic_receive_p2}: {message.payload.decode()}")
+                    else:
+                        logger.warning(f"Received message on unexpected topic {message.topic}: {message.payload.decode()}")
+                except Exception as e:
+                    logger.exception(f"Error processing received MQTT message: {e}")
 
-    # Async Task - Constantly listen to new messages in send queue to send to topic_send
     async def publish_loop(self, topic_send: str):
+        logger.info(f"Starting MQTT publish loop for topic: {topic_send}")
         while self.connected:
             try:
-                print("Waiting for message to send...")
+                logger.debug("Waiting for message to send to MQTT...")
                 msg = await self.send_data_queue.get()
                 await self.mqttc.publish(topic_send, msg)
-                print(f"Published message to Visualizer: {msg}")
+                logger.info(f"Published message to {topic_send}: {msg}")
             except (aiomqtt.MqttError, aiomqtt.MqttCodeError) as e:
+                logger.error(f"MQTT publish error: {e}. Disconnecting publish loop.")
                 self.connected = False
                 raise e
+            except Exception as e:
+                logger.exception(f"Unexpected error in publish_loop: {e}")
+
+    async def broadcast_message(self, message: str, topic_send: str):
+        """Optional helper to publish a message to a specific topic."""
+        try:
+            await self.mqttc.publish(topic_send, message)
+            logger.info(f"Broadcasted message to {topic_send}: {message}")
+        except Exception as e:
+            logger.exception(f"Failed to broadcast message: {e}")
