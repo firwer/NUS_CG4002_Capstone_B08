@@ -75,37 +75,6 @@ class GameData:
         })
 
 
-async def evaluation_server_job(curr_game_data: GameData, player_id: int, eval_input_queue: asyncio.Queue,
-                                eval_output_queue: asyncio.Queue):
-    EvalGameData = {
-        "player_id": player_id,
-        "action": curr_game_data.p1.action if player_id == 1 else curr_game_data.p2.action,
-        "game_state": {
-            "p1": curr_game_data.p1.game_state,
-            "p2": curr_game_data.p2.game_state
-        }
-    }
-    try:
-        # Send updated game state to evaluation server
-        await eval_input_queue.put(json.dumps(EvalGameData))
-        logger.info(f"[P{player_id}] Sent game data to evaluation server and waiting for response...")
-        # Wait for evaluation response
-
-        eval_resp = await asyncio.wait_for(eval_output_queue.get(), 5)
-        logger.debug(f"[P{player_id}] Received evaluation response: {eval_resp}")
-
-        eval_gs = json.loads(eval_resp)
-
-        # Update game state based on evaluation response
-        curr_game_data.p1.game_state = eval_gs.get('p1', curr_game_data.p1.game_state)
-        curr_game_data.p2.game_state = eval_gs.get('p2', curr_game_data.p2.game_state)
-        logger.info(f"[P{player_id}] Updated game state with evaluation response")
-    except asyncio.TimeoutError:
-        logger.warning(f"[P{player_id}] Timeout while waiting for evaluation response.")
-    except Exception as e:
-        logger.exception(f"[P{player_id}] Error communicating with evaluation server: {e}")
-
-
 async def start_mqtt_job(receive_topic_p1: str,
                          receive_topic_p2: str,
                          send_topic: str,
@@ -174,6 +143,7 @@ async def start_relay_node_data_handler(src_input_queue_p1: asyncio.Queue,
             try:
                 msg = await input_queue.get()
                 pkt = get_packet(msg)
+                print(pkt)
                 if pkt.packet_type == PACKET_DATA_HEALTH:
                     logger.info(f"[P{player_id}] HEALTH PACKET Received")
                     await target_health_queue.put("target_hit")
@@ -265,14 +235,14 @@ class GameEngine:
         self.cooldown_msg_queue_p2 = asyncio.Queue()
 
         self.currGameData = GameData()
+        self.eval_server_lock = asyncio.Lock()
 
         self.cooldown_manager = ActionCooldownManager(cooldown_period=config.GAME_ACTION_COOLDOWN,
                                                       cooldown_notify_queue_p1=self.cooldown_msg_queue_p1,
                                                       cooldown_notify_queue_p2=self.cooldown_msg_queue_p2)
-        self.game_round = 1
+        self.game_round_p1 = 1
+        self.game_round_p2 = 1
 
-        self.round_timeout = 50  # Initialize the round timeout
-        self.current_round_task = None  # To keep track of the supervisor task
         logger.info("Game Engine Initialized.")
 
     async def start_game(self):
@@ -348,10 +318,11 @@ class GameEngine:
         if player_id == 1:
             pred_output_queue = self.prediction_output_queue_p1
             gun_state_queue = self.gun_state_queue_p1
+            curr_round = self.game_round_p1
         else:
             pred_output_queue = self.prediction_output_queue_p2
             gun_state_queue = self.gun_state_queue_p2
-
+            curr_round = self.game_round_p2
         while True:
             try:
                 # Verify FOV with visualizer and update game state
@@ -360,19 +331,17 @@ class GameEngine:
                                                             gun_state_queue=gun_state_queue,
                                                             cooldown_manager=self.cooldown_manager,
                                                             cooldown_p1_event=self.cooldown_p1_event,
-                                                            cooldown_p2_event=self.cooldown_p2_event)
-                if predicted_action == "cooldown-progress":
-                    logger.warning(
-                        f"[P{player_id}] Action received during cooldown period. Discarding action.")
+                                                            cooldown_p2_event=self.cooldown_p2_event,
+                                                            curr_round=curr_round)
 
                 # Only send game state to evaluation server if the action is a valid one
                 if predicted_action in ['gun', 'bomb', 'shield', 'rain', 'logout', 'reload', "basket", "soccer",
                                         "volley", "bowl"]:
-                    # Send updated game state to evaluation server
-                    await evaluation_server_job(curr_game_data=self.currGameData,
-                                                player_id=player_id,
-                                                eval_input_queue=self.engine_to_evaluation_server_queue,
-                                                eval_output_queue=self.evaluation_server_to_engine_queue)
+                    async with self.eval_server_lock:
+                        # Send updated game state to evaluation server
+                        await self.evaluation_server_job(player_id=player_id,
+                                                         eval_input_queue=self.engine_to_evaluation_server_queue,
+                                                         eval_output_queue=self.evaluation_server_to_engine_queue)
 
                 # Send updated game state to visualizer
                 await visualizer_send_queue.put(
@@ -384,6 +353,40 @@ class GameEngine:
                 await relay_node_input_queue.put(f"{self.currGameData.to_json(player_id)}")
             except Exception as e:
                 logger.exception(f"[P{player_id}] Error in game_data_process: {e}")
+
+    async def evaluation_server_job(self, player_id: int, eval_input_queue: asyncio.Queue,
+                                    eval_output_queue: asyncio.Queue):
+        EvalGameData = {
+            "player_id": player_id,
+            "action": self.currGameData.p1.action if player_id == 1 else self.currGameData.p2.action,
+            "game_state": {
+                "p1": self.currGameData.p1.game_state,
+                "p2": self.currGameData.p2.game_state
+            }
+        }
+        try:
+            # Send updated game state to evaluation server
+            await eval_input_queue.put(json.dumps(EvalGameData))
+            logger.info(f"[P{player_id}] Sent game data to evaluation server and waiting for response...")
+            # Wait for evaluation response
+
+            eval_resp = await asyncio.wait_for(eval_output_queue.get(), 5)
+            if player_id == 1:
+                self.game_round_p1 += 1
+            else:
+                self.game_round_p2 += 1
+            logger.debug(f"[P{player_id}] Received evaluation response: {eval_resp}")
+
+            eval_gs = json.loads(eval_resp)
+
+            # Update game state based on evaluation response
+            self.currGameData.p1.game_state = eval_gs.get('p1', self.currGameData.p1.game_state)
+            self.currGameData.p2.game_state = eval_gs.get('p2', self.currGameData.p2.game_state)
+            logger.info(f"[P{player_id}] Updated game state with evaluation response")
+        except asyncio.TimeoutError:
+            logger.warning(f"[P{player_id}] Timeout while waiting for evaluation response.")
+        except Exception as e:
+            logger.exception(f"[P{player_id}] Error communicating with evaluation server: {e}")
 
     async def wait_for_any_cooldown(self):
         """Wait until at least one player's cooldown event is set."""
@@ -410,7 +413,7 @@ class GameEngine:
                     continue
 
             logger.supervisor(
-                f"Supervisor detected cooldown end for P{active_player}. Starting timeout for P{inactive_player}.")
+                f"Cooldown ended for P{active_player}. Starting {config.PLAYER_TIMEOUT_RANDOM_ACTION}s timeout for P{inactive_player}.")
 
             # Start the timeout for the inactive player
             timeout_task = asyncio.create_task(self.handle_inactive_player(inactive_player))
@@ -426,18 +429,17 @@ class GameEngine:
                     # sending of action for inactive player after 50 seconds
                 )
                 # Both cooldowns received in time
-                logger.cooldown_end(f"Both Players Cooldown period ended. READY FOR NEXT ROUND {self.game_round+1}")
+                logger.cooldown_end(f"Both Players Cooldown period ended. READY FOR NEXT ROUND {self.game_round_p1}")
             except asyncio.TimeoutError:
                 # Timeout occurred; inject random action for inactive player
                 logger.exception(
-                    f"Round {self.game_round}: Round Cooldown timeout reached. AUTO INACTIVE PLAYER ACTION-SENDER "
+                    f"Round {self.game_round_p1}: Round Cooldown timeout reached. AUTO INACTIVE PLAYER ACTION-SENDER "
                     f"MALFUNCTIONED!")
             finally:
                 # Reset the cooldown events for the next round
                 self.cooldown_p1_event.clear()
                 self.cooldown_p2_event.clear()
-                self.game_round += 1
-                logger.info(f"Round {self.game_round} started.")
+                logger.info(f"Round {self.game_round_p1} started.")
                 # Ensure the timeout task is canceled if still running
                 if not timeout_task.done():
                     timeout_task.cancel()
@@ -461,8 +463,8 @@ class GameEngine:
             await asyncio.sleep(config.PLAYER_TIMEOUT_RANDOM_ACTION)
             # Check if the inactive player's cooldown is still not set
             random_action = random.choice(config.PLAYER_RANDOM_ACTIONS)
-            logger.supervisor(f"Round {self.game_round}: Action timeout reached for P{player_id}. "
-                           f"Sending random action: {random_action}.")
+            logger.supervisor(f"Round {self.game_round_p1}: Action timeout reached for P{player_id}. "
+                              f"Sending random action: {random_action}.")
             if not self.cooldown_p1_event.is_set() and player_id == 1:
                 await self.prediction_output_queue_p1.put(random_action)
             elif not self.cooldown_p2_event.is_set() and player_id == 2:

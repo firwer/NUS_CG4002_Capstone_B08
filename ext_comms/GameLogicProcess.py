@@ -126,11 +126,20 @@ async def game_state_manager(currGameData, attacker_id: int,
                              gun_state_queue: asyncio.Queue,
                              cooldown_manager: ActionCooldownManager,
                              cooldown_p1_event: asyncio.Event,
-                             cooldown_p2_event: asyncio.Event):
+                             cooldown_p2_event: asyncio.Event,
+                             curr_round: int):
     global targetInFOV_p1, numOfRain_p1, targetInFOV_p2, numOfRain_p2
     try:
         prediction_action = await pred_output_queue.get()
         logger.info(f"Received {prediction_action} in game_state_manager for P{attacker_id}")
+
+        # Logout Protection Logic
+        if curr_round == 23 and prediction_action != "logout": # TODO: Doesn't seem to work
+            logger.warning(f"Game Over! Forcing logout for P{attacker_id} instead of {prediction_action}")
+            prediction_action = "logout"
+        elif curr_round <= 20 and prediction_action == "logout":
+            logger.warning(f"Caught Premature Logout! {prediction_action} for P{attacker_id}. Ignoring.")
+            return "invalid"
 
         if attacker_id == 1:
             targetInFOV = targetInFOV_p1
@@ -161,7 +170,7 @@ async def game_state_manager(currGameData, attacker_id: int,
         can_process = await cooldown_manager.acquire_action_slot(attacker_id)
         if not can_process:
             logger.warning(f"[P{attacker_id}] Action '{prediction_action}' discarded due to cooldown.")
-            return "invalid-cooldown"
+            return "cooldown-progress"
 
         logger.debug(f"[P{attacker_id}] Action '{prediction_action}' accepted and being processed.")
 
