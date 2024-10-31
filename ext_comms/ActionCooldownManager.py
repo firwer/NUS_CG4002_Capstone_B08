@@ -9,16 +9,18 @@ logger = setup_logger(__name__)
 
 
 class ActionCooldownManager:
-    def __init__(self, cooldown_period: float):
+    def __init__(self, cooldown_period: float, cooldown_notify_queue_p1, cooldown_notify_queue_p2):
         """
         Initialize the cooldown manager with a specified cooldown period.
 
         :param cooldown_period: Time in seconds to prevent actions after a valid action is received.
         """
+        self.cooldown_queue_p1 = cooldown_notify_queue_p1
+        self.cooldown_queue_p2 = cooldown_notify_queue_p2
         self.cooldown_period = cooldown_period
         self.player_locks: Dict[int, asyncio.Lock] = {}
-        logger.info(f"Cooldown Manager Initialized Successfully: Action cooldown period set to {self.cooldown_period} seconds.")
-
+        logger.info(
+            f"Cooldown Manager Initialized Successfully: Action cooldown period set to {self.cooldown_period} seconds.")
 
     def get_lock(self, player_id: int) -> asyncio.Lock:
         """
@@ -58,5 +60,8 @@ class ActionCooldownManager:
             await asyncio.sleep(self.cooldown_period)
         finally:
             if lock.locked():
+                if player_id == 1:
+                    self.cooldown_queue_p1.put_nowait("P1_cooldown-end")
+                else:
+                    self.cooldown_queue_p2.put_nowait("P2_cooldown-end")
                 lock.release()
-                logger.cooldown_end(f"[P{player_id}] Cooldown period ended. READY FOR NEXT ROUND")

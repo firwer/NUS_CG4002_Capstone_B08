@@ -1,6 +1,7 @@
 # gameengine.py
 import asyncio
 import json
+import random
 
 import config
 from ActionCooldownManager import ActionCooldownManager
@@ -255,9 +256,23 @@ class GameEngine:
         self.gun_state_queue_p1 = asyncio.Queue()
         self.gun_state_queue_p2 = asyncio.Queue()
 
+        # Shared state for tracking cooldowns
+        self.cooldown_p1_event = asyncio.Event()
+        self.cooldown_p2_event = asyncio.Event()
+        self.cooldown_lock = asyncio.Lock()
+
+        self.cooldown_msg_queue_p1 = asyncio.Queue()
+        self.cooldown_msg_queue_p2 = asyncio.Queue()
+
         self.currGameData = GameData()
 
-        self.cooldown_manager = ActionCooldownManager(cooldown_period=config.GAME_ACTION_COOLDOWN)
+        self.cooldown_manager = ActionCooldownManager(cooldown_period=config.GAME_ACTION_COOLDOWN,
+                                                      cooldown_notify_queue_p1=self.cooldown_msg_queue_p1,
+                                                      cooldown_notify_queue_p2=self.cooldown_msg_queue_p2)
+        self.game_round = 1
+
+        self.round_timeout = 50  # Initialize the round timeout
+        self.current_round_task = None  # To keep track of the supervisor task
         logger.info("Game Engine Initialized.")
 
     async def start_game(self):
@@ -311,7 +326,12 @@ class GameEngine:
             getVState(visualizer_receive_queue=self.visualizer_to_engine_queue_p2, player_id=2),
 
             self.game_data_process(1),
-            self.game_data_process(2)
+            self.game_data_process(2),
+
+            self.cooldown_service(self.cooldown_msg_queue_p1, player_id=1),
+            self.cooldown_service(self.cooldown_msg_queue_p2, player_id=2),
+
+            self.supervisor_task()  # Start the supervisor task
         ]
 
         logger.info("Starting all game engine tasks concurrently.")
@@ -327,11 +347,9 @@ class GameEngine:
 
         if player_id == 1:
             pred_output_queue = self.prediction_output_queue_p1
-            visualizer_receive_queue = self.visualizer_to_engine_queue_p1
             gun_state_queue = self.gun_state_queue_p1
         else:
             pred_output_queue = self.prediction_output_queue_p2
-            visualizer_receive_queue = self.visualizer_to_engine_queue_p2
             gun_state_queue = self.gun_state_queue_p2
 
         while True:
@@ -340,9 +358,12 @@ class GameEngine:
                 predicted_action = await game_state_manager(currGameData=self.currGameData, attacker_id=player_id,
                                                             pred_output_queue=pred_output_queue,
                                                             gun_state_queue=gun_state_queue,
-                                                            cooldown_manager=self.cooldown_manager)
-                if predicted_action == "invalid-cooldown":
-                    logger.warning(f"[P{player_id}] Duplicate action received during cooldown period. Discarding action.")
+                                                            cooldown_manager=self.cooldown_manager,
+                                                            cooldown_p1_event=self.cooldown_p1_event,
+                                                            cooldown_p2_event=self.cooldown_p2_event)
+                if predicted_action == "cooldown-progress":
+                    logger.warning(
+                        f"[P{player_id}] Action received during cooldown period. Discarding action.")
 
                 # Only send game state to evaluation server if the action is a valid one
                 if predicted_action in ['gun', 'bomb', 'shield', 'rain', 'logout', 'reload', "basket", "soccer",
@@ -363,3 +384,89 @@ class GameEngine:
                 await relay_node_input_queue.put(f"{self.currGameData.to_json(player_id)}")
             except Exception as e:
                 logger.exception(f"[P{player_id}] Error in game_data_process: {e}")
+
+    async def wait_for_any_cooldown(self):
+        """Wait until at least one player's cooldown event is set."""
+        await asyncio.wait(
+            [self.cooldown_p1_event.wait(), self.cooldown_p2_event.wait()],
+            return_when=asyncio.FIRST_COMPLETED
+        )
+
+    async def supervisor_task(self):
+        while True:
+            # Wait until at least one cooldown event is set
+            await self.wait_for_any_cooldown()
+
+            async with self.cooldown_lock:
+                # Determine which player's cooldown has been set
+                if self.cooldown_p1_event.is_set() and not self.cooldown_p2_event.is_set():
+                    active_player = 1
+                    inactive_player = 2
+                elif self.cooldown_p2_event.is_set() and not self.cooldown_p1_event.is_set():
+                    active_player = 2
+                    inactive_player = 1
+                else:
+                    # Either both are set (handled elsewhere) or both are not set
+                    continue
+
+            logger.supervisor(
+                f"Supervisor detected cooldown end for P{active_player}. Starting timeout for P{inactive_player}.")
+
+            # Start the timeout for the inactive player
+            timeout_task = asyncio.create_task(self.handle_inactive_player(inactive_player))
+
+            # Wait for both cooldown events or timeout
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(
+                        self.cooldown_p1_event.wait(),
+                        self.cooldown_p2_event.wait()
+                    ),
+                    timeout=config.GAME_TIMEOUT  # By right not needed because it should NEVER timeout given auto
+                    # sending of action for inactive player after 50 seconds
+                )
+                # Both cooldowns received in time
+                logger.cooldown_end(f"Both Players Cooldown period ended. READY FOR NEXT ROUND {self.game_round+1}")
+            except asyncio.TimeoutError:
+                # Timeout occurred; inject random action for inactive player
+                logger.exception(
+                    f"Round {self.game_round}: Round Cooldown timeout reached. AUTO INACTIVE PLAYER ACTION-SENDER "
+                    f"MALFUNCTIONED!")
+            finally:
+                # Reset the cooldown events for the next round
+                self.cooldown_p1_event.clear()
+                self.cooldown_p2_event.clear()
+                self.game_round += 1
+                logger.info(f"Round {self.game_round} started.")
+                # Ensure the timeout task is canceled if still running
+                if not timeout_task.done():
+                    timeout_task.cancel()
+
+    async def cooldown_service(self, cooldown_notify_queue: asyncio.Queue, player_id: int):
+        while True:
+            msg = await cooldown_notify_queue.get()
+            await self.engine_to_visualizer_queue.put(msg)  # Send cooldown ended message to visualizer
+
+            async with self.cooldown_lock:
+                if player_id == 1:
+                    self.cooldown_p1_event.set()
+                elif player_id == 2:
+                    self.cooldown_p2_event.set()
+                else:
+                    logger.warning(f"Received cooldown message for unknown player_id: {player_id}")
+
+    async def handle_inactive_player(self, player_id: int):
+        """Handle the timeout for the inactive player by injecting a random action."""
+        try:
+            await asyncio.sleep(config.PLAYER_TIMEOUT_RANDOM_ACTION)
+            # Check if the inactive player's cooldown is still not set
+            random_action = random.choice(config.PLAYER_RANDOM_ACTIONS)
+            logger.supervisor(f"Round {self.game_round}: Action timeout reached for P{player_id}. "
+                           f"Sending random action: {random_action}.")
+            if not self.cooldown_p1_event.is_set() and player_id == 1:
+                await self.prediction_output_queue_p1.put(random_action)
+            elif not self.cooldown_p2_event.is_set() and player_id == 2:
+                await self.prediction_output_queue_p2.put(random_action)
+        except asyncio.CancelledError:
+            # The timeout was canceled because the inactive player completed their cooldown
+            pass

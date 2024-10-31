@@ -124,23 +124,34 @@ async def getVState(visualizer_receive_queue: asyncio.Queue, player_id: int):
 async def game_state_manager(currGameData, attacker_id: int,
                              pred_output_queue: asyncio.Queue,
                              gun_state_queue: asyncio.Queue,
-                             cooldown_manager: ActionCooldownManager):
+                             cooldown_manager: ActionCooldownManager,
+                             cooldown_p1_event: asyncio.Event,
+                             cooldown_p2_event: asyncio.Event):
     global targetInFOV_p1, numOfRain_p1, targetInFOV_p2, numOfRain_p2
     try:
         prediction_action = await pred_output_queue.get()
         logger.info(f"Received {prediction_action} in game_state_manager for P{attacker_id}")
+
         if attacker_id == 1:
             targetInFOV = targetInFOV_p1
             numOfRain = numOfRain_p1
             currGameData.p1.action = prediction_action
             targetPlayerData = currGameData.p1.game_state
             OpponentPlayerData = currGameData.p2.game_state
+            cooldown_event = cooldown_p1_event
         else:
             targetInFOV = targetInFOV_p2
             numOfRain = numOfRain_p2
             currGameData.p2.action = prediction_action
             targetPlayerData = currGameData.p2.game_state
             OpponentPlayerData = currGameData.p1.game_state
+            cooldown_event = cooldown_p2_event
+
+        # Constraints to prevent multiple actions in the same round and invalid actions
+        if cooldown_event.is_set():
+            logger.warning(f"[P{attacker_id}] Already performed action for this round! Ignoring {prediction_action}. "
+                           f"Please ensure that the other player has performed the action for this round.")
+            return "invalid"
 
         if prediction_action == "invalid":
             logger.warning(f"[P{attacker_id}] Invalid action received: {prediction_action}. Doing nothing.")
