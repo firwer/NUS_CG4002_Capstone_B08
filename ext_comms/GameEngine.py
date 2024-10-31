@@ -85,13 +85,12 @@ async def evaluation_server_job(curr_game_data: GameData, player_id: int, eval_i
         }
     }
     try:
-
         # Send updated game state to evaluation server
         await eval_input_queue.put(json.dumps(EvalGameData))
-        logger.info(f"[P{player_id}] Sent game data to evaluation server.")
-
+        logger.info(f"[P{player_id}] Sent game data to evaluation server and waiting for response...")
         # Wait for evaluation response
-        eval_resp = await eval_output_queue.get()
+
+        eval_resp = await asyncio.wait_for(eval_output_queue.get(), 5)
         logger.debug(f"[P{player_id}] Received evaluation response: {eval_resp}")
 
         eval_gs = json.loads(eval_resp)
@@ -100,6 +99,8 @@ async def evaluation_server_job(curr_game_data: GameData, player_id: int, eval_i
         curr_game_data.p1.game_state = eval_gs.get('p1', curr_game_data.p1.game_state)
         curr_game_data.p2.game_state = eval_gs.get('p2', curr_game_data.p2.game_state)
         logger.info(f"[P{player_id}] Updated game state with evaluation response")
+    except asyncio.TimeoutError:
+        logger.warning(f"[P{player_id}] Timeout while waiting for evaluation response.")
     except Exception as e:
         logger.exception(f"[P{player_id}] Error communicating with evaluation server: {e}")
 
@@ -176,7 +177,6 @@ async def start_relay_node_data_handler(src_input_queue_p1: asyncio.Queue,
                     logger.info(f"[P{player_id}] HEALTH PACKET Received")
                     await target_health_queue.put("target_hit")
                 elif pkt.packet_type == PACKET_DATA_BULLET:
-                    logger.info(f"[P{player_id}] BULLET PACKET Received")
                     await target_gun_queue.put("shoot_attempt")
                     await output_action_queue.put("gun")
                 elif pkt.packet_type == PACKET_DATA_IMU:

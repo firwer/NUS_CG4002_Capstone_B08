@@ -59,4 +59,4 @@ class ActionCooldownManager:
         finally:
             if lock.locked():
                 lock.release()
-                logger.info(f"[P{player_id}] Cooldown period ended. Ready to accept new actions.")
+                logger.cooldown_end(f"[P{player_id}] Cooldown period ended. READY FOR NEXT ROUND")

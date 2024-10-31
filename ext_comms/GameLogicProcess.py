@@ -128,7 +128,7 @@ async def game_state_manager(currGameData, attacker_id: int,
     global targetInFOV_p1, numOfRain_p1, targetInFOV_p2, numOfRain_p2
     try:
         prediction_action = await pred_output_queue.get()
-
+        logger.info(f"Received {prediction_action} in game_state_manager for P{attacker_id}")
         if attacker_id == 1:
             targetInFOV = targetInFOV_p1
             numOfRain = numOfRain_p1

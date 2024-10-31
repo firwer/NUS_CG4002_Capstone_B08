@@ -10,7 +10,6 @@ import config
 sys.path.append('/home/xilinx/IP')
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-import int_comms.relay.packet
 from AI50Class import AI
 
 logger = setup_logger(__name__)

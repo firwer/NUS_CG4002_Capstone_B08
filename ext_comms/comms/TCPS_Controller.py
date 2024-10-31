@@ -76,7 +76,7 @@ class TCPS_Controller:
             while True:
                 success, message = await self._recv_message(reader)
                 if not success:
-                    logger.warning(f"Error in data received from {addr}. Closing connection.")
+                    logger.warning(f"Error in data received from Player {player_number}: {addr}. Closing connection.")
                     break
                 if player_number == 1:
                     await self.receive_queue_p1.put(message)
