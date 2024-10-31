@@ -143,7 +143,6 @@ async def start_relay_node_data_handler(src_input_queue_p1: asyncio.Queue,
             try:
                 msg = await input_queue.get()
                 pkt = get_packet(msg)
-                print(pkt)
                 if pkt.packet_type == PACKET_DATA_HEALTH:
                     logger.info(f"[P{player_id}] HEALTH PACKET Received")
                     await target_health_queue.put("target_hit")
