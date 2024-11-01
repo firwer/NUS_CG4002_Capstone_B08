@@ -12,6 +12,7 @@ targetInFOV_p1 = False
 numOfRain_p1 = 0
 targetInFOV_p2 = False
 numOfRain_p2 = 0
+game_state_lock = asyncio.Lock()
 
 
 async def reduce_health(targetGameState: dict, hp_reduction: int):
@@ -134,10 +135,10 @@ async def game_state_manager(currGameData, attacker_id: int,
         logger.info(f"Received {prediction_action} in game_state_manager for P{attacker_id}")
 
         # Logout Protection Logic
-        if curr_round == 23 and prediction_action != "logout": # TODO: Doesn't seem to work
+        if curr_round == 23 and prediction_action != "logout":  # TODO: Doesn't seem to work
             logger.warning(f"Game Over! Forcing logout for P{attacker_id} instead of {prediction_action}")
             prediction_action = "logout"
-        elif curr_round <= 20 and prediction_action == "logout":
+        elif curr_round < 20 and prediction_action == "logout":
             logger.warning(f"Caught Premature Logout! {prediction_action} for P{attacker_id}. Ignoring.")
             return "invalid"
 
@@ -174,46 +175,47 @@ async def game_state_manager(currGameData, attacker_id: int,
 
         logger.debug(f"[P{attacker_id}] Action '{prediction_action}' accepted and being processed.")
 
-        # Handle rain bomb damage
-        if targetInFOV:
-            for _ in range(numOfRain):
-                logger.info(f"[P{attacker_id}] -5 HP RAIN BOMB")
-                await reduce_health(OpponentPlayerData, config.GAME_RAIN_DMG)
-
-        # Handle other generic actions
-        if prediction_action == "gun":
-            will_hit = False
-
-            if not config.FREEPLAY_MODE and targetInFOV:
-                logger.info(f"[P{attacker_id}] Opponent in FOV, Shot HIT regardless of IR sensor.")
-                will_hit = True
-            else:
-                # Drain the queue to get the latest result
-                result = await gun_state_queue.get()
-                # Empty out gun_state_queue and get the last item to prevent accumulation
-                while not gun_state_queue.empty():
-                    result = await gun_state_queue.get()
-                if result == "hit":
-                    will_hit = True
-                elif result == "miss" and targetPlayerData["bullets"] > 0:
-                    targetPlayerData["bullets"] -= 1
-                    logger.info(f"[P{attacker_id}] Shot MISS. Bullets left: {targetPlayerData['bullets']}")
-            if will_hit:
-                logger.info(f"[P{attacker_id}] Gun shot HIT Opponent.")
-                await gun_shoot(targetPlayerData, OpponentPlayerData)
-        elif prediction_action == "shield":
-            await shield(targetPlayerData)
-        elif prediction_action == "reload":
-            await reload(targetPlayerData)
-        elif prediction_action == "bomb":
-            await bomb_player(targetPlayerData, OpponentPlayerData, targetInFOV)
-        elif prediction_action in {"basket", "soccer", "volley", "bowl"}:
+        async with game_state_lock:
+            # Handle rain bomb damage
             if targetInFOV:
-                await reduce_health(OpponentPlayerData, config.GAME_AI_DMG)
-        elif prediction_action == "logout":
-            logger.info(f"[P{attacker_id}] User logout")
-        else:
-            logger.warning(f"[P{attacker_id}] Unknown action received: {prediction_action}. Doing nothing.")
-        return prediction_action
+                for _ in range(numOfRain):
+                    logger.info(f"[P{attacker_id}] -5 HP RAIN BOMB")
+                    await reduce_health(OpponentPlayerData, config.GAME_RAIN_DMG)
+
+            # Handle other generic actions
+            if prediction_action == "gun":
+                will_hit = False
+
+                if not config.FREEPLAY_MODE and targetInFOV:
+                    logger.info(f"[P{attacker_id}] Opponent in FOV, Shot HIT regardless of IR sensor.")
+                    will_hit = True
+                else:
+                    # Drain the queue to get the latest result
+                    result = await gun_state_queue.get()
+                    # Empty out gun_state_queue and get the last item to prevent accumulation
+                    while not gun_state_queue.empty():
+                        result = await gun_state_queue.get()
+                    if result == "hit":
+                        will_hit = True
+                    elif result == "miss" and targetPlayerData["bullets"] > 0:
+                        targetPlayerData["bullets"] -= 1
+                        logger.info(f"[P{attacker_id}] Shot MISS. Bullets left: {targetPlayerData['bullets']}")
+                if will_hit:
+                    logger.info(f"[P{attacker_id}] Gun shot HIT Opponent.")
+                    await gun_shoot(targetPlayerData, OpponentPlayerData)
+            elif prediction_action == "shield":
+                await shield(targetPlayerData)
+            elif prediction_action == "reload":
+                await reload(targetPlayerData)
+            elif prediction_action == "bomb":
+                await bomb_player(targetPlayerData, OpponentPlayerData, targetInFOV)
+            elif prediction_action in {"basket", "soccer", "volley", "bowl"}:
+                if targetInFOV:
+                    await reduce_health(OpponentPlayerData, config.GAME_AI_DMG)
+            elif prediction_action == "logout":
+                logger.info(f"[P{attacker_id}] User logout")
+            else:
+                logger.warning(f"[P{attacker_id}] Unknown action received: {prediction_action}. Doing nothing.")
+            return prediction_action
     except Exception as e:
         logger.exception(f"[P{attacker_id}] Error in game_state_manager: {e}")
