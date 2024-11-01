@@ -49,7 +49,7 @@ class NotifyDelegate(btle.DefaultDelegate):
         self.relayTxNumber = 0
 
     def handleNotification(self, cHandle, data: bytes):
-        self.buffer += PendingDeprecationWarning
+        self.buffer += data
         if len(data) < 20:
             logger.info(f"Fragmentatation: {len(data)}, {data.hex()}")
 
@@ -114,7 +114,7 @@ class Beetle:
         self.sendReliableStart = 0
         self.cachedPacket = None
         self.reliableRetransmissions = 0
-        self.reliableTxRate = 0 # ms @wanlin CONFIG ME
+        self.reliableTxRate = 4000 # ms @wanlin CONFIG ME
         self.reliableTimeout = 1000 # ms
 
         # CONFIG TEST: subcomponent test flags
@@ -181,7 +181,7 @@ class Beetle:
                 # Is unreliable send
                 if pkt.packet_type == PACKET_DATA_IMU:
                     # TODO do work: WARNING - signness needs to be preserved
-                    # logger.info(f"{self.COLOR}RX PKT b{pkt.seq_num} #{pkt.adc} <IMU> (beetle stream)")
+                    logger.info(f"{self.COLOR}RX PKT b{pkt.seq_num} <IMU> (beetle stream)")
                     if self.sendToGameServerQueue is not None: 
                         self.sendToGameServerQueue.put_nowait(pkt)
                     continue
@@ -253,7 +253,7 @@ class Beetle:
                         if sendPkt is not None:
                             self.cachedPacket = sendPkt
                             self.sendReliableStart = millis()
-                            logger.info(f"{self.COLOR}TX PKT r{sendPkt.seq_num}, curr r{self.relay_seq_num}, data(bl{sendPkt.bullet},hp{sendPkt.health}) (relay reliable)")
+                            logger.info(f"{self.COLOR}TX PKT r{sendPkt.seq_num}, curr r{self.relay_seq_num}, data(bl{sendPkt.bullet},hp{sendPkt.health},sh{sendPkt.shield}) (relay reliable)")
                             self.write_packet(sendPkt)
                             self.receiver.relayTxNumber += 1
                             canSendReliable = False
@@ -372,9 +372,11 @@ class Beetle:
         # pkt.seq_num = self.relay_seq_num
         # pkt.bullet = 6
         # pkt.health = 100
+        # pkt.shield = 20
         # self.bullets = pkt.bullet
         # self.health = pkt.health
         # pkt.crc8 = get_checksum(pkt.to_bytearray())
+        # print(len(pkt.to_bytearray()))
         # return pkt
 
     def corrupt_packet(self, pkt):
@@ -417,35 +419,35 @@ def main():
     if player == 1:
         beetle0 = Beetle(BLUNO_P1_GLOVE_MAC, 0, sendToGameServerQueue, receiveFromGameServerQueue0)
         beetle1 = Beetle(BLUNO_P1_CHEST_MAC, 1, sendToGameServerQueue, receiveFromGameServerQueue1)
-        beetle2 = Beetle(BLUNO_P2_LEG_MAC, 2, sendToGameServerQueue)
+        beetle2 = Beetle(BLUNO_P1_LEG_MAC, 2, sendToGameServerQueue)
         externalThread = threading.Thread(target=external_p1.begin_external, args=(sendToGameServerQueue, receiveFromGameServerQueue0, receiveFromGameServerQueue1, 1,), name="External")
         t0 = threading.Thread(target=run_beetle, args=(beetle0,), name="Beetle0")
         t1 = threading.Thread(target=run_beetle, args=(beetle1,), name=f"Beetle1")
-        t2 = threading.Thread(target=run_beetle, args=(beetle2,), name=f"Beetle2")
+        # t2 = threading.Thread(target=run_beetle, args=(beetle2,), name=f"Beetle2")
         t0.start()
         t1.start()
-        t2.start()
+        # t2.start()
         externalThread.start()
         t0.join()
         t1.join()
-        t2.join()
+        # t2.join()
         externalThread.join()
     elif player == 2:
         # Player 2 Process
         beetle0 = Beetle(BLUNO_P2_GLOVE_MAC, 3, sendToGameServerQueue, receiveFromGameServerQueue0)
-        beetle1 = Beetle(BLUNO_P2_CHEST_MAC, 4, sendToGameServerQueue, receiveFromGameServerQueue0)
-        beetle2 = Beetle(BLUNO_P2_LEG_MAC, 5, sendToGameServerQueue)
+        beetle1 = Beetle(BLUNO_P2_CHEST_MAC, 4, sendToGameServerQueue, receiveFromGameServerQueue1)
+        # beetle2 = Beetle(BLUNO_P2_LEG_MAC, 5, sendToGameServerQueue)
         t0 = threading.Thread(target=run_beetle, args=(beetle0,), name="Beetle0")
         t1 = threading.Thread(target=run_beetle, args=(beetle1,), name="Beetle1")
-        t2 = threading.Thread(target=run_beetle, args=(beetle2,), name="Beetle2")
+        # t2 = threading.Thread(target=run_beetle, args=(beetle2,), name="Beetle2")
         externalThread = threading.Thread(target=external_p2.begin_external, args=(sendToGameServerQueue, receiveFromGameServerQueue0, receiveFromGameServerQueue1, 2,), name="External")
         t0.start()
         t1.start()
-        t2.start()
+        # t2.start()
         externalThread.start()
         t0.join()
         t1.join()
-        t2.join()
+        # t2.join()
         externalThread.join()
 
 
