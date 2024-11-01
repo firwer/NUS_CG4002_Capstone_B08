@@ -9,18 +9,13 @@ from bluepy import btle
 from packet import * 
 from checksum import *
 import threading
-import external_p1
-import external_p2
-# RED == PLAYER 1
-BLUNO_P1_GLOVE_MAC = "F4:B8:5E:42:6D:49" # TO BE USED FOR EVAL
-BLUNO_P1_CHEST_MAC = "F4:B8:5E:42:46:E5" 
-BLUNO_P1_LEG_MAC   = "F4:B8:5E:42:6D:42"
+import pandas as pd
 
-# GREEN == PLAYER 2
-BLUNO_P2_GLOVE_MAC = "F4:B8:5E:42:4C:BB" 
-BLUNO_P2_CHEST_MAC = "F4:B8:5E:42:6D:1E" #TO BE USED FOR EVAL
-BLUNO_P2_LEG_MAC   = "F4:B8:5E:42:61:6A" #TO BE USED FOR EVAL (TREAT AS PLAYER 1 FOR NOW)
+#BLUNO_RED_MAC_ADDRESS = "F4:B8:5E:42:6D:49"
+#BLUNO_RED_MAC_ADDRESS = "F4:B8:5E:42:4C:BB" #actually green
+BLUNO_RED_MAC_ADDRESS =  "F4:B8:5E:42:61:6A"#For leg green
 
+#FIXME: if we get 59 and then we get 61, ignore the first packet
 CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"
 logging.basicConfig(level=logging.DEBUG, format='\033[0m[%(levelname)s] [%(threadName)s] %(message)s')
 logger = logging.getLogger(__name__)
@@ -82,10 +77,26 @@ class Beetle:
         BLUE_COLOR = "\033[34m"   # Blue color
         MAGENTA_COLOR = "\033[35m" # Magenta color
         CYAN_COLOR = "\033[36m"   # Cyan color
-        colors = [BLUE_COLOR, GREEN_COLOR, RED_COLOR, CYAN_COLOR, GREEN_COLOR, YELLOW_COLOR]
+        colors = [BLUE_COLOR, GREEN_COLOR, RED_COLOR]
 
-        self.sendToGameServerQueue = sendToGameServerQueue
-        self.receiveFromGameServerQueue = receiveFromGameServerQueue
+        # ----- DATA COLLECTION -----
+        # self.my_csv = pd.DataFrame(columns=["gesture", "ax", "ay", "az", "gx", "gy", "gz"])
+        self.my_csv = pd.DataFrame()
+        self.ax = []
+        self.ay = []
+        self.az = []
+        self.gx = []
+        self.gy = []
+        self.gz = []
+        # basket, bowling, reload, volley, rainbomb, shield, logout, invalid
+        # walk, stomp/hardstep, kick
+        self.GESTURE = "stomp"
+        self.filename = "wanlin_green_leg_sample"
+        self.EXPECTED_PKTS = 50
+        self.CURRENT_PKTS = 0
+        self.ROWS_TO_COLLECT = 90 # CONFIGURE ME - THIS CONTROLS HOW MANY ROWS  
+        self.ROWS_LEFT = self.ROWS_TO_COLLECT 
+        self.PREV_ADC = -1
 
         self.COLOR = RESET_COLOR if beetle_id is None else colors[beetle_id]
         self.relay_seq_num = 0
