@@ -234,7 +234,7 @@ class GameEngine:
         self.cooldown_msg_queue_p2 = asyncio.Queue()
 
         self.currGameData = GameData()
-        self.eval_server_lock = asyncio.Lock()
+        self.gs_lock = asyncio.Lock()
 
         self.cooldown_manager = ActionCooldownManager(cooldown_period=config.GAME_ACTION_COOLDOWN,
                                                       cooldown_notify_queue_p1=self.cooldown_msg_queue_p1,
@@ -317,30 +317,34 @@ class GameEngine:
         if player_id == 1:
             pred_output_queue = self.prediction_output_queue_p1
             gun_state_queue = self.gun_state_queue_p1
-            curr_round = self.game_round_p1
         else:
             pred_output_queue = self.prediction_output_queue_p2
             gun_state_queue = self.gun_state_queue_p2
-            curr_round = self.game_round_p2
         while True:
+            if player_id == 1:
+                curr_round = self.game_round_p1
+            else:
+                curr_round = self.game_round_p2
             try:
-                # Verify FOV with visualizer and update game state
-                predicted_action = await game_state_manager(currGameData=self.currGameData, attacker_id=player_id,
-                                                            pred_output_queue=pred_output_queue,
-                                                            gun_state_queue=gun_state_queue,
-                                                            cooldown_manager=self.cooldown_manager,
-                                                            cooldown_p1_event=self.cooldown_p1_event,
-                                                            cooldown_p2_event=self.cooldown_p2_event,
-                                                            curr_round=curr_round)
+                prediction_action = await pred_output_queue.get()
+                async with self.gs_lock:
+                    async with self.cooldown_lock:
+                        # Verify FOV with visualizer and update game state
+                        predicted_action = await game_state_manager(currGameData=self.currGameData, attacker_id=player_id,
+                                                                    prediction_action=prediction_action,
+                                                                    gun_state_queue=gun_state_queue,
+                                                                    cooldown_manager=self.cooldown_manager,
+                                                                    cooldown_p1_event=self.cooldown_p1_event,
+                                                                    cooldown_p2_event=self.cooldown_p2_event,
+                                                                    curr_round=curr_round)
 
-                # Only send game state to evaluation server if the action is a valid one
-                if predicted_action in ['gun', 'bomb', 'shield', 'rain', 'logout', 'reload', "basket", "soccer",
-                                        "volley", "bowl"]:
-                    async with self.eval_server_lock:
-                        # Send updated game state to evaluation server
-                        await self.evaluation_server_job(player_id=player_id,
-                                                         eval_input_queue=self.engine_to_evaluation_server_queue,
-                                                         eval_output_queue=self.evaluation_server_to_engine_queue)
+                        # Only send game state to evaluation server if the action is a valid one
+                        if predicted_action in ['gun', 'bomb', 'shield', 'rain', 'logout', 'reload', "basket", "soccer",
+                                                "volley", "bowl"]:
+                            # Send updated game state to evaluation server
+                            await self.evaluation_server_job(player_id=player_id,
+                                                             eval_input_queue=self.engine_to_evaluation_server_queue,
+                                                             eval_output_queue=self.evaluation_server_to_engine_queue)
 
                 # Send updated game state to visualizer
                 await visualizer_send_queue.put(
