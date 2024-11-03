@@ -121,36 +121,65 @@ async def getVState(visualizer_receive_queue: asyncio.Queue, player_id: int):
             logger.exception(f"Error in getVState for player {player_id}: {e}")
 
 
+def set_gamestate_action(currGameData, player_id: int, action: str):
+    if player_id == 1:
+        currGameData.p1.action = action
+    else:
+        currGameData.p2.action = action
+
+
 async def game_state_manager(currGameData, attacker_id: int,
-                             pred_output_queue: asyncio.Queue,
+                             prediction_action: str,
                              gun_state_queue: asyncio.Queue,
-                             cooldown_manager: ActionCooldownManager):
+                             cooldown_manager: ActionCooldownManager,
+                             cooldown_p1_event: asyncio.Event,
+                             cooldown_p2_event: asyncio.Event,
+                             curr_round: int):
     global targetInFOV_p1, numOfRain_p1, targetInFOV_p2, numOfRain_p2
     try:
-        prediction_action = await pred_output_queue.get()
         logger.info(f"Received {prediction_action} in game_state_manager for P{attacker_id}")
+
+        # Logout Protection Logic
+        if curr_round == 23 and prediction_action != "logout":  # TODO: Doesn't seem to work
+            logger.warning(f"Game Over! Forcing logout for P{attacker_id} instead of {prediction_action}")
+            prediction_action = "logout"
+        elif curr_round < 20 and prediction_action == "logout":
+            logger.warning(f"Caught Premature Logout! {prediction_action} for P{attacker_id}. Ignoring.")
+            return "invalid"
+
         if attacker_id == 1:
             targetInFOV = targetInFOV_p1
             numOfRain = numOfRain_p1
             currGameData.p1.action = prediction_action
             targetPlayerData = currGameData.p1.game_state
             OpponentPlayerData = currGameData.p2.game_state
+            cooldown_event = cooldown_p1_event
         else:
             targetInFOV = targetInFOV_p2
             numOfRain = numOfRain_p2
             currGameData.p2.action = prediction_action
             targetPlayerData = currGameData.p2.game_state
             OpponentPlayerData = currGameData.p1.game_state
+            cooldown_event = cooldown_p2_event
+
+        # Constraints to prevent multiple actions in the same round and invalid actions
+        if cooldown_event.is_set():
+            logger.warning(f"[P{attacker_id}] Already performed action for this round! Ignoring {prediction_action}. "
+                           f"Please ensure that the other player has performed the action for this round.")
+            set_gamestate_action(currGameData, attacker_id, "invalid")
+            return "invalid"
 
         if prediction_action == "invalid":
             logger.warning(f"[P{attacker_id}] Invalid action received: {prediction_action}. Doing nothing.")
+            set_gamestate_action(currGameData, attacker_id, "invalid")
             return "invalid"
 
         logger.debug(f"[P{attacker_id}] Attempting to acquire cooldown slot.")
         can_process = await cooldown_manager.acquire_action_slot(attacker_id)
         if not can_process:
             logger.warning(f"[P{attacker_id}] Action '{prediction_action}' discarded due to cooldown.")
-            return "invalid-cooldown"
+            set_gamestate_action(currGameData, attacker_id, "cooldown-progress")
+            return "cooldown-progress"
 
         logger.debug(f"[P{attacker_id}] Action '{prediction_action}' accepted and being processed.")
 

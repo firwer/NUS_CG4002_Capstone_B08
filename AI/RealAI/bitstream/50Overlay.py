@@ -151,13 +151,12 @@ input_data_list = [
    },
    #fake
    {
-      'ax': [100]*50, 
-      'ay': [100]*50,
-      'az': [100]*50,
-      'gx': [100]*50,
-      'gy': [100]*50,
-      'gz': [100]*50,
-       
+      'ax': [-1000]*50, 
+      'ay': [-1000]*50,
+      'az': [-1000]*50,
+      'gx': [-1000]*50,
+      'gy': [-1000]*50,
+      'gz': [-1000]*50,
    },
 ]
 
@@ -206,7 +205,7 @@ for index, hard_coded_data in enumerate(input_data_list):
     max_idx = np.argmax(probabilities)
     confidence = probabilities[max_idx]
 
-    gesture_mapping = ['basket', 'bowling', 'invalid', 'invalid', 'logout', 'rainbomb', 'reload', 'invalid', 'shield', 'invalid', 'volley']
+    gesture_mapping = ['basket', 'bowl', 'invalid', 'invalid', 'logout', 'bomb', 'reload', 'invalid', 'shield', 'invalid', 'volley']
     predicted_gesture = gesture_mapping[max_idx]
     
     if confidence < 0.9:

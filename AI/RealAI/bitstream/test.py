@@ -17,11 +17,11 @@ stationary_input = [-1173, -1173, -1173, -303, -359, -511, -487, -426, -417, -43
 
 low_confidence_input = [-1000] * 300
 
-prediction = AImodel.predict(basket_input)
+prediction = AImodel.predict(basket_input, 1)   
 print(f"Output: {prediction}")
 
-prediction = AImodel.predict(stationary_input)
+prediction = AImodel.predict(stationary_input, 2)
 print(f"Output: {prediction}")
 
-prediction = AImodel.predict(low_confidence_input)
+prediction = AImodel.predict(low_confidence_input, 1)
 print(f"Output: {prediction}")
