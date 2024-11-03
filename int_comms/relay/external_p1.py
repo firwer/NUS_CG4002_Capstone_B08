@@ -1,6 +1,5 @@
 import json
 import struct
-from logging import Logger
 import logging
 import os
 import random
@@ -17,7 +16,7 @@ from int_comms.relay.external_p2 import sim_get_packet
 
 from comms.TCPC_Controller_Sync import TCPC_Controller_Sync
 from int_comms.relay.packet import PACKET_DATA_IMU, PACKET_DATA_BULLET, PACKET_DATA_HEALTH, PACKET_DATA_KICK, PacketImu, \
-    PacketBullet, PacketHealth, PacketKick, PacketGamestate, get_packet
+    PacketBullet, PacketHealth, PacketKick, PacketGamestate
 
 ext_logger = logging.getLogger("External")
 
@@ -135,7 +134,7 @@ def begin_external(sendToGameServerQueue: Queue, receiveFromGameServerQueue0: Qu
 ##
 
 # Function to convert IMU data into byte array for PacketImu
-def create_packet_from_imu_data(imu_data):
+def create_packet_from_imu_data(ax, ay, az, gx, gy, gz):
     # Convert IMU data to a byte array (each sensor value is 2 bytes - 16-bit signed integer)
     byte_array = bytearray()
 
@@ -147,12 +146,12 @@ def create_packet_from_imu_data(imu_data):
     byte_array.append(0)  # Placeholder for adc
 
     # Convert each IMU value into 2 bytes (16-bit signed integer) and append to the byte array
-    byte_array.extend(struct.pack('<h', imu_data['ax']))  # Convert ax to 2 bytes
-    byte_array.extend(struct.pack('<h', imu_data['ay']))  # Convert ay to 2 bytes
-    byte_array.extend(struct.pack('<h', imu_data['az']))  # Convert az to 2 bytes
-    byte_array.extend(struct.pack('<h', imu_data['gx']))  # Convert gx to 2 bytes
-    byte_array.extend(struct.pack('<h', imu_data['gy']))  # Convert gy to 2 bytes
-    byte_array.extend(struct.pack('<h', imu_data['gz']))  # Convert gz to 2 bytes
+    byte_array.extend(struct.pack('<h', ax))  # ax
+    byte_array.extend(struct.pack('<h', ay))  # ay
+    byte_array.extend(struct.pack('<h', az))  # az
+    byte_array.extend(struct.pack('<h', gx))  # gx
+    byte_array.extend(struct.pack('<h', gy))  # gy
+    byte_array.extend(struct.pack('<h', gz))  # gz
 
     # Add 4 bytes of padding
     byte_array.extend(bytearray(4))
@@ -166,15 +165,30 @@ def create_packet_from_imu_data(imu_data):
 
     return byte_array
 
-def create_imu_packets(imu_data_list):
+
+def create_imu_packets(imu_data):
     packets = []
 
-    for imu_data in imu_data_list:
-        byte_array = create_packet_from_imu_data(imu_data)
-        packet = PacketImu(byteArray=byte_array)  # Create a PacketImu instance with the byte array
+    # Find the shortest length among the data arrays to avoid index out-of-range errors
+    min_length = min(len(imu_data['ax']), len(imu_data['ay']), len(imu_data['az']),
+                     len(imu_data['gx']), len(imu_data['gy']), len(imu_data['gz']))
+
+    for i in range(min_length):
+        # Extract each individual reading to create one packet
+        ax = imu_data['ax'][i]
+        ay = imu_data['ay'][i]
+        az = imu_data['az'][i]
+        gx = imu_data['gx'][i]
+        gy = imu_data['gy'][i]
+        gz = imu_data['gz'][i]
+
+        # Create packet for the current set of values
+        packet_byte_array = create_packet_from_imu_data(ax, ay, az, gx, gy, gz)
+        packet = PacketImu(byteArray=packet_byte_array)  # Assuming PacketImu uses byteArray
         packets.append(packet)
 
     return packets
+
 
 def display_menu():
     """Display the interactive menu for packet selection"""
@@ -186,9 +200,13 @@ def display_menu():
     print("5. Bomb (Rainbomb)")
     print("6. Shield")
     print("7. Logout")
-    print("8. Gun")
-    print("9. Health")
-    print("10. Soccer (Kick)")
+    print("8. Gun Raise")
+    print("9. Gun Drop")
+    print("10. Stationary")
+    print("11. Shake")
+    print("12. Gun")
+    print("13. Health")
+    print("14. Soccer (Kick)")
     print("0. Exit")
 
 
@@ -198,16 +216,20 @@ def get_user_input(sendToGameServerQueue: Queue):
 
     # Dictionary to map user selections to packet types and functions
     packet_options = {
-        '1': ("Basket", create_imu_packets, basket_packets),
-        '2': ("Bowl", create_imu_packets, bowling_packets),
-        '3': ("Reload", create_imu_packets, reload_packets),
-        '4': ("Volley", create_imu_packets, volley_packets),
-        '5': ("Bomb (Rainbomb)", create_imu_packets, rainbomb_packets),
-        '6': ("Shield", create_imu_packets, shield_packets),
-        '7': ("Logout", create_imu_packets, logout_packets),
-        '8': ("Gun", [sim_get_packet], PACKET_DATA_BULLET),
-        '9': ("Health", [sim_get_packet], PACKET_DATA_HEALTH),
-        '10': ("Soccer (Kick)", [sim_get_packet], PACKET_DATA_KICK)
+        '1': ("Basket", create_imu_packets, basket),
+        '2': ("Bowl", create_imu_packets, bowl),
+        '3': ("Reload", create_imu_packets, reload),
+        '4': ("Volley", create_imu_packets, volley),
+        '5': ("Bomb (Rainbomb)", create_imu_packets, bomb),
+        '6': ("Shield", create_imu_packets, shield),
+        '7': ("Logout", create_imu_packets, logout),
+        '8': ("Gun Raise", create_imu_packets, gun_raise),
+        '9': ("Gun Drop", create_imu_packets, gun_drop),
+        '10': ("Stationary", create_imu_packets, stationary),
+        '11': ("Shake", create_imu_packets, shake),
+        '12': ("Gun", [sim_get_packet], PACKET_DATA_BULLET),
+        '13': ("Health", [sim_get_packet], PACKET_DATA_HEALTH),
+        '14': ("Soccer (Kick)", [sim_get_packet], PACKET_DATA_KICK)
     }
 
     while True:

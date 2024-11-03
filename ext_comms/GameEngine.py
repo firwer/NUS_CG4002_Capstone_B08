@@ -1,13 +1,20 @@
+# gameengine.py
 import asyncio
 import json
+import random
 
 import config
+from ActionCooldownManager import ActionCooldownManager
+from logger_config import setup_logger
 from EvaluationProcess import start_evaluation_process
 from GameLogicProcess import game_state_manager
+from GameLogicProcess import getVState
 from PredictionService import PredictionServiceProcess
 from comms.AsyncMQTTController import AsyncMQTTController
 from comms.TCPS_Controller import TCPS_Controller
 from int_comms.relay.packet import get_packet, PACKET_DATA_HEALTH, PACKET_DATA_BULLET, PACKET_DATA_IMU, PACKET_DATA_KICK
+
+logger = setup_logger(__name__)
 
 
 class GamePlayerData:
@@ -62,37 +69,11 @@ class GameData:
 
     def to_json(self, player_id):
         return json.dumps({
-            'player_id': player_id,  # This is to identify which player the data came from so that the FOV can be sent
-            # to the correct player
+            'player_id': player_id,
             'p1': self.p1.to_json(),
             'p2': self.p2.to_json()
         })
 
-
-async def evaluation_server_job(curr_game_data: GameData, player_id: int, eval_input_queue: asyncio.Queue,
-                                eval_output_queue: asyncio.Queue):
-    EvalGameData = {
-        "player_id": player_id,
-        "action": curr_game_data.p1.action if player_id == 1 else curr_game_data.p2.action,
-        "game_state": {
-            "p1": curr_game_data.p1.game_state,
-            "p2": curr_game_data.p2.game_state
-        }
-    }
-    print("SENDING TO EVAL SERVER ", EvalGameData)
-    # Send updated game state to evaluation server
-    await eval_input_queue.put(json.dumps(EvalGameData))
-    # Wait for evaluation response
-    eval_resp = await eval_output_queue.get()
-    eval_gs = json.loads(eval_resp)
-
-    # Update game state based on evaluation response
-    curr_game_data.p1.game_state = eval_gs['p1']
-    curr_game_data.p2.game_state = eval_gs['p2']
-
-
-# Need this function for visualizer to provide feedback on whether player is in sight. If game state did not change (
-# i.e. health is unchanged, it means player is not in sight)
 
 async def start_mqtt_job(receive_topic_p1: str,
                          receive_topic_p2: str,
@@ -100,20 +81,34 @@ async def start_mqtt_job(receive_topic_p1: str,
                          receive_queue_p1: asyncio.Queue,
                          receive_queue_p2: asyncio.Queue,
                          send_queue: asyncio.Queue):
-    mqtt_client = AsyncMQTTController(config.MQTT_BROKER_PORT, receive_queue_p1=receive_queue_p1,
-                                      receive_queue_p2=receive_queue_p2,
-                                      send_queue=send_queue)
-    await mqtt_client.start(receive_topic_p1, receive_topic_p2, send_topic)
+    try:
+        mqtt_client = AsyncMQTTController(
+            config.MQTT_BROKER_PORT,
+            receive_queue_p1=receive_queue_p1,
+            receive_queue_p2=receive_queue_p2,
+            send_queue=send_queue
+        )
+        logger.info("Starting MQTT Client...")
+        await mqtt_client.start(receive_topic_p1, receive_topic_p2, send_topic)
+    except Exception as e:
+        logger.exception(f"Failed to start MQTT job: {e}")
 
 
 async def start_tcp_job(tcp_port: int, receive_queue_p1: asyncio.Queue, receive_queue_p2: asyncio.Queue,
                         send_queue: asyncio.Queue):
-    tcp_server = TCPS_Controller(ip=config.TCP_SERVER_HOST, port=tcp_port, secret_key=config.TCP_SECRET_KEY,
-                                 receive_queue_p1=receive_queue_p1,
-                                 receive_queue_p2=receive_queue_p2,
-                                 send_queue=send_queue)
-    print("Starting TCP Server...")
-    await tcp_server.start_server()
+    try:
+        tcp_server = TCPS_Controller(
+            ip=config.TCP_SERVER_HOST,
+            port=tcp_port,
+            secret_key=config.TCP_SECRET_KEY,
+            receive_queue_p1=receive_queue_p1,
+            receive_queue_p2=receive_queue_p2,
+            send_queue=send_queue
+        )
+        logger.info(f"Starting TCP Server on port {tcp_port}...")
+        await tcp_server.start_server()
+    except Exception as e:
+        logger.exception(f"Failed to start TCP server on port {tcp_port}: {e}")
 
 
 async def start_relay_node_data_handler(src_input_queue_p1: asyncio.Queue,
@@ -143,24 +138,26 @@ async def start_relay_node_data_handler(src_input_queue_p1: asyncio.Queue,
             target_gun_queue = bullet_queue_p2
             target_health_queue = health_queue_p2
 
+        logger.debug(f"[P{player_id}] Starting Relay Node Sorting Service")
         while True:
-            msg = await input_queue.get()
-            pkt = get_packet(msg)
-            if pkt.packet_type == PACKET_DATA_HEALTH:
-                print("HEALTH PACKET Received")
-                await target_health_queue.put("target_hit")
-            elif pkt.packet_type == PACKET_DATA_BULLET:
-                print("BULLET PACKET Received")
-                await target_gun_queue.put("shoot_attempt")
-                await output_action_queue.put("gun")
-            elif pkt.packet_type == PACKET_DATA_IMU:
-                # Send to prediction service
-                await output_sensor_queue.put(pkt)
-            elif pkt.packet_type == PACKET_DATA_KICK:
-                print("KICK PACKET Received")
-                await output_action_queue.put("soccer")
-            else:
-                print("Invalid packet type received")
+            try:
+                msg = await input_queue.get()
+                pkt = get_packet(msg)
+                if pkt.packet_type == PACKET_DATA_HEALTH:
+                    logger.info(f"[P{player_id}] HEALTH PACKET Received")
+                    await target_health_queue.put("target_hit")
+                elif pkt.packet_type == PACKET_DATA_BULLET:
+                    await target_gun_queue.put("shoot_attempt")
+                    await output_action_queue.put("gun")
+                elif pkt.packet_type == PACKET_DATA_IMU:
+                    await output_sensor_queue.put(pkt)
+                elif pkt.packet_type == PACKET_DATA_KICK:
+                    logger.info(f"[P{player_id}] KICK PACKET Received")
+                    await output_action_queue.put("soccer")
+                else:
+                    logger.warning(f"[P{player_id}] Invalid packet type received: {pkt.packet_type}")
+            except Exception as e:
+                logger.exception(f"[P{player_id}] Error in push_to_queue: {e}")
 
     async def sync_gun_action(player_id: int):
         if player_id == 1:
@@ -171,33 +168,34 @@ async def start_relay_node_data_handler(src_input_queue_p1: asyncio.Queue,
             bullet_queue = bullet_queue_p2
             opponent_health_queue = health_queue_p1
             output_gun_state_queue = output_gun_state_p2
+        logger.debug(f"[P{player_id}] Starting sync_gun_action.")
         while True:
-            # Wait for a bullet packet
-            await bullet_queue.get()
-            print(f"Player {player_id} attempted to shoot")
             try:
-                # Wait for corresponding health packet from the opponent
-                await asyncio.wait_for(opponent_health_queue.get(), timeout=config.GAME_HEALTH_PKT_TIMEOUT)
-                print(f"Shot from Player {player_id} hit the opponent")
-                output_gun_state_queue.put_nowait("hit")
-            except asyncio.TimeoutError:
-                print(f"Shot from Player {player_id} missed")
-                output_gun_state_queue.put_nowait("miss")
+                # Wait for a bullet packet
+                await bullet_queue.get()
+                logger.info(f"[P{player_id}] Attempted to shoot")
+                try:
+                    # Wait for corresponding health packet from the opponent
+                    await asyncio.wait_for(opponent_health_queue.get(), timeout=config.GAME_HEALTH_PKT_TIMEOUT)
+                    logger.info(f"[P{player_id}] Received health packet from Opponent's IR sensor")
+                    output_gun_state_queue.put_nowait("hit")
+                except asyncio.TimeoutError:
+                    logger.info(f"[P{player_id}] Did not receive health packet from Opponent's IR sensor")
+                    output_gun_state_queue.put_nowait("miss")
+            except Exception as e:
+                logger.exception(f"[P{player_id}] Error in sync_gun_action: {e}")
 
-    push_to_queue_p1 = asyncio.create_task(
-        push_to_queue(1))
-    push_to_queue_p2 = asyncio.create_task(
-        push_to_queue(2))
+    try:
+        push_to_queue_p1 = asyncio.create_task(push_to_queue(1))
+        push_to_queue_p2 = asyncio.create_task(push_to_queue(2))
 
-    check_gun_p1 = asyncio.create_task(sync_gun_action(1))
-    check_gun_p2 = asyncio.create_task(sync_gun_action(2))
+        check_gun_p1 = asyncio.create_task(sync_gun_action(1))
+        check_gun_p2 = asyncio.create_task(sync_gun_action(2))
 
-    await asyncio.gather(push_to_queue_p1, push_to_queue_p2, check_gun_p1, check_gun_p2)
-
-    # Packet IMU - Standard AI Dmg except soccer
-    # Packet Bullet - Send straight for game state update (deduct attacker bullet)
-    # Packet Health - Send straight for game state update (deduct opponent health)
-    # Packet Kick - Send straight for game state update (deduct opponent health)
+        logger.info("Starting relay node data handler tasks.")
+        await asyncio.gather(push_to_queue_p1, push_to_queue_p2, check_gun_p1, check_gun_p2)
+    except Exception as e:
+        logger.exception(f"Error in start_relay_node_data_handler: {e}")
 
 
 class GameEngine:
@@ -227,33 +225,60 @@ class GameEngine:
         self.gun_state_queue_p1 = asyncio.Queue()
         self.gun_state_queue_p2 = asyncio.Queue()
 
+        # Shared state for tracking cooldowns
+        self.cooldown_p1_event = asyncio.Event()
+        self.cooldown_p2_event = asyncio.Event()
+        self.cooldown_lock = asyncio.Lock()
+
+        self.cooldown_msg_queue_p1 = asyncio.Queue()
+        self.cooldown_msg_queue_p2 = asyncio.Queue()
+
         self.currGameData = GameData()
+        self.gs_lock = asyncio.Lock()
+
+        self.cooldown_manager = ActionCooldownManager(cooldown_period=config.GAME_ACTION_COOLDOWN,
+                                                      cooldown_notify_queue_p1=self.cooldown_msg_queue_p1,
+                                                      cooldown_notify_queue_p2=self.cooldown_msg_queue_p2)
+        self.game_round_p1 = 1
+        self.game_round_p2 = 1
+
+        logger.info("Game Engine Initialized.")
 
     async def start_game(self):
+        logger.info("Initializing game engine tasks.")
+
         tasks = [
+            # Start TCP Server
+            start_tcp_job(
+                tcp_port=config.TCP_SERVER_PORT,
+                receive_queue_p1=self.relay_node_to_engine_queue_p1,
+                receive_queue_p2=self.relay_node_to_engine_queue_p2,
+                send_queue=self.engine_to_relay_node_queue
+            ),
 
-            # Start MQTT Broker Connection & TCP Server
-            start_tcp_job(tcp_port=config.TCP_SERVER_PORT,
-                          receive_queue_p1=self.relay_node_to_engine_queue_p1,
-                          receive_queue_p2=self.relay_node_to_engine_queue_p2,
-                          send_queue=self.engine_to_relay_node_queue),
+            # Start MQTT Job
+            start_mqtt_job(
+                receive_topic_p1=config.MQTT_VISUALIZER_TO_ENG_P1,
+                receive_topic_p2=config.MQTT_VISUALIZER_TO_ENG_P2,
+                send_topic=config.MQTT_ENG_TO_VISUALIZER,
+                receive_queue_p1=self.visualizer_to_engine_queue_p1,
+                receive_queue_p2=self.visualizer_to_engine_queue_p2,
+                send_queue=self.engine_to_visualizer_queue
+            ),
 
-            start_mqtt_job(receive_topic_p1=config.MQTT_VISUALIZER_TO_ENG_P1,
-                           receive_topic_p2=config.MQTT_VISUALIZER_TO_ENG_P2,
-                           send_topic=config.MQTT_ENG_TO_VISUALIZER,
-                           receive_queue_p1=self.visualizer_to_engine_queue_p1,
-                           receive_queue_p2=self.visualizer_to_engine_queue_p2,
-                           send_queue=self.engine_to_visualizer_queue),
+            # Start Relay Node Data Handler
+            start_relay_node_data_handler(
+                src_input_queue_p1=self.relay_node_to_engine_queue_p1,
+                src_input_queue_p2=self.relay_node_to_engine_queue_p2,
+                output_sensor_data_p1=self.prediction_input_queue_p1,
+                output_sensor_data_p2=self.prediction_input_queue_p2,
+                output_action_data_p1=self.prediction_output_queue_p1,
+                output_action_data_p2=self.prediction_output_queue_p2,
+                output_gun_state_p1=self.gun_state_queue_p1,
+                output_gun_state_p2=self.gun_state_queue_p2
+            ),
 
-            start_relay_node_data_handler(src_input_queue_p1=self.relay_node_to_engine_queue_p1,
-                                          src_input_queue_p2=self.relay_node_to_engine_queue_p2,
-                                          output_sensor_data_p1=self.prediction_input_queue_p1,
-                                          output_sensor_data_p2=self.prediction_input_queue_p2,
-                                          output_action_data_p1=self.prediction_output_queue_p1,
-                                          output_action_data_p2=self.prediction_output_queue_p2,
-                                          output_gun_state_p1=self.gun_state_queue_p1,
-                                          output_gun_state_p2=self.gun_state_queue_p2),
-
+            # Start Prediction Service Process
             PredictionServiceProcess(
                 predict_input_queue_p1=self.prediction_input_queue_p1,
                 predict_input_queue_p2=self.prediction_input_queue_p2,
@@ -266,42 +291,187 @@ class GameEngine:
                                      receive_queue=self.evaluation_server_to_engine_queue,
                                      send_queue=self.engine_to_evaluation_server_queue),
 
+            getVState(visualizer_receive_queue=self.visualizer_to_engine_queue_p1, player_id=1),
+            getVState(visualizer_receive_queue=self.visualizer_to_engine_queue_p2, player_id=2),
+
             self.game_data_process(1),
-            self.game_data_process(2)
+            self.game_data_process(2),
+
+            self.cooldown_service(self.cooldown_msg_queue_p1, player_id=1),
+            self.cooldown_service(self.cooldown_msg_queue_p2, player_id=2),
+
+            self.supervisor_task()  # Start the supervisor task
         ]
 
-        # Run all tasks concurrently
-        await asyncio.gather(*tasks)
+        logger.info("Starting all game engine tasks concurrently.")
+        try:
+            await asyncio.gather(*tasks)
+        except Exception as e:
+            logger.exception(f"An error occurred while running game engine tasks: {e}")
 
     async def game_data_process(self, player_id):
-        # Select appropriate queues based on player_id
+        logger.debug(f"[P{player_id}] Starting game data process service")
         visualizer_send_queue = self.engine_to_visualizer_queue
-        # Currently all data for relay node sent back to this queue regardless of player
         relay_node_input_queue = self.engine_to_relay_node_queue
 
         if player_id == 1:
             pred_output_queue = self.prediction_output_queue_p1
-            visualizer_receive_queue = self.visualizer_to_engine_queue_p1
             gun_state_queue = self.gun_state_queue_p1
         else:
             pred_output_queue = self.prediction_output_queue_p2
-            visualizer_receive_queue = self.visualizer_to_engine_queue_p2
             gun_state_queue = self.gun_state_queue_p2
-
         while True:
-            # Verify FOV with visualizer and update game state
-            await game_state_manager(currGameData=self.currGameData, attacker_id=player_id,
-                                     pred_output_queue=pred_output_queue,
-                                     visualizer_receive_queue=visualizer_receive_queue,
-                                     visualizer_send_queue=visualizer_send_queue,
-                                     gun_state_queue=gun_state_queue)
-            print("EVALUATING...")
-            # Send updated game state to evaluation server
-            await evaluation_server_job(curr_game_data=self.currGameData,
-                                        player_id=player_id,
-                                        eval_input_queue=self.engine_to_evaluation_server_queue,
-                                        eval_output_queue=self.evaluation_server_to_engine_queue)
+            if player_id == 1:
+                curr_round = self.game_round_p1
+            else:
+                curr_round = self.game_round_p2
+            try:
+                prediction_action = await pred_output_queue.get()
+                async with self.gs_lock:
+                    async with self.cooldown_lock:
+                        # Verify FOV with visualizer and update game state
+                        predicted_action = await game_state_manager(currGameData=self.currGameData, attacker_id=player_id,
+                                                                    prediction_action=prediction_action,
+                                                                    gun_state_queue=gun_state_queue,
+                                                                    cooldown_manager=self.cooldown_manager,
+                                                                    cooldown_p1_event=self.cooldown_p1_event,
+                                                                    cooldown_p2_event=self.cooldown_p2_event,
+                                                                    curr_round=curr_round)
 
-            print(f"SENDING TO RELAY: {self.currGameData.to_json(player_id)}")
-            # Send validated/verified game state to relay node
-            await relay_node_input_queue.put(f"{self.currGameData.to_json(player_id)}")
+                        # Only send game state to evaluation server if the action is a valid one
+                        if predicted_action in ['gun', 'bomb', 'shield', 'rain', 'logout', 'reload', "basket", "soccer",
+                                                "volley", "bowl"]:
+                            # Send updated game state to evaluation server
+                            await self.evaluation_server_job(player_id=player_id,
+                                                             eval_input_queue=self.engine_to_evaluation_server_queue,
+                                                             eval_output_queue=self.evaluation_server_to_engine_queue)
+
+                # Send updated game state to visualizer
+                await visualizer_send_queue.put(
+                    "gs_" + self.currGameData.to_json(player_id))  # Add gs_ prefix to indicate game
+
+                logger.info(
+                    f"[P{player_id}] Returning Game State To Relay Node: {self.currGameData.to_json(player_id)}")
+                # Send validated/verified game state to relay node
+                await relay_node_input_queue.put(f"{self.currGameData.to_json(player_id)}")
+            except Exception as e:
+                logger.exception(f"[P{player_id}] Error in game_data_process: {e}")
+
+    async def evaluation_server_job(self, player_id: int, eval_input_queue: asyncio.Queue,
+                                    eval_output_queue: asyncio.Queue):
+        EvalGameData = {
+            "player_id": player_id,
+            "action": self.currGameData.p1.action if player_id == 1 else self.currGameData.p2.action,
+            "game_state": {
+                "p1": self.currGameData.p1.game_state,
+                "p2": self.currGameData.p2.game_state
+            }
+        }
+        try:
+            # Send updated game state to evaluation server
+            await eval_input_queue.put(json.dumps(EvalGameData))
+            logger.info(f"[P{player_id}] Sent game data to evaluation server and waiting for response...")
+            # Wait for evaluation response
+
+            eval_resp = await asyncio.wait_for(eval_output_queue.get(), 5)
+            if player_id == 1:
+                self.game_round_p1 += 1
+            else:
+                self.game_round_p2 += 1
+            logger.debug(f"[P{player_id}] Received evaluation response: {eval_resp}")
+
+            eval_gs = json.loads(eval_resp)
+
+            # Update game state based on evaluation response
+            self.currGameData.p1.game_state = eval_gs.get('p1', self.currGameData.p1.game_state)
+            self.currGameData.p2.game_state = eval_gs.get('p2', self.currGameData.p2.game_state)
+            logger.info(f"[P{player_id}] Updated game state with evaluation response")
+        except asyncio.TimeoutError:
+            logger.warning(f"[P{player_id}] Timeout while waiting for evaluation response.")
+        except Exception as e:
+            logger.exception(f"[P{player_id}] Error communicating with evaluation server: {e}")
+
+    async def wait_for_any_cooldown(self):
+        """Wait until at least one player's cooldown event is set."""
+        await asyncio.wait(
+            [self.cooldown_p1_event.wait(), self.cooldown_p2_event.wait()],
+            return_when=asyncio.FIRST_COMPLETED
+        )
+
+    async def supervisor_task(self):
+        while True:
+            # Wait until at least one cooldown event is set
+            await self.wait_for_any_cooldown()
+
+            async with self.cooldown_lock:
+                # Determine which player's cooldown has been set
+                if self.cooldown_p1_event.is_set() and not self.cooldown_p2_event.is_set():
+                    active_player = 1
+                    inactive_player = 2
+                elif self.cooldown_p2_event.is_set() and not self.cooldown_p1_event.is_set():
+                    active_player = 2
+                    inactive_player = 1
+                else:
+                    # Either both are set (handled elsewhere) or both are not set
+                    continue
+
+            logger.supervisor(
+                f"Cooldown ended for P{active_player}. Starting {config.PLAYER_TIMEOUT_RANDOM_ACTION}s timeout for P{inactive_player}.")
+
+            # Start the timeout for the inactive player
+            timeout_task = asyncio.create_task(self.handle_inactive_player(inactive_player))
+
+            # Wait for both cooldown events or timeout
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(
+                        self.cooldown_p1_event.wait(),
+                        self.cooldown_p2_event.wait()
+                    ),
+                    timeout=config.GAME_TIMEOUT  # By right not needed because it should NEVER timeout given auto
+                    # sending of action for inactive player after 50 seconds
+                )
+                # Both cooldowns received in time
+                logger.cooldown_end(f"Both Players Cooldown period ended. READY FOR NEXT ROUND {self.game_round_p1}")
+            except asyncio.TimeoutError:
+                # Timeout occurred; inject random action for inactive player
+                logger.exception(
+                    f"Round {self.game_round_p1}: Round Cooldown timeout reached. AUTO INACTIVE PLAYER ACTION-SENDER "
+                    f"MALFUNCTIONED!")
+            finally:
+                # Reset the cooldown events for the next round
+                self.cooldown_p1_event.clear()
+                self.cooldown_p2_event.clear()
+                logger.info(f"Round {self.game_round_p1} started.")
+                # Ensure the timeout task is canceled if still running
+                if not timeout_task.done():
+                    timeout_task.cancel()
+
+    async def cooldown_service(self, cooldown_notify_queue: asyncio.Queue, player_id: int):
+        while True:
+            msg = await cooldown_notify_queue.get()
+            await self.engine_to_visualizer_queue.put(msg)  # Send cooldown ended message to visualizer
+
+            async with self.cooldown_lock:
+                if player_id == 1:
+                    self.cooldown_p1_event.set()
+                elif player_id == 2:
+                    self.cooldown_p2_event.set()
+                else:
+                    logger.warning(f"Received cooldown message for unknown player_id: {player_id}")
+
+    async def handle_inactive_player(self, player_id: int):
+        """Handle the timeout for the inactive player by injecting a random action."""
+        try:
+            await asyncio.sleep(config.PLAYER_TIMEOUT_RANDOM_ACTION)
+            # Check if the inactive player's cooldown is still not set
+            random_action = random.choice(config.PLAYER_RANDOM_ACTIONS)
+            logger.supervisor(f"Round {self.game_round_p1}: Action timeout reached for P{player_id}. "
+                              f"Sending random action: {random_action}.")
+            if not self.cooldown_p1_event.is_set() and player_id == 1:
+                await self.prediction_output_queue_p1.put(random_action)
+            elif not self.cooldown_p2_event.is_set() and player_id == 2:
+                await self.prediction_output_queue_p2.put(random_action)
+        except asyncio.CancelledError:
+            # The timeout was canceled because the inactive player completed their cooldown
+            pass
