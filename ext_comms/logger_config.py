@@ -7,20 +7,24 @@ from colorlog.escape_codes import escape_codes
 # Define a custom level for our specific message
 COOLDOWN_END_LEVEL_NUM = 25  # Between INFO (20) and WARNING (30)
 logging.addLevelName(COOLDOWN_END_LEVEL_NUM, "COOLDOWN_END")
-
-# Add magenta to escape codes if not present
-escape_codes.update({
-    'magenta': '\033[35m',
-    'reset': '\033[0m'  # reset color after each log line
-})
+SUPERVISOR_LEVEL_NUM = 26
+logging.addLevelName(SUPERVISOR_LEVEL_NUM, "SUPERVISOR")
 
 # Custom log method for cooldown_end
 def cooldown_end(self, message, *args, **kws):
     if self.isEnabledFor(COOLDOWN_END_LEVEL_NUM):
         self._log(COOLDOWN_END_LEVEL_NUM, message, args, **kws)
 
+
+def supervisor(self, message, *args, **kws):
+    if self.isEnabledFor(SUPERVISOR_LEVEL_NUM):
+        self._log(SUPERVISOR_LEVEL_NUM, message, args, **kws)
+
+
 # Attach the method to logging.Logger
 logging.Logger.cooldown_end = cooldown_end
+logging.Logger.supervisor = supervisor
+
 
 def setup_logger(name: str) -> logging.Logger:
     logger = logging.getLogger(name)
@@ -41,7 +45,8 @@ def setup_logger(name: str) -> logging.Logger:
                 'WARNING': 'yellow',
                 'ERROR': 'red',
                 'CRITICAL': 'bold_red',
-                'COOLDOWN_END': 'magenta'  # Assign magenta color for the custom level
+                'COOLDOWN_END': 'bold_purple',  # Assign magenta color for the custom level
+                'SUPERVISOR': 'bold_purple'
             }
         )
         console_handler.setFormatter(formatter)
