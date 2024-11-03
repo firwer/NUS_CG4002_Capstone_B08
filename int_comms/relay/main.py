@@ -9,7 +9,6 @@ from bluepy import btle
 from packet import * 
 from checksum import *
 import threading
-import pandas as pd
 import external_p1
 import external_p2
 
@@ -85,25 +84,8 @@ class Beetle:
         MAGENTA_COLOR = "\033[35m" # Magenta color
         CYAN_COLOR = "\033[36m"   # Cyan color
         colors = [BLUE_COLOR, GREEN_COLOR, RED_COLOR, MAGENTA_COLOR, CYAN_COLOR, YELLOW_COLOR]
-
-        # ----- DATA COLLECTION -----
-        # self.my_csv = pd.DataFrame(columns=["gesture", "ax", "ay", "az", "gx", "gy", "gz"])
-        self.my_csv = pd.DataFrame()
-        self.ax = []
-        self.ay = []
-        self.az = []
-        self.gx = []
-        self.gy = []
-        self.gz = []
-        # basket, bowling, reload, volley, rainbomb, shield, logout, invalid
-        # walk, stomp/hardstep, kick
-        self.GESTURE = "stomp"
-        self.filename = "wanlin_green_leg_sample"
-        self.EXPECTED_PKTS = 50
-        self.CURRENT_PKTS = 0
-        self.ROWS_TO_COLLECT = 90 # CONFIGURE ME - THIS CONTROLS HOW MANY ROWS  
-        self.ROWS_LEFT = self.ROWS_TO_COLLECT 
-        self.PREV_ADC = -1
+        self.sendToGameServerQueue = sendToGameServerQueue
+        self.receiveFromGameServerQueue = receiveFromGameServerQueue
 
         self.COLOR = RESET_COLOR if beetle_id is None else colors[beetle_id]
         self.relay_seq_num = 0
