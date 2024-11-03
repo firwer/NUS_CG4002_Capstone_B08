@@ -10,12 +10,19 @@ from packet import *
 from checksum import *
 import threading
 import pandas as pd
+import external_p1
+import external_p2
 
-#BLUNO_RED_MAC_ADDRESS = "F4:B8:5E:42:6D:49"
-#BLUNO_RED_MAC_ADDRESS = "F4:B8:5E:42:4C:BB" #actually green
-BLUNO_RED_MAC_ADDRESS =  "F4:B8:5E:42:61:6A"#For leg green
+# RED == PLAYER 1
+BLUNO_P1_GLOVE_MAC = "F4:B8:5E:42:6D:49" # TO BE USED FOR EVAL
+BLUNO_P1_CHEST_MAC = "F4:B8:5E:42:46:E5" 
+BLUNO_P1_LEG_MAC   = "F4:B8:5E:42:6D:42"
 
-#FIXME: if we get 59 and then we get 61, ignore the first packet
+# GREEN == PLAYER 2
+BLUNO_P2_GLOVE_MAC = "F4:B8:5E:42:4C:BB" 
+BLUNO_P2_CHEST_MAC = "F4:B8:5E:42:6D:1E" #TO BE USED FOR EVAL
+BLUNO_P2_LEG_MAC   = "F4:B8:5E:42:61:6A" #TO BE USED FOR EVAL (TREAT AS PLAYER 1 FOR NOW)
+
 CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"
 logging.basicConfig(level=logging.DEBUG, format='\033[0m[%(levelname)s] [%(threadName)s] %(message)s')
 logger = logging.getLogger(__name__)
@@ -77,7 +84,7 @@ class Beetle:
         BLUE_COLOR = "\033[34m"   # Blue color
         MAGENTA_COLOR = "\033[35m" # Magenta color
         CYAN_COLOR = "\033[36m"   # Cyan color
-        colors = [BLUE_COLOR, GREEN_COLOR, RED_COLOR]
+        colors = [BLUE_COLOR, GREEN_COLOR, RED_COLOR, MAGENTA_COLOR, CYAN_COLOR, YELLOW_COLOR]
 
         # ----- DATA COLLECTION -----
         # self.my_csv = pd.DataFrame(columns=["gesture", "ax", "ay", "az", "gx", "gy", "gz"])
@@ -426,7 +433,7 @@ def main():
         t2 = threading.Thread(target=run_beetle, args=(beetle2,), name=f"Beetle2")
         t0.start()
         t1.start()
-        # t2.start()
+        t2.start()
         externalThread.start()
         t0.join()
         t1.join()
@@ -443,7 +450,7 @@ def main():
         externalThread = threading.Thread(target=external_p2.begin_external, args=(sendToGameServerQueue, receiveFromGameServerQueue0, receiveFromGameServerQueue1, 2,), name="External")
         t0.start()
         t1.start()
-        # t2.start()
+        t2.start()
         externalThread.start()
         t0.join()
         t1.join()

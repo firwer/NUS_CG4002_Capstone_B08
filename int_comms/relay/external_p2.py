@@ -10,18 +10,20 @@ from queue import Queue
 from threading import Thread
 
 import config
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
-from int_comms.hardcoded_imu import basket_packets, bowling_packets, reload_packets, volley_packets, rainbomb_packets, \
-    shield_packets, logout_packets
+from int_comms.hardcoded_imu import basket, bowl, reload, volley, bomb, shield, logout, gun_raise, gun_drop, stationary, \
+    shake
 
 from comms.TCPC_Controller_Sync import TCPC_Controller_Sync
 from int_comms.relay.packet import PACKET_DATA_IMU, PACKET_DATA_BULLET, PACKET_DATA_HEALTH, PACKET_DATA_KICK, PacketImu, \
     PacketBullet, PacketHealth, PacketKick, PacketGamestate, get_packet
 
-ext_logger = logging.getLogger("External")
+ext_logger = logging.getLogger("External2")
 
-RELAY_NODE_PLAYER = -1
+RELAY_NODE_PLAYER = 2
 PLAYER_NUMBER = 2
+ext_logger = logging.getLogger(f"Extern{PLAYER_NUMBER}")
 
 
 def receive_queue_handler_integrated(tcpController: TCPC_Controller_Sync, receive_queues):
@@ -297,7 +299,7 @@ def start_simulate():
     wsController = TCPC_Controller_Sync(
         config.TCP_SERVER_HOST, config.TCP_SERVER_PORT, config.TCP_SECRET_KEY
     )
-    wsController.identify_relay_node(1)
+    wsController.identify_relay_node(2)
     ext_logger.debug("External comms liaison connected!")
     receiveQueues = [receiveFromGameServerQueue0, receiveFromGameServerQueue1]
     send_thread = Thread(target=send_queue_handler, args=(wsController, sendToGameServerQueue))
