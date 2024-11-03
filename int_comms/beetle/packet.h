@@ -30,7 +30,9 @@ typedef struct packet_imu_t {
     int16_t gyrX;
     int16_t gyrY;
     int16_t gyrZ;
-    uint32_t pad;
+    uint8_t device;
+    uint8_t pad0;
+    uint16_t pad1;
     uint8_t crc8;
 };
 

@@ -218,7 +218,8 @@ class PacketImu():
             self.gyroX = bytearray(2)
             self.gyroY = bytearray(2)
             self.gyroZ = bytearray(2)
-            self.padding = bytearray(4)
+            self.device = 0x0
+            self.padding = bytearray(3)
             self.crc8 = 0x0
         else:
             self.seq_num = byteArray[1]
@@ -229,7 +230,8 @@ class PacketImu():
             self.gyroX = byteArray[9:11]
             self.gyroY = byteArray[11:13]
             self.gyroZ = byteArray[13:15]
-            self.padding = byteArray[15:19]
+            self.device = byteArray[15]
+            self.padding = byteArray[16:19]
             self.crc8 = byteArray[19]
 
     def to_bytearray(self) -> bytearray:
@@ -243,6 +245,7 @@ class PacketImu():
         byte_array.extend(self.gyroX)
         byte_array.extend(self.gyroY)
         byte_array.extend(self.gyroZ)
+        byte_array.append(self.device)
         byte_array.extend(self.padding)
         byte_array.append(self.crc8)
         return byte_array

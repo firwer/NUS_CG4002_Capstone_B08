@@ -261,7 +261,7 @@ bool ic_push_imu(MPUData data)
   return true;
 }
 
-bool ic_push_imu(MPUData data, uint8_t action_count)
+bool ic_push_imu(MPUData data, uint8_t action_count, uint8_t device)
 {
   if (unreliable_buffer_filled)
     return false;
@@ -274,6 +274,7 @@ bool ic_push_imu(MPUData data, uint8_t action_count)
   unreliable_buffer.gyrZ = data.gz;
   unreliable_buffer_filled = true;
   unreliable_buffer.adc = action_count;
+  unreliable_buffer.device = device;
   return true;
 }
 

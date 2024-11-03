@@ -5,6 +5,10 @@
 #define PACKET_SIZE 20
 #define TIMEOUT_MS 500
 
+// Use me for unreliable data transfer tagging
+#define IMU_DEVICE_GLOVE 0
+#define IMU_DEVICE_LEG   1
+
 // Packet types
 #define PACKET_SIZE 20
 
