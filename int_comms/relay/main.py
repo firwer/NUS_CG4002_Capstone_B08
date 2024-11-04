@@ -298,6 +298,7 @@ class Beetle:
                 break
             except Exception as e: # keep trying
                 logger.error(f"{self.COLOR}Bluepy peripheral fail: {e}")
+                time.sleep(0.01)
                 continue
 
     def connect_to_beetle(self):
