@@ -105,12 +105,14 @@ async def ws_send_rainbomb_counts(websocket, rainbomb_counts_p1, rainbomb_counts
     await websocket.send(json.dumps(data))
 
 
-async def ws_send_action_update(websocket, action_match, player_id, message, response_time, game_state_expected, game_state_received, expected_action, user_action):
+async def ws_send_action_update(websocket, pos_1, pos_2, action_match, player_id, message, response_time, game_state_expected, game_state_received, expected_action, user_action):
     """
     Send the update of player actions to the web client along with diagnostics.
     """
     await websocket.send(get_json_ws(
         m_type=_MessageType.action_match,
+        pos_1=pos_1,
+        pos_2=pos_2,
         action_match=action_match,
         player_id=player_id,
         message=message,
@@ -234,7 +236,6 @@ async def handler(websocket):
             # Display positions
             pos_1, pos_2 = client.current_positions()
             await ws_send_positions(websocket, pos_1, pos_2)
-
             # Wait for "Next" button click
             success = await ws_recv_next_click(websocket, group_name)
 
@@ -280,6 +281,8 @@ async def handler(websocket):
                     # Send action update with diagnostics
                     await ws_send_action_update(
                         websocket,
+                        pos_1,
+                        pos_2,
                         action_match,
                         player_id,
                         message,
