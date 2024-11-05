@@ -230,6 +230,9 @@ class GameEngine:
         self.cooldown_p2_event = asyncio.Event()
         self.cooldown_lock = asyncio.Lock()
 
+        self.action_p1_event = asyncio.Event()
+        self.action_p2_event = asyncio.Event()
+
         self.cooldown_msg_queue_p1 = asyncio.Queue()
         self.cooldown_msg_queue_p2 = asyncio.Queue()
 
@@ -341,6 +344,10 @@ class GameEngine:
                         # Only send game state to evaluation server if the action is a valid one
                         if predicted_action in ['gun', 'bomb', 'shield', 'rain', 'logout', 'reload', "basket", "soccer",
                                                 "volley", "bowl"]:
+                            if player_id == 1:
+                                self.action_p1_event.set()
+                            else:
+                                self.action_p2_event.set()
                             # Send updated game state to evaluation server
                             await self.evaluation_server_job(player_id=player_id,
                                                              eval_input_queue=self.engine_to_evaluation_server_queue,
@@ -442,6 +449,8 @@ class GameEngine:
                 # Reset the cooldown events for the next round
                 self.cooldown_p1_event.clear()
                 self.cooldown_p2_event.clear()
+                self.action_p1_event.clear()
+                self.action_p2_event.clear()
                 logger.info(f"Round {self.game_round_p1} started.")
                 # Ensure the timeout task is canceled if still running
                 if not timeout_task.done():
@@ -464,6 +473,12 @@ class GameEngine:
         """Handle the timeout for the inactive player by injecting a random action."""
         try:
             await asyncio.sleep(config.PLAYER_TIMEOUT_RANDOM_ACTION)
+            if player_id == 1 and self.action_p1_event.is_set():
+                logger.supervisor(f"Timeout for P1 reached but action already received, WILL NOT sending random action")
+                return
+            if player_id == 2 and self.action_p2_event.is_set():
+                logger.supervisor(f"Timeout for P2 reached but action already received, WILL NOT sending random action")
+                return
             # Check if the inactive player's cooldown is still not set
             random_action = random.choice(config.PLAYER_RANDOM_ACTIONS)
             logger.supervisor(f"Round {self.game_round_p1}: Action timeout reached for P{player_id}. "
