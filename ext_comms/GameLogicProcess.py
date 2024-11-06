@@ -137,14 +137,14 @@ async def game_state_manager(currGameData, attacker_id: int,
                              curr_round: int):
     global targetInFOV_p1, numOfRain_p1, targetInFOV_p2, numOfRain_p2
     try:
-        logger.info(f"Received {prediction_action} in game_state_manager for P{attacker_id}")
+        logger.info(f"[Round {curr_round}][P{attacker_id}] Received {prediction_action} in game_state_manager")
 
         # Logout Protection Logic
         if curr_round == 23 and prediction_action != "logout":  # TODO: Doesn't seem to work
-            logger.warning(f"Game Over! Forcing logout for P{attacker_id} instead of {prediction_action}")
+            logger.warning(f"[Round {curr_round}][P{attacker_id}] Game Over! Forcing logout for P{attacker_id} instead of {prediction_action}")
             prediction_action = "logout"
         elif curr_round < 20 and prediction_action == "logout":
-            logger.warning(f"Caught Premature Logout! {prediction_action} for P{attacker_id}. Ignoring.")
+            logger.warning(f"[Round {curr_round}][P{attacker_id}] Caught Premature Logout! {prediction_action} for P{attacker_id}. Ignoring.")
             return "invalid"
 
         if attacker_id == 1:
@@ -164,29 +164,29 @@ async def game_state_manager(currGameData, attacker_id: int,
 
         # Constraints to prevent multiple actions in the same round and invalid actions
         if cooldown_event.is_set():
-            logger.warning(f"[P{attacker_id}] Already performed action for this round! Ignoring {prediction_action}. "
+            logger.warning(f"[Round {curr_round}][P{attacker_id}] Already performed action for this round! Ignoring {prediction_action}. "
                            f"Please ensure that the other player has performed the action for this round.")
             set_gamestate_action(currGameData, attacker_id, "invalid")
             return "invalid"
 
         if prediction_action == "invalid":
-            logger.warning(f"[P{attacker_id}] Invalid action received: {prediction_action}. Doing nothing.")
+            logger.warning(f"[Round {curr_round}][P{attacker_id}] Invalid action received: {prediction_action}. Doing nothing.")
             set_gamestate_action(currGameData, attacker_id, "invalid")
             return "invalid"
 
-        logger.debug(f"[P{attacker_id}] Attempting to acquire cooldown slot.")
+        logger.debug(f"[Round {curr_round}][P{attacker_id}] Attempting to acquire cooldown slot.")
         can_process = await cooldown_manager.acquire_action_slot(attacker_id)
         if not can_process:
-            logger.warning(f"[P{attacker_id}] Action '{prediction_action}' discarded due to cooldown.")
+            logger.warning(f"[Round {curr_round}][P{attacker_id}] Action '{prediction_action}' discarded due to cooldown.")
             set_gamestate_action(currGameData, attacker_id, "cooldown-progress")
             return "cooldown-progress"
 
-        logger.debug(f"[P{attacker_id}] Action '{prediction_action}' accepted and being processed.")
+        logger.debug(f"[Round {curr_round}][P{attacker_id}] Action '{prediction_action}' accepted and being processed.")
 
         # Handle rain bomb damage
         if targetInFOV:
             for _ in range(numOfRain):
-                logger.info(f"[P{attacker_id}] -5 HP RAIN BOMB")
+                logger.info(f"[Round {curr_round}][P{attacker_id}] -5 HP RAIN BOMB")
                 await reduce_health(OpponentPlayerData, config.GAME_RAIN_DMG)
 
         # Handle other generic actions
@@ -194,7 +194,7 @@ async def game_state_manager(currGameData, attacker_id: int,
             will_hit = False
 
             if not config.FREEPLAY_MODE and targetInFOV:
-                logger.info(f"[P{attacker_id}] Opponent in FOV, Shot HIT regardless of IR sensor.")
+                logger.info(f"[Round {curr_round}][P{attacker_id}] Opponent in FOV, Shot HIT regardless of IR sensor.")
                 will_hit = True
             else:
                 # Drain the queue to get the latest result
@@ -206,9 +206,9 @@ async def game_state_manager(currGameData, attacker_id: int,
                     will_hit = True
                 elif result == "miss" and targetPlayerData["bullets"] > 0:
                     targetPlayerData["bullets"] -= 1
-                    logger.info(f"[P{attacker_id}] Shot MISS. Bullets left: {targetPlayerData['bullets']}")
+                    logger.info(f"[Round {curr_round}][P{attacker_id}] Shot MISS. Bullets left: {targetPlayerData['bullets']}")
             if will_hit:
-                logger.info(f"[P{attacker_id}] Gun shot HIT Opponent.")
+                logger.info(f"[Round {curr_round}][P{attacker_id}] Gun shot HIT Opponent.")
                 await gun_shoot(targetPlayerData, OpponentPlayerData)
         elif prediction_action == "shield":
             await shield(targetPlayerData)
@@ -220,9 +220,9 @@ async def game_state_manager(currGameData, attacker_id: int,
             if targetInFOV:
                 await reduce_health(OpponentPlayerData, config.GAME_AI_DMG)
         elif prediction_action == "logout":
-            logger.info(f"[P{attacker_id}] User logout")
+            logger.info(f"[Round {curr_round}][P{attacker_id}] User logout")
         else:
-            logger.warning(f"[P{attacker_id}] Unknown action received: {prediction_action}. Doing nothing.")
+            logger.warning(f"[Round {curr_round}][P{attacker_id}] Unknown action received: {prediction_action}. Doing nothing.")
         return prediction_action
     except Exception as e:
-        logger.exception(f"[P{attacker_id}] Error in game_state_manager: {e}")
+        logger.exception(f"[Round {curr_round}][P{attacker_id}] Error in game_state_manager: {e}")
