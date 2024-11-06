@@ -299,10 +299,16 @@ async def handler(websocket):
             # After processing all players, extract rainbomb counts
             for player in [client.simulator.game_state.player_1, client.simulator.game_state.player_2]:
                 for quadrant in player.rain_list:
-                    if player == client.simulator.game_state.player_1:
-                        rainbomb_counts_p2[quadrant] += 1
-                    elif player == client.simulator.game_state.player_2:
-                        rainbomb_counts_p1[quadrant] += 1
+                    if quadrant == 0:
+                        if player == client.simulator.game_state.player_1:
+                            rainbomb_counts_p1[1] += 1
+                        elif player == client.simulator.game_state.player_2:
+                            rainbomb_counts_p2[3] += 1
+                    else:
+                        if player == client.simulator.game_state.player_1:
+                            rainbomb_counts_p2[quadrant] += 1
+                        elif player == client.simulator.game_state.player_2:
+                            rainbomb_counts_p1[quadrant] += 1
 
             # Send rainbomb counts
             await ws_send_rainbomb_counts(websocket, rainbomb_counts_p1, rainbomb_counts_p2)
