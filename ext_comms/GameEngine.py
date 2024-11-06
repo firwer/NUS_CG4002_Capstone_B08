@@ -385,8 +385,10 @@ class GameEngine:
             await eval_input_queue.put(json.dumps(EvalGameData))
             logger.info(f"[Round {curr_round}][P{player_id}] Sent game data to evaluation server and waiting for response...")
             # Wait for evaluation response
-
+            
             eval_resp = await asyncio.wait_for(eval_output_queue.get(), 5)
+            while not eval_output_queue.empty():
+                eval_resp = await eval_output_queue.get()
             if player_id == 1:
                 self.game_round_p1 += 1
             else:
