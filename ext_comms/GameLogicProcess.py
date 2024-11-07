@@ -191,25 +191,31 @@ async def game_state_manager(currGameData, attacker_id: int,
 
         # Handle other generic actions
         if prediction_action == "gun":
-            will_hit = False
+            #will_hit = False
 
             if not config.FREEPLAY_MODE and targetInFOV:
                 logger.info(f"[Round {curr_round}][P{attacker_id}] Opponent in FOV, Shot HIT regardless of IR sensor.")
-                will_hit = True
-            else:
-                # Drain the queue to get the latest result
-                result = await gun_state_queue.get()
-                # Empty out gun_state_queue and get the last item to prevent accumulation
-                while not gun_state_queue.empty():
-                    result = await gun_state_queue.get()
-                if result == "hit":
-                    will_hit = True
-                elif result == "miss" and targetPlayerData["bullets"] > 0:
-                    targetPlayerData["bullets"] -= 1
-                    logger.info(f"[Round {curr_round}][P{attacker_id}] Shot MISS. Bullets left: {targetPlayerData['bullets']}")
-            if will_hit:
+                #will_hit = True
                 logger.info(f"[Round {curr_round}][P{attacker_id}] Gun shot HIT Opponent.")
                 await gun_shoot(targetPlayerData, OpponentPlayerData)
+            else:
+                # Drain the queue to get the latest result
+                #result = await gun_state_queue.get()
+                # Empty out gun_state_queue and get the last item to prevent accumulation
+                #while not gun_state_queue.empty():
+                #    result = await gun_state_queue.get()
+                #if result == "hit":
+                #    will_hit = True
+                #elif result == "miss" and targetPlayerData["bullets"] > 0:
+                    # targetPlayerData["bullets"] -= 1
+                    # logger.info(f"[Round {curr_round}][P{attacker_id}] Shot MISS. Bullets left: {targetPlayerData['bullets']}")
+                if targetPlayerData["bullets"] > 0:
+                    targetPlayerData["bullets"] -= 1
+                    logger.info(
+                        f"[Round {curr_round}][P{attacker_id}] Shot MISS. Bullets left: {targetPlayerData['bullets']}")
+            # if will_hit:
+            #     logger.info(f"[Round {curr_round}][P{attacker_id}] Gun shot HIT Opponent.")
+            #     await gun_shoot(targetPlayerData, OpponentPlayerData)
         elif prediction_action == "shield":
             await shield(targetPlayerData)
         elif prediction_action == "reload":
