@@ -121,7 +121,7 @@ class PredictionServiceProcess:
                     async with self.lock:
                         logger.debug(f"[P{player_id}] Acquired AI lock. Performing prediction.")
                         # Offload AI prediction to a separate thread
-                        predicted_action = await asyncio.to_thread(self.ai_inference.predict, combined_input)
+                        predicted_action = await asyncio.to_thread(self.ai_inference.predict, combined_input, player_id)
 
                     logger.info(f"[P{player_id}] AI Prediction: {predicted_action}")
 

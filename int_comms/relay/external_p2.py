@@ -14,7 +14,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from int_comms.hardcoded_imu import basket, bowl, reload, volley, bomb, shield, logout, gun_raise, gun_drop, stationary, \
     shake
-
+from hardcoded_imu import basket, bowl, reload, volley, bomb, shield, logout, gun_raise, gun_drop, stationary, \
+    shake
 from comms.TCPC_Controller_Sync import TCPC_Controller_Sync
 from int_comms.relay.packet import PACKET_DATA_IMU, PACKET_DATA_BULLET, PACKET_DATA_HEALTH, PACKET_DATA_KICK, PacketImu, \
     PacketBullet, PacketHealth, PacketKick, PacketGamestate, get_packet

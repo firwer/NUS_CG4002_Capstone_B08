@@ -11,6 +11,8 @@ from threading import Thread
 import config
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+from hardcoded_imu import basket, logout, shield, bomb, volley, reload, bowl, stationary, gun_raise, gun_drop, \
+    shake
 from int_comms.hardcoded_imu import basket, bowl, reload, volley, bomb, shield, logout, gun_raise, gun_drop, stationary, \
     shake
 

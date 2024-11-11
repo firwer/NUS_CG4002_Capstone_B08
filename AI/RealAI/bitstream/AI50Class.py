@@ -6,6 +6,9 @@ import time
 from sklearn.preprocessing import StandardScaler
 from ast import literal_eval
 from scipy.special import softmax
+from logger_config import setup_logger
+
+logger = setup_logger(__name__)
 
 class AI:
     def __init__(self):
@@ -51,7 +54,7 @@ class AI:
         CONTROL_REGISTER = 0x0
         self.hls.write(CONTROL_REGISTER, 0x81)  # Starts the HLS IP
 
-    def predict(self, input):
+    def predict(self, input, player_id):
       input_buffer = allocate(shape=(300,), dtype=np.float32)
       output_buffer = allocate(shape=(11,), dtype=np.float32)
       padded_input = np.pad(input, (0, 300 - len(input)), 'constant')
@@ -61,14 +64,14 @@ class AI:
       for i in range(300):
          input_buffer[i] = scaled_input[0][i]
        
-      start_time = time.time()
+      #start_time = time.time()
       self.dma_send.transfer(input_buffer)
       self.dma_recv.transfer(output_buffer)
       self.dma_send.wait()
       self.dma_recv.wait()
    
       # Output the result from DMA
-      print(f"Float values:{output_buffer}")
+      logger.info(f"[P{player_id}] Float values:{output_buffer}\n")
       max_idx = 0
       max_val = output_buffer[0]
       for i in range(1, 11):
@@ -78,7 +81,7 @@ class AI:
 
       #print("Input Buffer (Sent Data):", input_buffer)
       #print(f"Predicted Gesture: {max_idx}")
-      print(f"Inference time: {((time.time() - start_time) * 1000):.4f} ms\n")
+      #print(f"Inference time: {((time.time() - start_time) * 1000):.4f} ms\n")
 
       # Apply softmax to calculate confidence
       probabilities = softmax(output_buffer)
@@ -87,9 +90,9 @@ class AI:
       
       gesture_mapping = ['basket', 'bowling', 'invalid', 'invalid', 'logout', 'rainbomb', 'reload', 'invalid', 'shield', 'invalid', 'volley']
       predicted_gesture = gesture_mapping[max_idx]
-      print(f"Predicted Gesture: {predicted_gesture} with confidence: {confidence:.2f}")
+      logger.info(f"[P{player_id}] Predicted Gesture : {predicted_gesture} with confidence: {confidence:.2f}")
 
-      if confidence < 0.9:
+      if confidence < 0.85:
          predicted_gesture = 'invalid'
 
       # Clean up

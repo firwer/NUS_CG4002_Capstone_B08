@@ -330,6 +330,10 @@ function handleActionMatch(data) {
 
     // Check if all players have responded for the current round
     if (Object.keys(window.round_responses[window.current_round]).length === num_player) {
+        // Retrieve current positions
+        const pos1 = data.pos_1;
+        const pos2 = data.pos_2;
+
         // Iterate over each player's response and append to tables
         for (const pid in window.round_responses[window.current_round]) {
             if (!window.round_responses[window.current_round].hasOwnProperty(pid)) continue;
@@ -339,7 +343,9 @@ function handleActionMatch(data) {
                 resp.playerName,
                 resp.response_time,
                 resp.expected_action,
-                resp.user_action
+                resp.user_action,
+                pos1,
+                pos2
             );
 
             if (resp.game_state_expected && resp.game_state_received) {
@@ -363,7 +369,7 @@ function handleActionMatch(data) {
  * @param {string} expected_action - The expected action from the evaluation server
  * @param {string} user_action - The action provided by the user
  */
-function appendResponseTime(round, player_id, response_time, expected_action, user_action) {
+function appendResponseTime(round, player_id, response_time, expected_action, user_action, p1_quadrant, p2_quadrant) {
     const tableBody = document.querySelector("#response_time_table tbody");
     if (!tableBody) {
         console.error("Response Time table body not found.");
@@ -391,6 +397,16 @@ function appendResponseTime(round, player_id, response_time, expected_action, us
     const playerCell = document.createElement("td");
     playerCell.textContent = player_id;
     row.appendChild(playerCell);
+
+    // P1 Quadrant
+    const p1QuadrantCell = document.createElement("td");
+    p1QuadrantCell.textContent = p1_quadrant;
+    row.appendChild(p1QuadrantCell);
+
+    // P2 Quadrant
+    const p2QuadrantCell = document.createElement("td");
+    p2QuadrantCell.textContent = p2_quadrant;
+    row.appendChild(p2QuadrantCell);
 
     // Response Time
     const timeCell = document.createElement("td");
