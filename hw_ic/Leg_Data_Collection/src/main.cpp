@@ -93,7 +93,10 @@ void setup()
 
 void loop()
 {
-
+  if(communicate()){
+      playBLEFeedback();
+  }
+  
   if (millis() - lastSoundTime > NOTE_DELAY)
   {
     if (noteQueue.itemCount() > 0)
