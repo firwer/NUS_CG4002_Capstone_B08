@@ -13,7 +13,11 @@
 #define NOTE_DELAY 100
 
 #define MPU_SAMPLING_RATE 40
-#define NUM_RECORDED_POINTS 64
+#define NUM_RECORDED_POINTS 54
+
+#define KICK_DEBOUNCE_TIME 1000
+
+unsigned long lastKickTime = 0;
 
 ArduinoQueue<uint16_t> noteQueue(10); // Tones are now stored in 16-bit integers
 unsigned long lastSoundTime = 0;
@@ -38,8 +42,6 @@ struct CalibrationData
   int16_t ygoffset;
   int16_t zgoffset;
 };
-
-uint8_t actionCounter = 0;
 
 CalibrationData calibrationData;
 uint8_t recordedPoints = 0;
@@ -127,7 +129,7 @@ void loop()
       mpuData.gz = (((mpuData.gz) / 32767.0) * 250.0) * 100;
 
       // @wanlin
-      ic_push_imu(mpuData, actionCounter);
+      ic_push_imu(mpuData, actionCounter, IMU_DEVICE_LEG);
       ic_udp_quicksend();
       // communicate();
 
@@ -150,10 +152,11 @@ void loop()
 
 void motionDetected()
 {
-  if (!isRecording)
+  if (!isRecording && millis() - lastKickTime > KICK_DEBOUNCE_TIME)
   {
     isMotionDetected = true;
     isRecording = true;
+    lastKickTime = millis();
   }
 }
 

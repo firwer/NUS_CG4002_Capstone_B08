@@ -190,7 +190,9 @@ void loop()
     }
     // push bullet packet for any gun action attempted, regardless of num bullets
     ic_push_bullet(curr_bulletsLeft);
-    communicate();
+    if(communicate()){
+        playBLEFeedback();
+    }
     shotBeenFired = true;
   }
 
@@ -221,7 +223,7 @@ void loop()
       mpuData.gz = (((mpuData.gz) / 32767.0) * 250.0) * 100;
 
       // @wanlin
-      ic_push_imu(mpuData, actionCounter);
+      ic_push_imu(mpuData, actionCounter, IMU_DEVICE_GLOVE);
       ic_udp_quicksend();
       // communicate();
 
