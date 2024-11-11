@@ -12,7 +12,8 @@ import pandas as pd
 
 #BLUNO_RED_MAC_ADDRESS = "F4:B8:5E:42:6D:49"
 BLUNO_RED_MAC_ADDRESS = "F4:B8:5E:42:4C:BB" #actually green
-
+BLUNO_GREEN_KICK_MAC = "F4:B8:5E:42:61:6A"
+BLUNO_RED_KICK_MAC = "F4:B8:5E:42:6D:42"
 #FIXME: if we get 59 and then we get 61, ignore the first packet
 CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"
 
@@ -89,6 +90,7 @@ class Beetle:
         self.gy = []
         self.gz = []
         # basket, bowling, reload, volley, rainbomb, shield, logout, invalid
+        # extra gestures kick walk, stomp, soccer
         self.GESTURE = "invalid"
         self.filename = "nich_green_50"
         self.EXPECTED_PKTS = 50
@@ -428,7 +430,7 @@ class Beetle:
 def main():
     # Create Beetle instances
     # beetle0 = Beetle(BLUNO_RED_MAC_ADDRESS, 0, "red")
-    beetle0 = Beetle(BLUNO_RED_MAC_ADDRESS, 0)
+    beetle0 = Beetle(BLUNO_RED_KICK_MAC, 0)
     beetle0.run()
 
 if __name__ == "__main__":
