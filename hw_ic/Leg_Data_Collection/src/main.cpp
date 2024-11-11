@@ -75,7 +75,7 @@ void setup()
 
   mpu.setDHPFMode(MPU6050_DHPF_1P25);
   mpu.setDLPFMode(MPU6050_DLPF_BW_20);
-  mpu.setMotionDetectionThreshold(80);
+  mpu.setMotionDetectionThreshold(100);
   mpu.setMotionDetectionDuration(5);
 
   mpu.setIntMotionEnabled(true);
@@ -93,7 +93,10 @@ void setup()
 
 void loop()
 {
-
+  if(communicate()){
+      playBLEFeedback();
+  }
+  
   if (millis() - lastSoundTime > NOTE_DELAY)
   {
     if (noteQueue.itemCount() > 0)
