@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 
 # Load and preprocess the dataset
-file_path = 'data/latest2/combined_3.csv'
+file_path = 'data/leg/combined_leg.csv'
 df = pd.read_csv(file_path, converters={'ax': literal_eval, 'ay': literal_eval, 'az': literal_eval,
                                         'gx': literal_eval, 'gy': literal_eval, 'gz': literal_eval})
 
@@ -195,8 +195,8 @@ def save_weights_biases(model, save_dir):
 save_weights_biases(model, save_dir)
 print(f"Weights and biases saved to {save_dir}")
 
-# Load the new dataset
-debug_file_path = 'data/latest2/debug.csv'
+# Debug data
+debug_file_path = 'data/leg/debug.csv'
 debug_df = pd.read_csv(debug_file_path, converters={
     'ax': literal_eval, 'ay': literal_eval, 'az': literal_eval, 
     'gx': literal_eval, 'gy': literal_eval, 'gz': literal_eval
