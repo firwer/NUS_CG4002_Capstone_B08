@@ -11,6 +11,7 @@ sys.path.append('/home/xilinx/IP')
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from AI50Class import AI
+from LegAIClass import LegAI
 
 logger = setup_logger(__name__)
 
@@ -59,8 +60,12 @@ class PredictionServiceProcess:
 
     async def initialize_ai(self):
         try:
+            #init glove AI
             self.ai_inference = AI()
             logger.info("AI Inference engine initialized successfully.")
+            #init leg AI
+            self.leg_ai_inference = LegAI()
+            logger.info("Leg AI Inference engine initialized successfully.")
         except Exception as e:
             logger.exception(f"Failed to initialize AI Inference engine: {e}")
 
@@ -121,7 +126,10 @@ class PredictionServiceProcess:
                     async with self.lock:
                         logger.debug(f"[P{player_id}] Acquired AI lock. Performing prediction.")
                         # Offload AI prediction to a separate thread
-                        predicted_action = await asyncio.to_thread(self.ai_inference.predict, combined_input, player_id)
+                        if imu_packet.device == 0:
+                            predicted_action = await asyncio.to_thread(self.ai_inference.predict, combined_input, player_id)
+                        if imu_packet.device == 1:
+                            predicted_action = await asyncio.to_thread(self.leg_ai_inference.predict, combined_input, player_id)
 
                     logger.info(f"[P{player_id}] AI Prediction: {predicted_action}")
 
