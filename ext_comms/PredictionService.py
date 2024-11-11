@@ -88,6 +88,8 @@ class PredictionServiceProcess:
         logger.debug(f"[P{player_id}] Starting prediction processing service")
         curr_imu_count = -1
         prev_imu_count = -1
+        curr_leg_imu_count = -1
+        prev_leg_imu_count = -1
         dataBuf = []
         if player_id == 1:
             input_queue = self.predict_input_queue_p1
@@ -103,16 +105,24 @@ class PredictionServiceProcess:
                 dataBuf.clear()
                 # Wait for the first packet from stream
                 imu_packet = await input_queue.get()
-                if imu_packet.adc == prev_imu_count:
-                    logger.debug(f"[P{player_id}] Duplicate IMU packet detected. Skipping.")
-                    continue
+                if imu_packet.device == 0:
+                    if imu_packet.adc == prev_imu_count:
+                        logger.debug(f"[P{player_id}] Duplicate glove IMU packet detected. Skipping.")
+                        continue
+                if imu_packet.device == 1:
+                    if imu_packet.adc == prev_leg_imu_count:
+                        logger.debug(f"[P{player_id}] Duplicate leg IMU packet detected. Skipping.")
+                        continue
                 dataBuf.append(imu_packet)
                 logger.debug(f"[P{player_id}] Collected 1/{config.GAME_AI_PACKET_COUNT} IMU packets.")
 
                 # Collect remaining packets with timeout
                 while len(dataBuf) < config.GAME_AI_PACKET_COUNT:
                     imu_packet_new = await asyncio.wait_for(input_queue.get(), timeout=15)
-                    curr_imu_count = imu_packet_new.adc
+                    if imu_packet.device == 0:
+                        curr_imu_count = imu_packet_new.adc
+                    if imu_packet.device == 1:
+                        curr_leg_imu_count = imu_packet_new.adc
                     dataBuf.append(imu_packet_new)
                     logger.debug(
                         f"[P{player_id}] Collected {len(dataBuf)}/{config.GAME_AI_PACKET_COUNT} IMU packets.")
@@ -137,7 +147,10 @@ class PredictionServiceProcess:
                     await output_queue.put(predicted_action)
                     logger.debug(f"[P{player_id}] Sent prediction to output queue.")
 
-                    prev_imu_count = curr_imu_count
+                    if imu_packet.device == 0:
+                        prev_imu_count = curr_imu_count
+                    if imu_packet.device == 1:
+                        prev_leg_imu_count = curr_leg_imu_count
             except asyncio.TimeoutError:
                 logger.warning(f"[P{player_id}] Timeout while waiting for IMU packets. Clearing buffer.")
             except Exception as e:
