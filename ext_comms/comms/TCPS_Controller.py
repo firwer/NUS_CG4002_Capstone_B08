@@ -80,10 +80,8 @@ class TCPS_Controller:
                     break
                 if player_number == 1:
                     await self.receive_queue_p1.put(message)
-                    logger.debug(f"Received message for Player 1: {message}")
                 elif player_number == 2:
                     await self.receive_queue_p2.put(message)
-                    logger.debug(f"Received message for Player 2: {message}")
                 else:
                     logger.warning(f"Invalid player number {player_number} received from {addr}.")
         except Exception as e:

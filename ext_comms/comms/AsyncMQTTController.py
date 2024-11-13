@@ -85,7 +85,6 @@ class AsyncMQTTController:
         logger.info(f"Starting MQTT publish loop for topic: {topic_send}")
         while self.connected:
             try:
-                logger.debug("Waiting for message to send to MQTT...")
                 msg = await self.send_data_queue.get()
                 await self.mqttc.publish(topic_send, msg)
                 logger.info(f"Published message to {topic_send}: {msg}")
