@@ -61,7 +61,7 @@ GAME_RAIN_DMG = 5
 # Game Configurations
 GAME_HEALTH_PKT_TIMEOUT = 0.5  # Time to wait for health packet to arrive before timeout
 GAME_AI_PACKET_COUNT = 50  # Desired number of packets to collect
-GAME_ACTION_COOLDOWN = 6  # Cooldown period for EACH player actions PER ROUND
+GAME_ACTION_COOLDOWN = 3  # Cooldown period for EACH player actions PER ROUND
 
 GAME_TIMEOUT = 70  # Time to wait for the game to end before timeout
 PLAYER_TIMEOUT_RANDOM_ACTION = 18 # Time to wait for the player to make a random action before timeout
