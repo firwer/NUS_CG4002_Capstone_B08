@@ -137,14 +137,6 @@ async def game_state_manager(currGameData, attacker_id: int,
     try:
         logger.info(f"[Round {curr_round}][P{attacker_id}] Received {prediction_action} in game_state_manager")
 
-        # Logout Protection Logic
-        if curr_round == 23 and prediction_action != "logout":
-            logger.warning(f"[Round {curr_round}][P{attacker_id}] Game Over! Forcing logout for P{attacker_id} instead of {prediction_action}")
-            prediction_action = "logout"
-        elif curr_round < 20 and prediction_action == "logout":
-            logger.warning(f"[Round {curr_round}][P{attacker_id}] Caught Premature Logout! {prediction_action} for P{attacker_id}. Ignoring.")
-            return "invalid"
-
         if attacker_id == 1:
             targetInFOV = targetInFOV_p1
             numOfRain = numOfRain_p1
@@ -163,13 +155,14 @@ async def game_state_manager(currGameData, attacker_id: int,
         if prediction_action == "invalid":
             logger.warning(f"[Round {curr_round}][P{attacker_id}] Invalid action received: {prediction_action}. Doing nothing.")
             set_gamestate_action(currGameData, attacker_id, "invalid")
-
+            return
 
         logger.debug(f"[Round {curr_round}][P{attacker_id}] Attempting to acquire cooldown slot.")
         can_process = await cooldown_manager.acquire_action_slot(attacker_id)
         if not can_process:
             logger.warning(f"[Round {curr_round}][P{attacker_id}] Action '{prediction_action}' discarded due to cooldown.")
             set_gamestate_action(currGameData, attacker_id, "cooldown-progress")
+            return  # Early exit since action cannot be processed
 
         logger.debug(f"[Round {curr_round}][P{attacker_id}] Action '{prediction_action}' accepted and being processed.")
 
@@ -189,11 +182,11 @@ async def game_state_manager(currGameData, attacker_id: int,
             else:
                 # Drain the queue to get the latest result
                 result = await gun_state_queue.get()
-                #Empty out gun_state_queue and get the last item to prevent accumulation
+                # Empty out gun_state_queue and get the last item to prevent accumulation
                 while not gun_state_queue.empty():
-                   result = await gun_state_queue.get()
+                    result = await gun_state_queue.get()
                 if result == "hit":
-                   will_hit = True
+                    will_hit = True
                 elif result == "miss" and targetPlayerData["bullets"] > 0:
                     targetPlayerData["bullets"] -= 1
                     logger.info(f"[Round {curr_round}][P{attacker_id}] Shot MISS. Bullets left: {targetPlayerData['bullets']}")

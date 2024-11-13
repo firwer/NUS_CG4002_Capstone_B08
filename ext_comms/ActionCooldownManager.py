@@ -62,6 +62,7 @@ class ActionCooldownManager:
             if lock.locked():
                 if player_id == 1:
                     self.cooldown_queue_p1.put_nowait("1_cooldown-end")
-                else:
+                elif player_id == 2:
                     self.cooldown_queue_p2.put_nowait("2_cooldown-end")
                 lock.release()
+                logger.info(f"Cooldown ended for Player {player_id}.")

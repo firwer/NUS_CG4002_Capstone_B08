@@ -203,14 +203,16 @@ class GameEngine:
     def __init__(self, eval_server_port):
         self.eval_server_port = eval_server_port
 
+        # Initialize all queues
         self.prediction_input_queue_p1 = asyncio.Queue()
         self.prediction_input_queue_p2 = asyncio.Queue()
 
         self.prediction_output_queue_p1 = asyncio.Queue()
         self.prediction_output_queue_p2 = asyncio.Queue()
 
-        self.engine_to_evaluation_server_queue = asyncio.Queue()
-        self.evaluation_server_to_engine_queue = asyncio.Queue()
+        # Removed evaluation server queues
+        # self.engine_to_evaluation_server_queue = asyncio.Queue()
+        # self.evaluation_server_to_engine_queue = asyncio.Queue()
 
         self.relay_node_to_engine_queue_p1 = asyncio.Queue()  # Pipeline from relay node for P1
         self.relay_node_to_engine_queue_p2 = asyncio.Queue()  # Pipeline from relay node for P2
@@ -287,21 +289,11 @@ class GameEngine:
                 predict_output_queue_p2=self.prediction_output_queue_p2
             ).run(),
 
-            # Start Evaluation Server Process
-            # start_evaluation_process(eval_server_port=self.eval_server_port,
-            #                          receive_queue=self.evaluation_server_to_engine_queue,
-            #                          send_queue=self.engine_to_evaluation_server_queue),
-
             getVState(visualizer_receive_queue=self.visualizer_to_engine_queue_p1, player_id=1),
             getVState(visualizer_receive_queue=self.visualizer_to_engine_queue_p2, player_id=2),
 
             self.game_data_process(1),
             self.game_data_process(2),
-
-            # self.cooldown_service(self.cooldown_msg_queue_p1, player_id=1),
-            # self.cooldown_service(self.cooldown_msg_queue_p2, player_id=2),
-            #
-            # self.supervisor_task()  # Start the supervisor task
         ]
 
         logger.info("Starting all game engine tasks concurrently.")
@@ -309,6 +301,12 @@ class GameEngine:
             await asyncio.gather(*tasks)
         except Exception as e:
             logger.exception(f"An error occurred while running game engine tasks: {e}")
+
+        # Start cooldown notification handlers
+        handle_cooldown_p1 = asyncio.create_task(self.handle_cooldown_messages(self.cooldown_msg_queue_p1, player_id=1))
+        handle_cooldown_p2 = asyncio.create_task(self.handle_cooldown_messages(self.cooldown_msg_queue_p2, player_id=2))
+
+        await asyncio.gather(*tasks, handle_cooldown_p1, handle_cooldown_p2)
 
     async def game_data_process(self, player_id):
         logger.debug(f"[P{player_id}] Starting game data process service")
@@ -332,10 +330,10 @@ class GameEngine:
                     async with self.cooldown_lock:
                         # Verify FOV with visualizer and update game state
                         await game_state_manager(currGameData=self.currGameData, attacker_id=player_id,
-                                                                    prediction_action=prediction_action,
-                                                                    gun_state_queue=gun_state_queue,
-                                                                    cooldown_manager=self.cooldown_manager,
-                                                                    curr_round=curr_round)
+                                                prediction_action=prediction_action,
+                                                gun_state_queue=gun_state_queue,
+                                                cooldown_manager=self.cooldown_manager,
+                                                curr_round=curr_round)
 
                 # Send updated game state to visualizer
                 await visualizer_send_queue.put(
@@ -348,15 +346,9 @@ class GameEngine:
             except Exception as e:
                 logger.exception(f"[Round {curr_round}][P{player_id}] Error in game_data_process: {e}")
 
-    # async def cooldown_service(self, cooldown_notify_queue: asyncio.Queue, player_id: int):
-    #     while True:
-    #         msg = await cooldown_notify_queue.get()
-    #         await self.engine_to_visualizer_queue.put(msg)  # Send cooldown ended message to visualizer
-    #
-    #         async with self.cooldown_lock:
-    #             if player_id == 1:
-    #                 self.cooldown_p1_event.set()
-    #             elif player_id == 2:
-    #                 self.cooldown_p2_event.set()
-    #             else:
-    #                 logger.warning(f"Received cooldown message for unknown player_id: {player_id}")
+    async def handle_cooldown_messages(self, cooldown_queue: asyncio.Queue, player_id: int):
+        while True:
+            msg = await cooldown_queue.get()
+            if msg.endswith("cooldown-end"):
+                await self.engine_to_visualizer_queue.put(msg)
+                logger.info(f"Player {player_id} cooldown ended.")
