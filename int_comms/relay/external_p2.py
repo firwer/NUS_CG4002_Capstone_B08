@@ -10,10 +10,11 @@ from queue import Queue
 from threading import Thread
 
 import config
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from int_comms.hardcoded_imu import basket, bowl, reload, volley, bomb, shield, logout, gun_raise, gun_drop, stationary, \
-    shake
+    shake, soccer, walk
 from hardcoded_imu import basket, bowl, reload, volley, bomb, shield, logout, gun_raise, gun_drop, stationary, \
     shake
 from comms.TCPC_Controller_Sync import TCPC_Controller_Sync
@@ -78,7 +79,6 @@ def send_queue_handler(tcpController: TCPC_Controller_Sync, send_queue: Queue):
     while True:
         message = send_queue.get(block=True)
         tcpController.send(message.to_bytearray())
-
 
 
 def begin_external(sendToGameServerQueue: Queue, receiveFromGameServerQueue0: Queue, receiveFromGameServerQueue1,
@@ -196,7 +196,8 @@ def create_packet_from_imu_data(ax, ay, az, gx, gy, gz):
 
     return byte_array
 
-def create_imu_packets(imu_data):
+
+def create_imu_packets(imu_data, isLeg):
     packets = []
 
     # Find the shortest length among the data arrays to avoid index out-of-range errors
@@ -215,9 +216,12 @@ def create_imu_packets(imu_data):
         # Create packet for the current set of values
         packet_byte_array = create_packet_from_imu_data(ax, ay, az, gx, gy, gz)
         packet = PacketImu(byteArray=packet_byte_array)  # Assuming PacketImu uses byteArray
+        if isLeg:
+            packet.device = 1
         packets.append(packet)
 
     return packets
+
 
 def display_menu():
     """Display the interactive menu for packet selection"""
@@ -236,31 +240,35 @@ def display_menu():
     print("12. Gun")
     print("13. Health")
     print("14. Soccer (Kick)")
+    print("15. Soccer (IMU)")
+    print("16. Walk (IMU)")
     print("0. Exit")
 
 
 def get_user_input(sendToGameServerQueue: Queue):
-    adc_counter = 0
+    adc_counter_leg = 0
+    adc_counter_glove = 0
     pkts = []
 
     # Dictionary to map user selections to packet types and functions
     packet_options = {
-        '1': ("Basket", create_imu_packets, basket),
-        '2': ("Bowl", create_imu_packets, bowl),
-        '3': ("Reload", create_imu_packets, reload),
-        '4': ("Volley", create_imu_packets, volley),
-        '5': ("Bomb (Rainbomb)", create_imu_packets, bomb),
-        '6': ("Shield", create_imu_packets, shield),
-        '7': ("Logout", create_imu_packets, logout),
-        '8': ("Gun Raise", create_imu_packets, gun_raise),
-        '9': ("Gun Drop", create_imu_packets, gun_drop),
-        '10': ("Stationary", create_imu_packets, stationary),
-        '11': ("Shake", create_imu_packets, shake),
-        '12': ("Gun", [sim_get_packet], PACKET_DATA_BULLET),
-        '13': ("Health", [sim_get_packet], PACKET_DATA_HEALTH),
-        '14': ("Soccer (Kick)", [sim_get_packet], PACKET_DATA_KICK)
+        '1': ("Basket", create_imu_packets, basket, False),
+        '2': ("Bowl", create_imu_packets, bowl, False),
+        '3': ("Reload", create_imu_packets, reload, False),
+        '4': ("Volley", create_imu_packets, volley, False),
+        '5': ("Bomb (Rainbomb)", create_imu_packets, bomb, False),
+        '6': ("Shield", create_imu_packets, shield, False),
+        '7': ("Logout", create_imu_packets, logout, False),
+        '8': ("Gun Raise", create_imu_packets, gun_raise, False),
+        '9': ("Gun Drop", create_imu_packets, gun_drop, False),
+        '10': ("Stationary", create_imu_packets, stationary, False),
+        '11': ("Shake", create_imu_packets, shake, False),
+        '12': ("Gun", [sim_get_packet], PACKET_DATA_BULLET, False),
+        '13': ("Health", [sim_get_packet], PACKET_DATA_HEALTH, False),
+        '14': ("Soccer (Kick)", [sim_get_packet], PACKET_DATA_KICK, False),
+        '15': ("Soccer (IMU)", create_imu_packets, soccer, True),
+        '16': ("Walk (IMU)", create_imu_packets, walk, True),
     }
-
     while True:
         display_menu()
         user_input = input("\nEnter your choice (0 to exit): ").strip()
@@ -271,23 +279,29 @@ def get_user_input(sendToGameServerQueue: Queue):
 
         # Get packet type based on user selection
         if user_input in packet_options:
-            packet_name, packet_function, packet_data = packet_options[user_input]
+            packet_name, packet_function, packet_data, isLeg = packet_options[user_input]
             print(f"\nYou selected: {packet_name}")
 
             # Generate packets based on the selected packet type
             if packet_name == "Gun" or packet_name == "Health" or packet_name == "Soccer (Kick)":
                 pkts = [sim_get_packet(packet_data)]  # Single packet for Gun, Health, and Kick
             else:
-                pkts = packet_function(packet_data)  # IMU packets for other options
+                pkts = packet_function(packet_data, isLeg)  # IMU packets for other options
 
             # Send packets
             for i, packet in enumerate(pkts):
-                packet.adc = adc_counter
+                if isLeg:
+                    packet.adc = adc_counter_leg
+                else:
+                    packet.adc = adc_counter_glove
                 print(f"Sending {i + 1}/60 packet")
                 time.sleep(0.01)  # Delay to simulate real-time packet sending
                 sendToGameServerQueue.put(packet)
 
-            adc_counter += 1
+            if isLeg:
+                adc_counter_leg += 1
+            else:
+                adc_counter_glove += 1
 
         else:
             print("Invalid selection. Please choose a valid option.")
