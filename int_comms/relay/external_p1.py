@@ -10,12 +10,12 @@ from threading import Thread
 
 import config
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from hardcoded_imu import basket, logout, shield, bomb, volley, reload, bowl, stationary, gun_raise, gun_drop, \
     shake
+from int_comms.hardcoded_imu import basket, bowl, reload, volley, bomb, shield, logout, gun_raise, gun_drop, stationary, \
+    shake
 
-
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from comms.TCPC_Controller_Sync import TCPC_Controller_Sync
 from int_comms.relay.packet import PACKET_DATA_IMU, PACKET_DATA_BULLET, PACKET_DATA_HEALTH, PACKET_DATA_KICK, PacketImu, \
     PacketBullet, PacketHealth, PacketKick, PacketGamestate
@@ -46,12 +46,14 @@ def receive_queue_handler_integrated(tcpController: TCPC_Controller_Sync, receiv
                 player = json.loads(root['p1'])
                 pkt.bullet = player["game_state"]["bullets"]
                 pkt.health = player["game_state"]["hp"]
-                ext_logger.info(f"P1 getting {pkt.bullet} bullets, {pkt.health} health")
+                pkt.shield = player["game_state"]["shield_hp"]
+                ext_logger.info(f"P1 getting {pkt.bullet} bullets, {pkt.health} health, {pkt.shield} shield")
             else:
                 player = json.loads(root['p2'])
                 pkt.bullet = player["game_state"]["bullets"]
                 pkt.health = player["game_state"]["hp"]
-                ext_logger.info(f"P2 getting {pkt.bullet} bullets, {pkt.health} health")
+                pkt.shield = player["game_state"]["shield_hp"]
+                ext_logger.info(f"P2 getting {pkt.bullet} bullets, {pkt.health} health, {pkt.shield} shield")
 
             # broadcast the queues 
             for receive_queue in receive_queues:

@@ -5,6 +5,10 @@
 #define PACKET_SIZE 20
 #define TIMEOUT_MS 500
 
+// Use me for unreliable data transfer tagging
+#define IMU_DEVICE_GLOVE 0
+#define IMU_DEVICE_LEG   1
+
 // Packet types
 #define PACKET_SIZE 20
 
@@ -35,7 +39,7 @@ void handleValidPacket(struct packet_general_t *packet, uint8_t packet_type);
 struct packet_general_t reliable_receive();
 bool await_packet(struct packet_general_t *packet_buffer);
 void await_handshake(bool helloReceived);
-bool ic_push_imu(MPUData data, uint8_t action_count);
+bool ic_push_imu(MPUData data, uint8_t action_count, uint8_t device);
 
 // hw-ic integration declarations
 bool ic_connect();

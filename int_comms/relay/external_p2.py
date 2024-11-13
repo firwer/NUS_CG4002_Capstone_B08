@@ -11,12 +11,11 @@ from threading import Thread
 
 import config
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+from int_comms.hardcoded_imu import basket, bowl, reload, volley, bomb, shield, logout, gun_raise, gun_drop, stationary, \
+    shake
 from hardcoded_imu import basket, bowl, reload, volley, bomb, shield, logout, gun_raise, gun_drop, stationary, \
     shake
-
-
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from comms.TCPC_Controller_Sync import TCPC_Controller_Sync
 from int_comms.relay.packet import PACKET_DATA_IMU, PACKET_DATA_BULLET, PACKET_DATA_HEALTH, PACKET_DATA_KICK, PacketImu, \
     PacketBullet, PacketHealth, PacketKick, PacketGamestate, get_packet
@@ -48,15 +47,15 @@ def receive_queue_handler_integrated(tcpController: TCPC_Controller_Sync, receiv
                 player = json.loads(root['p1'])
                 pkt.bullet = player["game_state"]["bullets"]
                 pkt.health = player["game_state"]["hp"]
-                pkt.shield = player["gamestate"]["shield_hp"]
-                ext_logger.info(f"P1 getting {pkt.bullet} bullets, {pkt.health} health")
+                pkt.shield = player["game_state"]["shield_hp"]
+                ext_logger.info(f"P1 getting {pkt.bullet} bullets, {pkt.health} health, {pkt.shield} shield")
             else:
                 player = json.loads(root['p2'])
                 pkt.bullet = player["game_state"]["bullets"]
                 pkt.health = player["game_state"]["hp"]
-                pkt.shield = player["gamestate"]["shield_hp"]
-                ext_logger.info(f"P2 getting {pkt.bullet} bullets, {pkt.health} health")
-                
+                pkt.shield = player["game_state"]["shield_hp"]
+                ext_logger.info(f"P2 getting {pkt.bullet} bullets, {pkt.health} health, {pkt.shield} shield")
+
             # broadcast the queues 
             for receive_queue in receive_queues:
                 receive_queue.put(pkt)
@@ -79,6 +78,7 @@ def send_queue_handler(tcpController: TCPC_Controller_Sync, send_queue: Queue):
     while True:
         message = send_queue.get(block=True)
         tcpController.send(message.to_bytearray())
+
 
 
 def begin_external(sendToGameServerQueue: Queue, receiveFromGameServerQueue0: Queue, receiveFromGameServerQueue1,
@@ -137,6 +137,34 @@ def sim_get_packet(type):
         return pkt
     assert False  # this should never trigger!
 
+def begin_external(sendToGameServerQueue: Queue, receiveFromGameServerQueue0: Queue, receiveFromGameServerQueue1,
+                   player_num):
+    global RELAY_NODE_PLAYER
+    RELAY_NODE_PLAYER = player_num
+    ext_logger.debug("Controller sync begin...")
+    wsController = TCPC_Controller_Sync(
+        config.TCP_SERVER_HOST, config.TCP_SERVER_PORT, config.TCP_SECRET_KEY
+    )
+    ext_logger.debug("External comms liaison starting...")
+    wsController.connect()
+    wsController.identify_relay_node(RELAY_NODE_PLAYER)
+    receiveQueues = [receiveFromGameServerQueue0, receiveFromGameServerQueue1]
+    ext_logger.debug("External comms liaison connected!")
+    # start the input thread
+    send_thread = Thread(target=send_queue_handler, args=(wsController, sendToGameServerQueue))
+    receive_thread = Thread(target=receive_queue_handler_integrated, args=(wsController, receiveQueues))
+    send_thread.start()
+    receive_thread.start()
+    send_thread.join()
+    receive_thread.join()
+
+
+##
+## Simulation Code Below
+##
+##
+
+# Function to convert IMU data into byte array for PacketImu
 def create_packet_from_imu_data(ax, ay, az, gx, gy, gz):
     # Convert IMU data to a byte array (each sensor value is 2 bytes - 16-bit signed integer)
     byte_array = bytearray()
@@ -168,7 +196,6 @@ def create_packet_from_imu_data(ax, ay, az, gx, gy, gz):
 
     return byte_array
 
-
 def create_imu_packets(imu_data):
     packets = []
 
@@ -191,7 +218,6 @@ def create_imu_packets(imu_data):
         packets.append(packet)
 
     return packets
-
 
 def display_menu():
     """Display the interactive menu for packet selection"""
@@ -265,6 +291,7 @@ def get_user_input(sendToGameServerQueue: Queue):
 
         else:
             print("Invalid selection. Please choose a valid option.")
+
 
 # This is only for testing/simulation purposes. Actual internal comms side entry point is not here.
 def start_simulate():
