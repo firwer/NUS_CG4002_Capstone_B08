@@ -196,13 +196,13 @@ void playBLEFeedback()
 }
 void playMotionFeedback()
 {
-  noteQueue.enqueue(NOTE_CS6);
-  noteQueue.enqueue(NOTE_D6);
+  noteQueue.enqueue(NOTE_A6);
+  noteQueue.enqueue(NOTE_C6);
   noteQueue.enqueue(NOTE_E6);
 }
 void playMotionEndFeedback()
 {
   noteQueue.enqueue(NOTE_E6);
-  noteQueue.enqueue(NOTE_D6);
-  noteQueue.enqueue(NOTE_CS6);
+  noteQueue.enqueue(NOTE_C6);
+  noteQueue.enqueue(NOTE_A6);
 }
