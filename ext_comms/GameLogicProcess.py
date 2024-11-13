@@ -140,7 +140,7 @@ async def game_state_manager(currGameData, attacker_id: int,
         logger.info(f"[Round {curr_round}][P{attacker_id}] Received {prediction_action} in game_state_manager")
 
         # Logout Protection Logic
-        if curr_round == 23 and prediction_action != "logout":  # TODO: Doesn't seem to work
+        if curr_round == 23 and prediction_action != "logout":
             logger.warning(f"[Round {curr_round}][P{attacker_id}] Game Over! Forcing logout for P{attacker_id} instead of {prediction_action}")
             prediction_action = "logout"
         elif curr_round < 20 and prediction_action == "logout":

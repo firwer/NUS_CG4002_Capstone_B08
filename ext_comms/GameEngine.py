@@ -387,19 +387,24 @@ class GameEngine:
             # Wait for evaluation response
             
             eval_resp = await asyncio.wait_for(eval_output_queue.get(), 5)
+            logger.critical(f"[Round {curr_round}][P{player_id}] Received evaluation response: {eval_resp}")
             while not eval_output_queue.empty():
+                logger.exception(f"[Round {curr_round}][P{player_id}] PURGING PREVIOUS")
                 eval_resp = await eval_output_queue.get()
+                logger.critical(f"[Round {curr_round}][P{player_id}] Received evaluation response: {eval_resp}")
+            logger.critical(f"[Round {curr_round}][P{player_id}] Purged eval_output_queue")
             if player_id == 1:
                 self.game_round_p1 += 1
             else:
                 self.game_round_p2 += 1
-            logger.debug(f"[Round {curr_round}][P{player_id}] Received evaluation response: {eval_resp}")
+            #logger.debug(f"[Round {curr_round}][P{player_id}] Received evaluation response: {eval_resp}")
 
             eval_gs = json.loads(eval_resp)
 
             # Update game state based on evaluation response
             self.currGameData.p1.game_state = eval_gs.get('p1', self.currGameData.p1.game_state)
             self.currGameData.p2.game_state = eval_gs.get('p2', self.currGameData.p2.game_state)
+            logger.critical(f"[Round {curr_round}][P{player_id}] Latest State: {self.currGameData.to_json(player_id)}")
             logger.info(f"[Round {curr_round}][P{player_id}] Updated game state with evaluation response")
         except asyncio.TimeoutError:
             logger.warning(f"[Round {curr_round}][P{player_id}] Timeout while waiting for evaluation response.")
