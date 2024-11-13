@@ -11,6 +11,9 @@
 #define IMU_INTERRUPT_PIN 2
 #define BUZZER_PIN 3
 #define NOTE_DELAY 100
+#define VIBRATOR_PIN 4
+#define LED_OUTPUT_PIN 5
+#define FEEDBACK_PLAY_TIME 750
 
 #define MPU_SAMPLING_RATE 40
 #define NUM_RECORDED_POINTS 54
@@ -30,6 +33,9 @@ bool isRecording = false;
 bool isMotionDetected = false;
 bool isMotionTunePlayed = false;
 bool hasMotionEnded = false;
+bool playingFeedback = false;
+unsigned long playingFeedbackTime = 0;
+
 uint8_t actionCounter = 0;
 MPUData mpuData; // @wanlin
 
@@ -81,6 +87,8 @@ void setup()
   mpu.setIntMotionEnabled(true);
 
   pinMode(IMU_INTERRUPT_PIN, INPUT);
+  pinMode(LED_OUTPUT_PIN, OUTPUT);
+  pinMode(VIBRATOR_PIN, OUTPUT);
   attachInterrupt(digitalPinToInterrupt(IMU_INTERRUPT_PIN), motionDetected, RISING);
   pinMode(BUZZER_PIN, OUTPUT);
   melody.begin(BUZZER_PIN);
@@ -93,10 +101,11 @@ void setup()
 
 void loop()
 {
-  if(communicate()){
-      playBLEFeedback();
+  if (communicate())
+  {
+    playBLEFeedback();
   }
-  
+
   if (millis() - lastSoundTime > NOTE_DELAY)
   {
     if (noteQueue.itemCount() > 0)
@@ -107,8 +116,18 @@ void loop()
     lastSoundTime = millis();
   }
 
+  if (playingFeedback && millis() - playingFeedbackTime >= FEEDBACK_PLAY_TIME)
+  {
+    digitalWrite(LED_OUTPUT_PIN, LOW);
+    digitalWrite(VIBRATOR_PIN, LOW);
+    playingFeedback = false;
+  }
+
   if (isRecording)
   {
+    digitalWrite(LED_OUTPUT_PIN, HIGH);
+    digitalWrite(VIBRATOR_PIN, HIGH);
+    playingFeedbackTime = millis();
     if (!isMotionTunePlayed)
     {
       // Serial.println("Motion Detected. Displaying raw then corresponding real readings.");
@@ -159,6 +178,7 @@ void motionDetected()
   {
     isMotionDetected = true;
     isRecording = true;
+    playingFeedback = true;
     lastKickTime = millis();
   }
 }
