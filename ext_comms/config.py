@@ -64,5 +64,5 @@ GAME_AI_PACKET_COUNT = 50  # Desired number of packets to collect
 GAME_ACTION_COOLDOWN = 6  # Cooldown period for EACH player actions PER ROUND
 
 GAME_TIMEOUT = 70  # Time to wait for the game to end before timeout
-PLAYER_TIMEOUT_RANDOM_ACTION = 18 # Time to wait for the player to make a random action before timeout
+PLAYER_TIMEOUT_RANDOM_ACTION = 24  # Time to wait for the player to make a random action before timeout
 PLAYER_RANDOM_ACTIONS = ["basket", "bowl", "soccer", "volley", "shield", "reload"]

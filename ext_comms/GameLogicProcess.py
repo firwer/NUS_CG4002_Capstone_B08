@@ -229,6 +229,7 @@ async def game_state_manager(currGameData, attacker_id: int,
             logger.info(f"[Round {curr_round}][P{attacker_id}] User logout")
         else:
             logger.warning(f"[Round {curr_round}][P{attacker_id}] Unknown action received: {prediction_action}. Doing nothing.")
+
         return prediction_action
     except Exception as e:
         logger.exception(f"[Round {curr_round}][P{attacker_id}] Error in game_state_manager: {e}")

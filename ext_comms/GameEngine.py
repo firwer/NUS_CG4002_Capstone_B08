@@ -332,6 +332,10 @@ class GameEngine:
                 curr_round = self.game_round_p2
             try:
                 prediction_action = await pred_output_queue.get()
+                isRandom = False
+                if prediction_action.startswith("random_"):
+                    prediction_action = prediction_action[7:]
+                    isRandom = True
                 async with self.gs_lock:
                     async with self.cooldown_lock:
                         # Verify FOV with visualizer and update game state
@@ -355,14 +359,18 @@ class GameEngine:
                                                              eval_input_queue=self.engine_to_evaluation_server_queue,
                                                              eval_output_queue=self.evaluation_server_to_engine_queue)
 
-                # Send updated game state to visualizer
-                await visualizer_send_queue.put(
-                    "gs_" + self.currGameData.to_json(player_id))  # Add gs_ prefix to indicate game
-
                 logger.info(
                     f"[Round {curr_round}][P{player_id}] Returning Game State To Relay Node: {self.currGameData.to_json(player_id)}")
                 # Send validated/verified game state to relay node
                 await relay_node_input_queue.put(f"{self.currGameData.to_json(player_id)}")
+                if isRandom:
+                    if player_id == 1:
+                        self.currGameData.p1.action = "random_" + predicted_action
+                    else:
+                        self.currGameData.p2.action = "random_" + predicted_action
+                # Send updated game state to visualizer
+                await visualizer_send_queue.put(
+                    "gs_" + self.currGameData.to_json(player_id))  # Add gs_ prefix to indicate game
             except Exception as e:
                 logger.exception(f"[Round {curr_round}][P{player_id}] Error in game_data_process: {e}")
 
@@ -501,6 +509,7 @@ class GameEngine:
             random_action = random.choice(config.PLAYER_RANDOM_ACTIONS)
             logger.supervisor(f"[Round {self.game_round_p1}][P{player_id}] Action timeout reached. "
                               f"Sending random action: {random_action}.")
+            random_action = "random_" + random_action
             if not self.cooldown_p1_event.is_set() and player_id == 1:
                 await self.prediction_output_queue_p1.put(random_action)
             elif not self.cooldown_p2_event.is_set() and player_id == 2:
