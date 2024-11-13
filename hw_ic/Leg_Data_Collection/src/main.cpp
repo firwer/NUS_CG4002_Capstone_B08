@@ -13,7 +13,7 @@
 #define NOTE_DELAY 100
 #define VIBRATOR_PIN 4
 #define LED_OUTPUT_PIN 5
-#define FEEDBACK_PLAY_TIME 750
+#define FEEDBACK_PLAY_TIME 1500
 
 #define MPU_SAMPLING_RATE 40
 #define NUM_RECORDED_POINTS 54
@@ -33,6 +33,7 @@ bool isRecording = false;
 bool isMotionDetected = false;
 bool isMotionTunePlayed = false;
 bool hasMotionEnded = false;
+
 bool playingFeedback = false;
 unsigned long playingFeedbackTime = 0;
 
@@ -116,6 +117,12 @@ void loop()
     lastSoundTime = millis();
   }
 
+  if (playingFeedback)
+  {
+    digitalWrite(LED_OUTPUT_PIN, HIGH);
+    digitalWrite(VIBRATOR_PIN, HIGH);
+  }
+
   if (playingFeedback && millis() - playingFeedbackTime >= FEEDBACK_PLAY_TIME)
   {
     digitalWrite(LED_OUTPUT_PIN, LOW);
@@ -125,9 +132,6 @@ void loop()
 
   if (isRecording)
   {
-    digitalWrite(LED_OUTPUT_PIN, HIGH);
-    digitalWrite(VIBRATOR_PIN, HIGH);
-    playingFeedbackTime = millis();
     if (!isMotionTunePlayed)
     {
       // Serial.println("Motion Detected. Displaying raw then corresponding real readings.");
@@ -179,6 +183,7 @@ void motionDetected()
     isMotionDetected = true;
     isRecording = true;
     playingFeedback = true;
+    playingFeedbackTime = millis();
     lastKickTime = millis();
   }
 }
