@@ -132,8 +132,6 @@ async def game_state_manager(currGameData, attacker_id: int,
                              prediction_action: str,
                              gun_state_queue: asyncio.Queue,
                              cooldown_manager: ActionCooldownManager,
-                             cooldown_p1_event: asyncio.Event,
-                             cooldown_p2_event: asyncio.Event,
                              curr_round: int):
     global targetInFOV_p1, numOfRain_p1, targetInFOV_p2, numOfRain_p2
     try:
@@ -153,33 +151,25 @@ async def game_state_manager(currGameData, attacker_id: int,
             currGameData.p1.action = prediction_action
             targetPlayerData = currGameData.p1.game_state
             OpponentPlayerData = currGameData.p2.game_state
-            cooldown_event = cooldown_p1_event
         else:
             targetInFOV = targetInFOV_p2
             numOfRain = numOfRain_p2
             currGameData.p2.action = prediction_action
             targetPlayerData = currGameData.p2.game_state
             OpponentPlayerData = currGameData.p1.game_state
-            cooldown_event = cooldown_p2_event
 
         # Constraints to prevent multiple actions in the same round and invalid actions
-        if cooldown_event.is_set():
-            logger.warning(f"[Round {curr_round}][P{attacker_id}] Already performed action for this round! Ignoring {prediction_action}. "
-                           f"Please ensure that the other player has performed the action for this round.")
-            set_gamestate_action(currGameData, attacker_id, "invalid")
-            return "invalid"
 
         if prediction_action == "invalid":
             logger.warning(f"[Round {curr_round}][P{attacker_id}] Invalid action received: {prediction_action}. Doing nothing.")
             set_gamestate_action(currGameData, attacker_id, "invalid")
-            return "invalid"
+
 
         logger.debug(f"[Round {curr_round}][P{attacker_id}] Attempting to acquire cooldown slot.")
         can_process = await cooldown_manager.acquire_action_slot(attacker_id)
         if not can_process:
             logger.warning(f"[Round {curr_round}][P{attacker_id}] Action '{prediction_action}' discarded due to cooldown.")
             set_gamestate_action(currGameData, attacker_id, "cooldown-progress")
-            return "cooldown-progress"
 
         logger.debug(f"[Round {curr_round}][P{attacker_id}] Action '{prediction_action}' accepted and being processed.")
 
@@ -191,31 +181,25 @@ async def game_state_manager(currGameData, attacker_id: int,
 
         # Handle other generic actions
         if prediction_action == "gun":
-            #will_hit = False
+            will_hit = False
 
-            if not config.FREEPLAY_MODE and targetInFOV:
+            if targetInFOV:
                 logger.info(f"[Round {curr_round}][P{attacker_id}] Opponent in FOV, Shot HIT regardless of IR sensor.")
-                #will_hit = True
-                logger.info(f"[Round {curr_round}][P{attacker_id}] Gun shot HIT Opponent.")
-                await gun_shoot(targetPlayerData, OpponentPlayerData)
+                will_hit = True
             else:
                 # Drain the queue to get the latest result
-                #result = await gun_state_queue.get()
-                # Empty out gun_state_queue and get the last item to prevent accumulation
-                #while not gun_state_queue.empty():
-                #    result = await gun_state_queue.get()
-                #if result == "hit":
-                #    will_hit = True
-                #elif result == "miss" and targetPlayerData["bullets"] > 0:
-                    # targetPlayerData["bullets"] -= 1
-                    # logger.info(f"[Round {curr_round}][P{attacker_id}] Shot MISS. Bullets left: {targetPlayerData['bullets']}")
-                if targetPlayerData["bullets"] > 0:
+                result = await gun_state_queue.get()
+                #Empty out gun_state_queue and get the last item to prevent accumulation
+                while not gun_state_queue.empty():
+                   result = await gun_state_queue.get()
+                if result == "hit":
+                   will_hit = True
+                elif result == "miss" and targetPlayerData["bullets"] > 0:
                     targetPlayerData["bullets"] -= 1
-                    logger.info(
-                        f"[Round {curr_round}][P{attacker_id}] Shot MISS. Bullets left: {targetPlayerData['bullets']}")
-            # if will_hit:
-            #     logger.info(f"[Round {curr_round}][P{attacker_id}] Gun shot HIT Opponent.")
-            #     await gun_shoot(targetPlayerData, OpponentPlayerData)
+                    logger.info(f"[Round {curr_round}][P{attacker_id}] Shot MISS. Bullets left: {targetPlayerData['bullets']}")
+            if will_hit:
+                logger.info(f"[Round {curr_round}][P{attacker_id}] Gun shot HIT Opponent.")
+                await gun_shoot(targetPlayerData, OpponentPlayerData)
         elif prediction_action == "shield":
             await shield(targetPlayerData)
         elif prediction_action == "reload":
@@ -229,6 +213,5 @@ async def game_state_manager(currGameData, attacker_id: int,
             logger.info(f"[Round {curr_round}][P{attacker_id}] User logout")
         else:
             logger.warning(f"[Round {curr_round}][P{attacker_id}] Unknown action received: {prediction_action}. Doing nothing.")
-        return prediction_action
     except Exception as e:
         logger.exception(f"[Round {curr_round}][P{attacker_id}] Error in game_state_manager: {e}")
