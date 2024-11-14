@@ -20,6 +20,6 @@ This project uses an Arduino Bluno to manage player health and shield states in 
 This project uses the following open-source libraries:
 - [Tone Library](https://github.com/bhagman/Tone) by Brett Hagman: Provides functions for generating tones on Arduino.
 - [EEPROM Library](https://docs.arduino.cc/learn/built-in-libraries/eeprom/): Built-in Arduino library for storing data in the non-volatile memory.
-- [ArduinoQueue Library](https://github.com/EinarArnason/ArduinoQueue)
-= [IRremote Library](https://github.com/Arduino-IRremote/Arduino-IRremote)
+- [ArduinoQueue Library](https://github.com/EinarArnason/ArduinoQueue): Backbone of audio feedback system.
+- [IRremote Library](https://github.com/Arduino-IRremote/Arduino-IRremote)
 
