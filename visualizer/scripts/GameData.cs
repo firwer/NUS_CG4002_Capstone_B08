@@ -1,6 +1,6 @@
 using System;
 
-namespace GameDataNameSpace
+namespace GameDataNameSpace // Use the same namespace as your other scripts
 {
     public class GameState
     {

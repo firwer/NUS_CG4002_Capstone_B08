@@ -1,14 +1,15 @@
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using Vuforia;
 using Image = UnityEngine.UI.Image;
+using UnityEngine.Video;
 
 public class UIHandler : MonoBehaviour
 {
     public ProjectileHandler projectileHandler;
+    public ProjectileHandlerToPlayer projectileHandlerToPlayer;
     public SoundHandler soundHandler;
 
     public GameObject enemyWindow;
@@ -23,7 +24,7 @@ public class UIHandler : MonoBehaviour
     private TMP_Text healthNum;
     private Image shieldImage;
     public GameObject shieldBarWindow;
-    public GameObject equipShieldIcon;
+    public TMP_Text inRainText;
     private TMP_Text shieldHealthNum;
     private TMP_Text shieldAmmo;
     private TMP_Text bulletsNum;
@@ -44,22 +45,28 @@ public class UIHandler : MonoBehaviour
 
     // Sets low hp overlay variables
     public Image lowHealthOverlay;	
-    public float lowHpDuration;
-    public float lowHpFadeSpeed;
+    private float lowHpDuration = 0.3f;
+    private float lowHpFadeSpeed = 2f;
 
     // Sets equip shield overlay variables
     public Image equipShieldOverlay;
-    public float equipShieldDuration;
-    public float equipShieldFadeSpeed;
+    private float equipShieldDuration = 0.5f;
+    private float equipShieldFadeSpeed = 2f;
 
     // Sets low hp overlay variables
     public Image deathOverlay;
-    public float deathDuration;
-    public float deathFadeSpeed;
+    //private float deathDuration = 0.1f;
+    //private float deathFadeSpeed = 3f;
 
     private float lowHpDurationTimer;
     private float equipShieldDurationTimer;
     private float deathDurationTimer;
+    public VideoPlayer videoPlayer;
+
+    public Image[] ProfOverlayImages;
+    private float fadeDurationProfOverlay = 0.3f; // Time to fade in/out
+    private float displayDurationProfOverlay = 6.2f; // Time to stay visible after fading in
+    private Color initialColorProfOverlay;
 
     // For enemy shield bubble object
     private GameObject instantiatedObject;
@@ -81,13 +88,11 @@ public class UIHandler : MonoBehaviour
     {
         shieldAmmo.text = "3";
         shieldBarWindow.gameObject.SetActive(false);
-        equipShieldIcon.gameObject.SetActive(false);
     }
 
     public void SetMaxShield(int shields)
     {
         shieldBarWindow.gameObject.SetActive(true);
-        equipShieldIcon.gameObject.SetActive(true);
         shieldAmmo.text = shields.ToString();
         shieldImage.fillAmount = 1.0f;
         shieldHealthNum.text = "30";
@@ -112,16 +117,9 @@ public class UIHandler : MonoBehaviour
 
     public void SetHealth(int health, int shields, int shieldHealth)
     {
-        if (health == 100)
-        {
-            soundHandler.PlayReviveAudio();
-            return;
-        }
-
         if (shieldHealth == 0)
         {
             shieldBarWindow.gameObject.SetActive(false);
-            equipShieldIcon.gameObject.SetActive(false);
         }
         else
         {
@@ -150,10 +148,10 @@ public class UIHandler : MonoBehaviour
     }
 
     public void SetDeath()
-    {   
+    {
         // For grey flashing screen upon death
-        deathDurationTimer = 0;
-        deathOverlay.color = new Color(deathOverlay.color.r, deathOverlay.color.g, deathOverlay.color.b, 0.8f);
+        //deathDurationTimer = 0;
+        //deathOverlay.color = new Color(deathOverlay.color.r, deathOverlay.color.g, deathOverlay.color.b, 0.8f);
         SetMaxHealth();
         SetMaxBullets();
         SetMaxBombs();
@@ -161,6 +159,20 @@ public class UIHandler : MonoBehaviour
 
         // Play died sfx
         soundHandler.PlayDiedAudio();
+        soundHandler.PlayReviveAudio();
+
+        videoPlayer.gameObject.SetActive(true);
+        if (!videoPlayer.isPlaying)
+        {
+            videoPlayer.Play();  // Start playing the video
+        }
+        ShowProfImageWithFade();
+    }
+    void OnVideoFinished(VideoPlayer vp)
+    {
+        // Stop the video
+        vp.Stop();
+        vp.gameObject.SetActive(false);
     }
 
     public void SetBullets(int bullets)
@@ -185,7 +197,7 @@ public class UIHandler : MonoBehaviour
     {
         if (rendEnemyObject.enabled == true)
         {
-            projectileHandler.ThrowBall(ball, true, true);
+            projectileHandler.ThrowBall(ball, true);
             if (ball == "bowl")
             {
                 soundHandler.PlayThrowBowlingBallAudio();
@@ -201,13 +213,13 @@ public class UIHandler : MonoBehaviour
         }
         else
         {
-            projectileHandler.ThrowBall(ball, false, true);
+            projectileHandler.ThrowBall(ball, false);
         }
     }
     public void EnemyThrowBalls(string ball)
     {
         Debug.Log("CAPSTONE: UIHandler: Calling projectileHandler ThrowBall");
-        projectileHandler.ThrowBall(ball, false, false);
+        projectileHandlerToPlayer.ThrowBallToPlayer(ball, false);
     }
     public void Reload()
     {
@@ -241,7 +253,7 @@ public class UIHandler : MonoBehaviour
 
         // Set the parent to the ImageTarget
         instantiatedObject.transform.SetParent(imageTargetBehaviour.transform, false);
-        instantiatedObject.transform.localPosition = new Vector3(0, 0, -0.15f);
+        instantiatedObject.transform.localPosition = new Vector3(0, 0, -0.4f);
         
         enemyShieldBarWindow.gameObject.SetActive(true);
         enemyShieldImage.fillAmount = 1.0f;
@@ -264,7 +276,6 @@ public class UIHandler : MonoBehaviour
         }
     }
 
-    
     public void UpdateSettingsDescription(string text)
     {
         settingsTextDescription.text = text;
@@ -274,6 +285,85 @@ public class UIHandler : MonoBehaviour
     {
         // Return True if enemy is in FOV, False if enemy not in FOV
         return rendEnemyObject.enabled;
+    }
+
+    public void SetInRainNumber(string inRainNumber)
+    {
+        inRainText.text = inRainNumber;
+    }
+
+    public void ShowProfImageWithFade()
+    {
+        StartCoroutine(FadeInAndOut());
+    }
+
+    private IEnumerator FadeInAndOut()
+    {
+        // Fade In
+        float elapsedTime = 0f;
+
+        // Fade in each image
+        while (elapsedTime < fadeDurationProfOverlay)
+        {
+            float t = elapsedTime / fadeDurationProfOverlay;
+            foreach (Image img in ProfOverlayImages)
+            {
+                Color color = img.color;
+                color.a = Mathf.Lerp(0f, 1f, t);
+                img.color = color;
+            }
+
+            elapsedTime += Time.deltaTime;
+            yield return null;
+        }
+
+        // Ensure all images are fully visible
+        foreach (Image img in ProfOverlayImages)
+        {
+            Color color = img.color;
+            color.a = 1f;
+            img.color = color;
+        }
+
+        // Wait for the display duration
+        yield return new WaitForSeconds(displayDurationProfOverlay);
+
+        // Fade Out
+        elapsedTime = 0f;
+
+        // Fade out each image
+        while (elapsedTime < fadeDurationProfOverlay)
+        {
+            float t = elapsedTime / fadeDurationProfOverlay;
+            foreach (Image img in ProfOverlayImages)
+            {
+                Color color = img.color;
+                color.a = Mathf.Lerp(1f, 0f, t);
+                img.color = color;
+            }
+
+            elapsedTime += Time.deltaTime;
+            yield return null;
+        }
+
+        // Ensure all images are fully transparent
+        foreach (Image img in ProfOverlayImages)
+        {
+            Color color = img.color;
+            color.a = 0f;
+            img.color = color;
+        }
+    }
+
+    public void PlayLogOut()
+    {
+        soundHandler.PlayLogOutAudio();
+        videoPlayer.gameObject.SetActive(true);
+        if (!videoPlayer.isPlaying)
+        {
+            videoPlayer.Play();  // Start playing the video
+        }
+        ShowProfImageWithFade();
     }
 
     // Start is called before the first frame update
@@ -302,7 +392,7 @@ public class UIHandler : MonoBehaviour
 
         // No shield equipped on start for both player and enemy
         shieldBarWindow.gameObject.SetActive(false);
-        equipShieldIcon.gameObject.	SetActive(false);
+        //inRainWindow.gameObject.SetActive(false);
         enemyShieldBarWindow.gameObject.SetActive(false);
 
         // Init reload window to be invisible
@@ -313,11 +403,23 @@ public class UIHandler : MonoBehaviour
         SetMaxBullets();
         SetMaxBombs();
     }
+
     private void Start()
     {
+        videoPlayer.loopPointReached += OnVideoFinished;
+
         lowHealthOverlay.color = new Color(lowHealthOverlay.color.r, lowHealthOverlay.color.g, lowHealthOverlay.color.b, 0);
         equipShieldOverlay.color = new Color(equipShieldOverlay.color.r, equipShieldOverlay.color.g, equipShieldOverlay.color.b, 0);
         deathOverlay.color = new Color(deathOverlay.color.r, deathOverlay.color.g, deathOverlay.color.b, 0);
+        videoPlayer.playOnAwake = false;
+        Debug.Log("UI START");
+        foreach (Image img in ProfOverlayImages)
+        {
+            Color initialColor = img.color;
+            initialColor.a = 0f;
+            //Debug.Log("setting to 0 alpha");
+            img.color = initialColor;
+        }
     }
     void Update()
     {
@@ -352,17 +454,7 @@ public class UIHandler : MonoBehaviour
                 equipShieldOverlay.color = new Color(equipShieldOverlay.color.r, equipShieldOverlay.color.g, equipShieldOverlay.color.b, tempAlphaShield);
             }
         }
-        // Flash grey screen
-        if (deathOverlay.color.a > 0)
-        {
-            deathDurationTimer += Time.deltaTime;
-            if (deathDurationTimer > deathDuration)
-            {
-                float tempAlphaDeath = deathOverlay.color.a;
-                tempAlphaDeath -= Time.deltaTime * lowHpFadeSpeed;
-                deathOverlay.color = new Color(deathOverlay.color.r, deathOverlay.color.g, deathOverlay.color.b, tempAlphaDeath);
-            }
-        }
+        // Display reloading screen
         if (reloadImage.color.a > 0)
         {
             reloadProgress += Time.deltaTime * 1.8f;
