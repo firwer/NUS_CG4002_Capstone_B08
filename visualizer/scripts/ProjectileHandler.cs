@@ -1,13 +1,17 @@
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI;
-using UnityEngine.UIElements;
 
+/// <summary>
+/// Instantiates a projectile respective to the ball action and handles its movement along a 
+/// Bezier curve. Destroys it on reaching the target.
+/// If enemy is not in the field of view, the projectile moves towards a point in front of
+/// the player.
+/// </summary>
 public class ProjectileHandler : MonoBehaviour
 {
     public RainChecker rainChecker;
     public SoundHandler soundHandler;
+    public WorldResetHandler worldResetHandler;
 
     public Transform player; // Start point (A)
     public Transform enemy;  // End point (B)
@@ -21,7 +25,6 @@ public class ProjectileHandler : MonoBehaviour
 
     public float speed = 0.1f; // Speed of projectile movement along the curve
     public float arcHeightToEnemy = 0.6f; // The height of the arc (dynamic control point)
-    public float arcHeightToPlayer = 0.3f;
     private float t = 0f; // Time parameter for curve (0 to 1)
     private GameObject projectileInstance; // Instance of the projectile
     private Vector3 controlPoint; // Calculated control point (E)
@@ -36,58 +39,30 @@ public class ProjectileHandler : MonoBehaviour
             UpdateProjectilePosition();
         }
     }
-    public void ThrowBall(string ball, bool inFOV, bool isPlayerThrowing)
+    public void ThrowBall(string ball, bool inFOV)
     {
         enemyInFOV = inFOV;
         ballToThrow = ball;
-        if (isPlayerThrowing)
+        switch (ballToThrow)
         {
-            switch (ballToThrow)
-            {
-                default:
-                    Debug.Log("Unable to get ball");
-                    break;
-                case "basket":
-                    StartThrow(basketballToThrow);
-                    break;
-                case "soccer":
-                    StartThrow(soccerToThrow);
-                    break;
-                case "bowl":
-                    StartThrow(bowlingToThrow);
-                    break;
-                case "volley":
-                    StartThrow(volleyballToThrow);
-                    break;
-                case "bomb":
-                    StartThrow(rainBombToThrow);
-                    break;
-            }
-        }
-        else
-        {
-            Debug.Log("CAPSTONE: PlayerNotThrowing ball");
-            switch (ballToThrow)
-            {
-                default:
-                    Debug.Log("Unable to get ball");
-                    break;
-                case "basket":
-                    ShootBackAtPlayer(basketballToThrow);
-                    break;
-                case "soccer":
-                    ShootBackAtPlayer(soccerToThrow);
-                    break;
-                case "bowl":
-                    ShootBackAtPlayer(bowlingToThrow);
-                    break;
-                case "volley":
-                    ShootBackAtPlayer(volleyballToThrow);
-                    break;
-                case "bomb":
-                    ShootBackAtPlayer(rainBombToThrow);
-                    break;
-            }
+            default:
+                Debug.Log("Unable to get ball");
+                break;
+            case "basket":
+                StartThrow(basketballToThrow);
+                break;
+            case "soccer":
+                StartThrow(soccerToThrow);
+                break;
+            case "bowl":
+                StartThrow(bowlingToThrow);
+                break;
+            case "volley":
+                StartThrow(volleyballToThrow);
+                break;
+            case "bomb":
+                StartThrow(rainBombToThrow);
+                break;
         }
     }
 
@@ -172,55 +147,13 @@ public class ProjectileHandler : MonoBehaviour
                 soundHandler.PlayOnHitAudio();
             }
 
-            if (ballToThrow == "bomb")
+            if (ballToThrow == "bomb" && enemyInFOV)
             {
                 GameObject rainBomb = Instantiate(rainBombRain, enemy.position, Quaternion.identity);
+                worldResetHandler.AddRainToList(rainBomb);
                 soundHandler.PlayOnHitRainBombAudio();
                 rainChecker.GetRainBomb(rainBomb);
             }
-        }
-    }
-    public void ShootBackAtPlayer(GameObject projectilePrefab)
-    {
-        Debug.Log("CAPSTONE: ProjectileHandler: ShootBackAtPlayer called");
-        // Get the middle of the screen in world coordinates
-        float distanceFromCamera = 1.5f;
-
-        Vector3 screenMiddle = new Vector3(Screen.width / 2, Screen.height / 2, distanceFromCamera);
-        Vector3 startMiddlePoint = Camera.main.ScreenToWorldPoint(screenMiddle);
-
-        // Instantiate the projectile at the middle screen point
-        projectileInstance = Instantiate(projectilePrefab, startMiddlePoint, Quaternion.identity);
-
-        // Set the control point to create an arc similar to your forward projectile
-        Vector3 midpoint = (startMiddlePoint + player.position) / 2f;
-        controlPoint = new Vector3(midpoint.x, midpoint.y + arcHeightToPlayer, midpoint.z);
-
-        // Reset t to start the curve animation
-        t = 0f;
-    }
-
-    public void UpdateReverseProjectilePosition()
-    {
-        // Same Bezier curve logic as in UpdateProjectilePosition, but with player as the target
-        t += Time.deltaTime * speed;
-        t = Mathf.Clamp01(t);
-
-        // Calculate the projectile position using the Bezier curve
-        Vector3 position = (1 - t) * (1 - t) * projectileInstance.transform.position +
-                           2 * t * (1 - t) * controlPoint +
-                           t * t * player.position;
-
-        // Set the projectile's position and rotation
-        projectileInstance.transform.position = position;
-        projectileInstance.transform.Rotate(450f * Time.deltaTime, 0f, 0f, Space.Self);
-
-        // Destroy the projectile when it reaches the player
-        if (t >= 1f)
-        {
-            Destroy(projectileInstance);
-            Instantiate(ballsOnHitExplosionPrefab, player.position, Quaternion.identity);
-            soundHandler.PlayOnHitAudio();
         }
     }
 }

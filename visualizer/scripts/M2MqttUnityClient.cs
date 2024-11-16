@@ -101,7 +101,6 @@ namespace M2MqttUnity
                 Debug.Log("Connecting (M2MqttUnityClient.cs)");
             }
         }
-
         /// <summary>
         /// Disconnect from the broker, if connected.
         /// </summary>
@@ -322,9 +321,11 @@ namespace M2MqttUnity
 
             //client.Settings.TimeoutOnConnection = timeoutOnConnection;
             string clientId = Guid.NewGuid().ToString();
+            ushort keepAlivePeriod = 5;
+
             try
             {
-                client.Connect(clientId, mqttUserName, mqttPassword);
+                client.Connect(clientId, mqttUserName, mqttPassword, true, keepAlivePeriod);
             }
             catch (Exception e)
             {
