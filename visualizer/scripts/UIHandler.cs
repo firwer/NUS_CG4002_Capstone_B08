@@ -6,6 +6,9 @@ using Vuforia;
 using Image = UnityEngine.UI.Image;
 using UnityEngine.Video;
 
+/// <summary>
+/// Handles the UI changes for the HUD
+/// </summary>
 public class UIHandler : MonoBehaviour
 {
     public ProjectileHandler projectileHandler;

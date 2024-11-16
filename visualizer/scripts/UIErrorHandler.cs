@@ -3,6 +3,9 @@ using UnityEngine;
 using TMPro;
 using Image = UnityEngine.UI.Image;
 
+/// <summary>
+/// Handles the error messages and UI changes for the HUD
+/// </summary>
 public class UIErrorHandler : MonoBehaviour
 {
     // Respective Error messages that will show up in middle of screen

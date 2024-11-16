@@ -2,6 +2,10 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+/// <summary>
+/// Handles the projectile movement from enemy to player by instantiating a ball prefab
+/// and moving it along a Bezier curve. Destroys it on reaching the player.
+/// </summary>
 public class ProjectileHandlerToPlayer : MonoBehaviour
 {
     public SoundHandler soundHandler;

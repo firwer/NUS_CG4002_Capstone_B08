@@ -3,6 +3,10 @@ using System.Collections.Generic;
 using UnityEngine;
 using Vuforia;
 
+/// <summary>
+/// Handles the reset of the world rain gameObjects when the anchor is found
+/// by repositioning the rain objects based on the anchor's position.
+/// </summary>
 public class WorldResetHandler : MonoBehaviour
 {
     public ImageTargetBehaviour anchorImageTarget;

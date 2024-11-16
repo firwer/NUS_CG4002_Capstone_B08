@@ -6,6 +6,9 @@ using GameDataNameSpace;
 using System.Linq;
 using UnityEngine.SceneManagement;
 
+/// <summary>
+/// Handles the messages received from game engine and updates the UI accordingly
+/// </summary>
 public class MsgHandler : MonoBehaviour
 {
     public M2MqttUnityTest M2MqttUnityTestGameObject;

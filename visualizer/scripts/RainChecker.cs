@@ -2,6 +2,10 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+/// <summary>
+/// Append rain objects to the list and check if the enemy object is visible.
+/// If the enemy object is not visible, disable the rain objects.
+/// </summary>
 public class RainChecker : MonoBehaviour
 {
     public GameObject enemyObject;

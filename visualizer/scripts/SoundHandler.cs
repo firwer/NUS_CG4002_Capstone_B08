@@ -1,5 +1,8 @@
 using UnityEngine;
 
+/// <summary>
+/// Play sound effects for the player actions
+/// </summary>
 public class SoundHandler : MonoBehaviour
 {
     public AudioClip gunAudio;

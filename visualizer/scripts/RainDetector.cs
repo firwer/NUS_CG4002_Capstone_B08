@@ -1,5 +1,8 @@
 using UnityEngine;
 
+/// <summary>
+/// Handles the number of rain GameObjects in contact with the opponent
+/// </summary>
 public class RainDetector : MonoBehaviour
 {
     private CapsuleCollider capsuleCollider;

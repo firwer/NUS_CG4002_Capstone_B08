@@ -1,6 +1,12 @@
 using System.Collections;
 using UnityEngine;
 
+/// <summary>
+/// Instantiates a projectile respective to the ball action and handles its movement along a 
+/// Bezier curve. Destroys it on reaching the target.
+/// If enemy is not in the field of view, the projectile moves towards a point in front of
+/// the player.
+/// </summary>
 public class ProjectileHandler : MonoBehaviour
 {
     public RainChecker rainChecker;
