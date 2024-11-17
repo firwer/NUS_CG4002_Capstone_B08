@@ -33,20 +33,20 @@ walk_input = [-904, -613, -914, -474, -373, -656, -476, -528, -492, -474, -480, 
              3787, 5935, 9051, 6214, 4315, 3115, 2415, 1979, 1936, 1896, 2005, 2197, 2467, 2745, 2940, 3269, 4200, 5628, 6818, 7992, 8397, 8757, 8871, 6030, 4586, -166, -4006, -6836, -10251, -13093, -15672, -17927, -19195, -18311, -13507, -5172, 4905, 2655, 5624, 6559, 5725, 4096, 2842, 2124, 1674, 1491, 1570, 1776, 2109, 2529,
              1965, 173, 4043, 228, 360, 1573, 1729, 1078, 335, -315, 293, 514, 157, -4, -45, 8, 19, -466, -1129, -1496, -1604, -1534, -2008, -2270, -2476, 122, 35, -389, 753, 1222, 1881, 2729, 2813, 1805, 2211, 1068, 418, 923, 714, 2276, 1007, 794, 1088, 1139, 1540, 1100, 353, 234, 579, 563]
 
-# prediction = AImodel.predict(basket_input, 1)   
-# print(f"Output: {prediction}")
+prediction = AImodel.predict(basket_input, 1)   
+print(f"Output: {prediction}")
 
 prediction = LegAIModel.predict(soccer_input, 1)
 print(f"Output: {prediction}")
 
-# prediction = AImodel.predict(stationary_input, 2)
-# print(f"Output: {prediction}")
+prediction = AImodel.predict(stationary_input, 2)
+print(f"Output: {prediction}")
 
 prediction = LegAIModel.predict(walk_input, 2)
 print(f"Output: {prediction}")
 
-# prediction = AImodel.predict(low_confidence_input, 1)
-# print(f"Output: {prediction}")
+prediction = AImodel.predict(low_confidence_input, 1)
+print(f"Output: {prediction}")
 
 prediction = LegAIModel.predict(low_confidence_input, 2)
 print(f"Output: {prediction}")
