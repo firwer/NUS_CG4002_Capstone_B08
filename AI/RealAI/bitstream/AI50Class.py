@@ -42,7 +42,7 @@ class AI:
         print(f"Glove Scaler time: {((time.time() - scaler_time) * 1000):.4f} ms\n")
 
         # Load the overlay
-        overlay = Overlay("/home/xilinx/IP/design_4.bit")
+        overlay = Overlay("/home/xilinx/IP/design_both.bit")
 
         # DMA objects
         self.dma = overlay.axi_dma_0
@@ -55,15 +55,16 @@ class AI:
         self.hls.write(CONTROL_REGISTER, 0x81)  # Starts the HLS IP
 
     def predict(self, input, player_id):
-      input_buffer = allocate(shape=(300,), dtype=np.float32)
+      input_buffer = allocate(shape=(301,), dtype=np.float32)
       output_buffer = allocate(shape=(11,), dtype=np.float32)
       padded_input = np.pad(input, (0, 300 - len(input)), 'constant')
       
       # Use the stored scaler to transform the input
       scaled_input = self.scaler.transform([padded_input])
+      input_buffer[0] = 0.0 #device = glove
       for i in range(300):
-         input_buffer[i] = scaled_input[0][i]
-       
+         input_buffer[i + 1] = scaled_input[0][i]
+
       #start_time = time.time()
       self.dma_send.transfer(input_buffer)
       self.dma_recv.transfer(output_buffer)
