@@ -29,9 +29,9 @@ bool playingFeedback = false;
 ArduinoQueue<float> movingAverageQueue(MOVING_AVERAGE_SIZE);
 float movingAverage = 0;
 const unsigned long SAMPLING_DELAY = 1000 / MPU_SAMPLE_RATE;
-const float ACCEL_THRESHOLD = -7.0; // CONFIG ME (ALSO IN M/S^2)
-const float KICK_ANGLE = 65;        // CONFIG ME
-Kalman kalmanY;                     // Kalman filter for Y (pitch)
+const float ACCEL_THRESHOLD = -10.0; // CONFIG ME (ALSO IN M/S^2)
+const float KICK_ANGLE = 65;         // CONFIG ME
+Kalman kalmanY;                      // Kalman filter for Y (pitch)
 
 Tone melody;
 

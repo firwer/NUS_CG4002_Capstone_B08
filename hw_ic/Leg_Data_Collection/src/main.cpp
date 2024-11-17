@@ -11,6 +11,9 @@
 #define IMU_INTERRUPT_PIN 2
 #define BUZZER_PIN 3
 #define NOTE_DELAY 100
+#define VIBRATOR_PIN 4
+#define LED_OUTPUT_PIN 5
+#define FEEDBACK_PLAY_TIME 1500
 
 #define MPU_SAMPLING_RATE 40
 #define NUM_RECORDED_POINTS 54
@@ -30,6 +33,10 @@ bool isRecording = false;
 bool isMotionDetected = false;
 bool isMotionTunePlayed = false;
 bool hasMotionEnded = false;
+
+bool playingFeedback = false;
+unsigned long playingFeedbackTime = 0;
+
 uint8_t actionCounter = 0;
 MPUData mpuData; // @wanlin
 
@@ -75,12 +82,14 @@ void setup()
 
   mpu.setDHPFMode(MPU6050_DHPF_1P25);
   mpu.setDLPFMode(MPU6050_DLPF_BW_20);
-  mpu.setMotionDetectionThreshold(80);
+  mpu.setMotionDetectionThreshold(100);
   mpu.setMotionDetectionDuration(5);
 
   mpu.setIntMotionEnabled(true);
 
   pinMode(IMU_INTERRUPT_PIN, INPUT);
+  pinMode(LED_OUTPUT_PIN, OUTPUT);
+  pinMode(VIBRATOR_PIN, OUTPUT);
   attachInterrupt(digitalPinToInterrupt(IMU_INTERRUPT_PIN), motionDetected, RISING);
   pinMode(BUZZER_PIN, OUTPUT);
   melody.begin(BUZZER_PIN);
@@ -93,6 +102,10 @@ void setup()
 
 void loop()
 {
+  if (communicate())
+  {
+    playBLEFeedback();
+  }
 
   if (millis() - lastSoundTime > NOTE_DELAY)
   {
@@ -102,6 +115,19 @@ void loop()
       melody.play(note, 100); // Play note for 50ms
     }
     lastSoundTime = millis();
+  }
+
+  if (playingFeedback)
+  {
+    digitalWrite(LED_OUTPUT_PIN, HIGH);
+    digitalWrite(VIBRATOR_PIN, HIGH);
+  }
+
+  if (playingFeedback && millis() - playingFeedbackTime >= FEEDBACK_PLAY_TIME)
+  {
+    digitalWrite(LED_OUTPUT_PIN, LOW);
+    digitalWrite(VIBRATOR_PIN, LOW);
+    playingFeedback = false;
   }
 
   if (isRecording)
@@ -156,6 +182,8 @@ void motionDetected()
   {
     isMotionDetected = true;
     isRecording = true;
+    playingFeedback = true;
+    playingFeedbackTime = millis();
     lastKickTime = millis();
   }
 }
@@ -168,13 +196,13 @@ void playBLEFeedback()
 }
 void playMotionFeedback()
 {
-  noteQueue.enqueue(NOTE_CS6);
-  noteQueue.enqueue(NOTE_D6);
+  noteQueue.enqueue(NOTE_A6);
+  noteQueue.enqueue(NOTE_C6);
   noteQueue.enqueue(NOTE_E6);
 }
 void playMotionEndFeedback()
 {
   noteQueue.enqueue(NOTE_E6);
-  noteQueue.enqueue(NOTE_D6);
-  noteQueue.enqueue(NOTE_CS6);
+  noteQueue.enqueue(NOTE_C6);
+  noteQueue.enqueue(NOTE_A6);
 }
