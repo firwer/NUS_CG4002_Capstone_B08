@@ -2,6 +2,7 @@
 #include <MPU6050.h>
 #include <Tone.h>
 #include <ArduinoQueue.h>
+#include "internal.hpp"
 
 // Define I/O pins
 #define IMU_INTERRUPT_PIN 2
@@ -40,15 +41,8 @@ bool hasMotionEnded = false;
 void playMotionFeedback();
 void playMotionEndFeedback();
 void playFullMagazineTone(); // This is also the startup tune
-struct MPUData
-{
-  int16_t ax;
-  int16_t ay;
-  int16_t az;
-  int16_t gx;
-  int16_t gy;
-  int16_t gz;
-} MPUData;
+
+MPUData mpudata;
 
 // can use this if the AI model can accept floats
 struct MPUData_FLOAT
@@ -86,7 +80,7 @@ void setup()
   mpu.initialize();
   if (!mpu.testConnection())
   {
-    Serial.println("MPU6050 connection failed");
+    // Serial.println("MPU6050 connection failed");
     while (1)
       ;
   }
@@ -106,8 +100,8 @@ void setup()
   mpu.setYGyroOffset(calibrationData.ygoffset);
   mpu.setZGyroOffset(calibrationData.zgoffset);
 
-  mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_4);
-  mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_250);
+  mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_8);
+  mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_500);
 
   mpu.setDHPFMode(MPU6050_DHPF_1P25);
   mpu.setDLPFMode(MPU6050_DLPF_BW_20);
@@ -120,10 +114,13 @@ void setup()
   attachInterrupt(digitalPinToInterrupt(IMU_INTERRUPT_PIN), motionDetected, RISING);
   pinMode(BUZZER_PIN, OUTPUT);
   shotFired.begin(BUZZER_PIN); // DO NOT DELETE
+  while(!ic_connect()){}
+  shotFired.play(NOTE_C1, 1000);
 }
 
 void loop()
 {
+  communicate();
   //==================== BUZZER SUBROUTINE ====================
   if (millis() - lastSoundTime > NOTE_DELAY)
   {
@@ -146,53 +143,35 @@ void loop()
   {
     if (!isMotionTunePlayed)
     {
-      Serial.println("Motion Detected. Displaying raw then corresponding real readings.");
+    //   Serial.println("Motion Detected. Displaying raw then corresponding real readings.");
       playMotionFeedback();
       isMotionTunePlayed = true;
       hasMotionEnded = false;
     }
     if (millis() - lastSampleTime >= SAMPLING_DELAY && recordedPoints < NUM_RECORDED_POINTS)
     {
-      mpu.getMotion6(&MPUData.ax, &MPUData.ay, &MPUData.az, &MPUData.gx, &MPUData.gy, &MPUData.gz);
+      mpu.getMotion6(&mpudata.ax, &mpudata.ay, &mpudata.az, &mpudata.gx, &mpudata.gy, &mpudata.gz);
       // Take the raw 16bit data, divide by 32767 to get the ratio, multiply by 4g to get the real value,
       // then multiply by 9.81 to get m/s^2
       // multiply by 100 to get integers
-      MPUData_FLOAT.accelXreal = (((MPUData.ax) / 32767.0) * 4.0 * 9.81) * 100;
-      MPUData_FLOAT.accelYreal = (((MPUData.ay) / 32767.0) * 4.0 * 9.81) * 100;
-      MPUData_FLOAT.accelZreal = (((MPUData.az) / 32767.0) * 4.0 * 9.81) * 100;
+      MPUData_FLOAT.accelXreal = (((mpudata.ax) / 32767.0) * 4.0 * 9.81) * 100;
+      MPUData_FLOAT.accelYreal = (((mpudata.ay) / 32767.0) * 4.0 * 9.81) * 100;
+      MPUData_FLOAT.accelZreal = (((mpudata.az) / 32767.0) * 4.0 * 9.81) * 100;
       // same for gyroscope scaling
-      MPUData_FLOAT.gyroXreal = (((MPUData.gx) / 32767.0) * 250.0) * 100;
-      MPUData_FLOAT.gyroYreal = (((MPUData.gy) / 32767.0) * 250.0) * 100;
-      MPUData_FLOAT.gyroZreal = (((MPUData.gz) / 32767.0) * 250.0) * 100;
-
-      // REMOVE THESE IF NOT NEEDED
-
-      Serial.print("RAW Accel & Gyro:\t");
-
-      Serial.print(MPUData.ax);
-      Serial.print("\t");
-      Serial.print(MPUData.ay);
-      Serial.print("\t");
-      Serial.print(MPUData.az);
-      Serial.print("\t");
-      Serial.print(MPUData.gx);
-      Serial.print("\t");
-      Serial.print(MPUData.gy);
-      Serial.print("\t");
-      Serial.println(MPUData.gz);
-
-      Serial.print("Real Accel & Gyro:\t");
-      Serial.print(MPUData_FLOAT.accelXreal);
-      Serial.print("\t");
-      Serial.print(MPUData_FLOAT.accelYreal);
-      Serial.print("\t");
-      Serial.print(MPUData_FLOAT.accelZreal);
-      Serial.print("\t");
-      Serial.print(MPUData_FLOAT.gyroXreal);
-      Serial.print("\t");
-      Serial.print(MPUData_FLOAT.gyroYreal);
-      Serial.print("\t");
-      Serial.println(MPUData_FLOAT.gyroZreal);
+      MPUData_FLOAT.gyroXreal = (((mpudata.gx) / 32767.0) * 250.0) * 100;
+      MPUData_FLOAT.gyroYreal = (((mpudata.gy) / 32767.0) * 250.0) * 100;
+      MPUData_FLOAT.gyroZreal = (((mpudata.gz) / 32767.0) * 250.0) * 100;
+      
+      // this is a dirty implementation
+      MPUData data;
+      data.ax = MPUData_FLOAT.accelXreal;
+      data.ay = MPUData_FLOAT.accelYreal;
+      data.az = MPUData_FLOAT.accelZreal;
+      data.gx = MPUData_FLOAT.gyroXreal;
+      data.gy = MPUData_FLOAT.gyroYreal;
+      data.gz = MPUData_FLOAT.gyroZreal;
+      ic_push_imu(data);
+      communicate();
 
       lastSampleTime = millis();
       recordedPoints++;
