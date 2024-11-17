@@ -7,7 +7,7 @@ External Communications
 How to setup the external comms module
 1. Prepare the environment (install the required packages)
 ``pip3 install -r requirements.txt``
-2. Run the evaluation server inside the real_eval_server subfolder ``python WebSocketServer.py``
+2. Run the evaluation server inside the real_eval_server folder ``python WebSocketServer.py``
 3. Open eval server's index.html in a browser.
 4. Enter the Eval Server IP Address (localhost if running on the same machine) and click connect. Select the B08 and enter the password (See config.py)
 5. Click "Login"
