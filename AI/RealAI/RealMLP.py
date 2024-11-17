@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 
 # Load and preprocess the dataset
-file_path = 'data/leg/combined_leg.csv'
+file_path = 'data/latest2/combined_3.csv'
 df = pd.read_csv(file_path, converters={'ax': literal_eval, 'ay': literal_eval, 'az': literal_eval,
                                         'gx': literal_eval, 'gy': literal_eval, 'gz': literal_eval})
 
@@ -196,7 +196,7 @@ save_weights_biases(model, save_dir)
 print(f"Weights and biases saved to {save_dir}")
 
 # Debug data
-debug_file_path = 'data/leg/debug.csv'
+debug_file_path = 'data/latest2/unseen_june_debug.csv'
 debug_df = pd.read_csv(debug_file_path, converters={
     'ax': literal_eval, 'ay': literal_eval, 'az': literal_eval, 
     'gx': literal_eval, 'gy': literal_eval, 'gz': literal_eval
@@ -219,7 +219,7 @@ for idx, row in debug_df.iterrows():
     # Convert to tensor
     tensor_input = torch.tensor(scaled_input, dtype=torch.float32)
     torch.set_printoptions(sci_mode=False, precision=4)
-    print(tensor_input)
+    #print(tensor_input)
     # Predict using the model
     with torch.no_grad():
         output = model(tensor_input)
