@@ -30,7 +30,7 @@ Please refer to [Internal Communications README](int_comms/readme.md) under the 
 ## External Communications
 Please refer to [External Communications README](ext_comms/README.md) under the `ext_comms` folder.
 
-## Artifical Intelligence (AI)
+## Artificial Intelligence (AI)
 
 ## Visualizer
 Please refer to [Visualizer README](visualizer/README.md) under the `visualizer` folder.
